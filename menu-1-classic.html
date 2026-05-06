@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>Carmel De-vries · מחירון - גרסה קלאסית</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Heebo:wght@300;400;500;600;700&family=Great+Vibes&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --gold:#b08d57;
+    --gold-light:#d4b685;
+    --gold-dark:#8a6d3f;
+    --cream:#fbf6ec;
+    --cream-2:#f1e6cf;
+    --ink:#2a1f15;
+    --ink-soft:#6a5640;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Heebo', sans-serif; color:var(--ink);
+    background:#e8dec8;
+    padding:20px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .menu{
+    width: 800px; max-width:100%;
+    margin: 0 auto;
+    background: linear-gradient(180deg, #fbf6ec 0%, #f6ecd6 100%);
+    border-radius: 4px;
+    padding: 50px 56px 40px;
+    position: relative;
+    box-shadow: 0 30px 80px rgba(42,31,21,.18);
+  }
+  /* corner ornaments */
+  .menu::before, .menu::after,
+  .menu .corner-bl, .menu .corner-br{
+    content:""; position:absolute; width:90px; height:90px;
+    border:2px solid var(--gold);
+    pointer-events:none;
+  }
+  .menu::before{top:18px; right:18px; border-bottom:none; border-left:none}
+  .menu::after{top:18px; left:18px; border-bottom:none; border-right:none}
+  .menu .corner-bl{bottom:18px; right:18px; border-top:none; border-left:none}
+  .menu .corner-br{bottom:18px; left:18px; border-top:none; border-right:none}
+
+  /* header */
+  .header{text-align:center; padding-top:16px; padding-bottom:24px; position:relative}
+  .whisk{
+    width:60px; height:60px; margin: 0 auto 8px;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--gold-dark);
+  }
+  .whisk svg{width:100%; height:100%}
+  .leaf-row{
+    position:absolute; top:34px; left:50%; transform:translateX(-50%);
+    display:flex; gap:140px; pointer-events:none;
+  }
+  .leaf-row .leaf{color:var(--gold); opacity:.6}
+  .brand{font-family:'Great Vibes', cursive; font-size:64px; line-height:1; color:var(--gold-dark); letter-spacing:1px}
+  .brand-sub{
+    margin-top:6px;
+    font-family:'Cormorant Garamond', serif;
+    letter-spacing:.55em; font-size:13px; color:var(--ink-soft); font-weight:600;
+  }
+  .brand-en{
+    margin-top:8px;
+    font-family:'Cormorant Garamond', serif;
+    letter-spacing:.45em; font-size:11px; color:var(--ink-soft); font-weight:500;
+  }
+  .tagline{
+    margin-top:18px; display:inline-flex; align-items:center; gap:14px;
+    font-size:16px; color:var(--ink);
+  }
+  .tagline .heart{color:var(--gold); font-size:9px}
+  .tagline .line{width:46px; height:1px; background:var(--gold); opacity:.6}
+
+  .divider{
+    height:1px; background:linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 24px auto;
+  }
+
+  /* product list */
+  .item{
+    display:grid; grid-template-columns: 110px 1fr 130px;
+    align-items:center; gap:18px;
+    padding: 18px 4px;
+    border-bottom: 1px dashed rgba(176,141,87,.4);
+  }
+  .item:last-child{border-bottom:none}
+  .price-cell{
+    text-align:center;
+  }
+  .price{
+    font-family:'Cormorant Garamond', serif; font-weight:700;
+    font-size:42px; color:var(--gold-dark); line-height:1;
+  }
+  .price .sym{font-size:22px; vertical-align:8px; margin-inline-start:2px}
+  .unit{font-size:11.5px; color:var(--ink-soft); margin-top:6px; line-height:1.4}
+
+  .info{padding-inline-start:6px}
+  .name{font-family:'Cormorant Garamond', serif; font-weight:700; font-size:24px; color:var(--ink); margin-bottom:4px}
+  .desc{font-size:14px; color:var(--ink-soft); line-height:1.5}
+  .min{font-size:11px; color:#9a6a3f; margin-top:4px; font-weight:500}
+
+  .photo{
+    width:110px; height:110px; border-radius:6px;
+    background: linear-gradient(135deg, #1a1612 0%, #3a2a1f 100%);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--gold-light);
+    font-family:'Cormorant Garamond', serif;
+    font-size:30px;
+    flex-shrink:0;
+    box-shadow: inset 0 0 0 4px rgba(212,182,133,.12);
+  }
+  .photo.has{background:transparent}
+  .photo img{width:100%;height:100%;object-fit:cover;border-radius:6px}
+
+  /* footer */
+  .footer{
+    margin-top:24px; padding-top:18px;
+    border-top: 1px solid rgba(176,141,87,.3);
+    display:flex; justify-content:center; align-items:center; gap:16px;
+    color:var(--ink); font-size:15px;
+  }
+  .footer .phone-circle{
+    width:34px; height:34px; border-radius:50%;
+    background:var(--gold); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px;
+  }
+  .footer .heart{color:var(--gold); font-size:10px}
+  .footer .brand-mini{font-family:'Great Vibes', cursive; font-size:24px; color:var(--gold-dark); line-height:1}
+
+  @media (max-width: 700px){
+    body{padding:8px}
+    .menu{padding:40px 22px 30px}
+    .item{grid-template-columns: 80px 1fr 88px; gap:10px}
+    .photo{width:80px; height:80px}
+    .price{font-size:32px}
+    .name{font-size:19px}
+    .desc{font-size:12.5px}
+    .brand{font-size:50px}
+  }
+</style>
+</head>
+<body>
+
+<div class="menu">
+  <div class="corner-bl"></div>
+  <div class="corner-br"></div>
+
+  <div class="header">
+    <div class="whisk">
+      <!-- whisk + heart svg -->
+      <svg viewBox="0 0 64 64" fill="none">
+        <path d="M32 8 C32 8, 28 18, 24 26 C20 34, 18 40, 22 48 C25 54, 32 56, 32 56 C32 56, 39 54, 42 48 C46 40, 44 34, 40 26 C36 18, 32 8, 32 8 Z" stroke="currentColor" stroke-width="1.2" fill="none" opacity=".55"/>
+        <path d="M32 14 C32 14, 30 20, 28 26 C26 32, 25 38, 28 44 C30 48, 32 50, 32 50 C32 50, 34 48, 36 44 C39 38, 38 32, 36 26 C34 20, 32 14, 32 14 Z" stroke="currentColor" stroke-width="1.2" fill="none" opacity=".7"/>
+        <circle cx="32" cy="32" r="1.5" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="brand">Carmel</div>
+    <div class="brand-sub">DE-VRIES</div>
+    <div class="brand-en">HOMEMADE&nbsp;&nbsp;BAKED&nbsp;&nbsp;GOODS</div>
+
+    <div class="tagline">
+      <span class="line"></span>
+      <span class="heart">❤</span>
+      <span>אפייה ביתית באהבה</span>
+      <span class="heart">❤</span>
+      <span class="line"></span>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- product 1 -->
+  <div class="item">
+    <div class="price-cell">
+      <div class="price">55<span class="sym">₪</span></div>
+      <div class="unit">מארז של<br>כ-30 יח׳</div>
+    </div>
+    <div class="info">
+      <div class="name">עוגיות מכונה מרוקאיות</div>
+      <div class="desc">עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.</div>
+    </div>
+    <div class="photo has"><img src="images/maroc.jpg" alt="עוגיות מכונה מרוקאיות"></div>
+  </div>
+
+  <!-- product 2 -->
+  <div class="item">
+    <div class="price-cell">
+      <div class="price">4<span class="sym">₪</span></div>
+      <div class="unit">ליחידה</div>
+    </div>
+    <div class="info">
+      <div class="name">כדורי שוקולד</div>
+      <div class="desc">כדורים עשירים בכל טוב מצופים קוקוס / סוכריות.</div>
+    </div>
+    <div class="photo has"><img src="images/chocoballs.jpg" alt="כדורי שוקולד"></div>
+  </div>
+
+  <!-- product 3 -->
+  <div class="item">
+    <div class="price-cell">
+      <div class="price">75<span class="sym">₪</span></div>
+      <div class="unit">מארז של<br>כ-12 יח׳</div>
+    </div>
+    <div class="info">
+      <div class="name">מגולגלות במילויים</div>
+      <div class="desc">בצק עדין וניחוח במילוי עשיר וטעים לבחירה 3 טעמים. פיסטוק / קינדר / נוטלה</div>
+    </div>
+    <div class="photo has"><img src="images/rolled.jpg" alt="מגולגלות במילויים"></div>
+  </div>
+
+  <!-- product 4 -->
+  <div class="item">
+    <div class="price-cell">
+      <div class="price">55<span class="sym">₪</span></div>
+      <div class="unit">מארז של<br>כ-30 יח׳</div>
+    </div>
+    <div class="info">
+      <div class="name">עוגיות טחינה קלאסיות</div>
+      <div class="desc">מרקם נימוח שנמס בפה.</div>
+    </div>
+    <div class="photo has"><img src="images/tahini.jpg" alt="עוגיות טחינה קלאסיות"></div>
+  </div>
+
+  <!-- product 5 -->
+  <div class="item">
+    <div class="price-cell">
+      <div class="price">35<span class="sym">₪</span></div>
+      <div class="unit">מארז של<br>כ-11 יח׳</div>
+    </div>
+    <div class="info">
+      <div class="name">עוגיות חמאה שקדים</div>
+      <div class="desc">עוגיות פריכות על בסיס שקדים וחמאה.</div>
+    </div>
+    <div class="photo has"><img src="images/almond.jpg" alt="עוגיות חמאה שקדים"></div>
+  </div>
+
+  <!-- product 6 -->
+  <div class="item">
+    <div class="price-cell">
+      <div class="price">4<span class="sym">₪</span></div>
+      <div class="unit">ליחידה</div>
+    </div>
+    <div class="info">
+      <div class="name">עוגיות יויו</div>
+      <div class="desc">עוגיות טבולות בסירופ מתוק עטופות בקוקוס.</div>
+      <div class="min">* מינימום להזמנה כ-30 יח׳</div>
+    </div>
+    <div class="photo has"><img src="images/yoyo.jpg" alt="עוגיות יויו"></div>
+  </div>
+
+  <div class="footer">
+    <span class="phone-circle">☎</span>
+    <span dir="ltr" style="font-weight:600">052-4809393</span>
+    <span class="heart">❤</span>
+    <span class="brand-mini">Carmel De-vries</span>
+  </div>
+</div>
+
+</body>
+</html>

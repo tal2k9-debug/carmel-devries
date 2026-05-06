@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carmel De-vries · אפייה ביתית באהבה</title>
+<meta name="description" content="Carmel De-vries — אפייה ביתית באהבה. הזמנות בווטסאפ.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Heebo:wght@300;400;500;600;700;800&family=Great+Vibes&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --gold:#b08d57;
+    --gold-light:#c9a978;
+    --gold-dark:#8a6d3f;
+    --cream:#faf5ec;
+    --cream-2:#f4ead7;
+    --ink:#2a1f15;
+    --ink-soft:#5a4a38;
+    --black:#1a1612;
+    --shadow: 0 10px 30px rgba(42,31,21,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{font-family:'Heebo',sans-serif;background:var(--cream);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased}
+  img{max-width:100%;display:block}
+  a{color:inherit;text-decoration:none}
+
+  /* ---------- HEADER / HERO ---------- */
+  .hero{
+    background:
+      linear-gradient(180deg, rgba(250,245,236,.85) 0%, rgba(244,234,215,.92) 75%, rgba(244,234,215,1) 100%),
+      url('images/group.jpg') center/cover no-repeat;
+    padding: 64px 20px 48px;
+    text-align:center;
+    border-bottom: 1px solid rgba(176,141,87,.18);
+    position:relative;
+  }
+  .hero::before, .hero::after{
+    content:"";position:absolute;left:50%;transform:translateX(-50%);
+    width:160px;height:1px;background:linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .hero::before{top:24px}
+  .hero::after{bottom:24px}
+
+  .brand-logo{font-family:'Great Vibes', cursive; font-size:72px; color:var(--gold-dark); line-height:1; margin-bottom:6px}
+  .brand-sub{font-family:'Cormorant Garamond', serif; letter-spacing:.4em; font-size:14px; color:var(--ink-soft); font-weight:500}
+  .brand-tagline{
+    margin-top:18px;
+    font-size:18px; color:var(--ink); font-weight:400;
+    display:inline-flex; gap:14px; align-items:center;
+  }
+  .brand-tagline .dot{color:var(--gold); font-size:10px}
+
+  /* ---------- SECTION ---------- */
+  section{padding:48px 20px}
+  .container{max-width:1100px;margin:0 auto}
+  .section-title{
+    text-align:center; margin-bottom:36px;
+  }
+  .section-title h2{
+    font-family:'Cormorant Garamond', serif; font-weight:600;
+    font-size:34px; color:var(--ink); letter-spacing:.02em;
+  }
+  .section-title .ornament{
+    display:inline-flex; align-items:center; gap:10px;
+    margin-top:10px; color:var(--gold);
+  }
+  .section-title .ornament .line{width:60px;height:1px;background:var(--gold)}
+  .section-title .ornament .heart{font-size:11px}
+
+  /* ---------- PRODUCTS GRID ---------- */
+  .products{
+    display:grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr));
+    gap:24px;
+  }
+  .product{
+    background:#fff; border-radius:18px; overflow:hidden;
+    box-shadow:var(--shadow);
+    border:1px solid rgba(176,141,87,.18);
+    display:flex; flex-direction:column;
+    transition: transform .25s ease, box-shadow .25s ease;
+  }
+  .product:hover{transform: translateY(-4px); box-shadow: 0 16px 40px rgba(42,31,21,.14)}
+
+  .product-img{
+    aspect-ratio: 4/3;
+    background:
+      linear-gradient(135deg, #1a1612 0%, #2a1f15 100%);
+    position:relative;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--gold-light);
+  }
+  .product-img .placeholder{
+    text-align:center; padding:20px;
+    font-family:'Cormorant Garamond', serif;
+    font-size:18px; opacity:.85;
+  }
+  .product-img .placeholder .icon{font-size:42px; margin-bottom:8px; opacity:.7}
+  .product-img.has-img{background:transparent}
+  .product-img img{width:100%;height:100%;object-fit:cover}
+
+  .product-body{padding:22px 22px 18px; flex:1; display:flex; flex-direction:column}
+  .product-name{
+    font-family:'Cormorant Garamond', serif; font-weight:600;
+    font-size:24px; color:var(--ink); margin-bottom:8px;
+  }
+  .product-desc{font-size:14.5px; color:var(--ink-soft); line-height:1.6; flex:1}
+  .product-price-row{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-top:18px; padding-top:14px; border-top:1px dashed rgba(176,141,87,.35);
+  }
+  .product-price{
+    font-family:'Cormorant Garamond', serif;
+    font-size:30px; font-weight:600; color:var(--gold-dark);
+  }
+  .product-price .currency{font-size:18px; margin-inline-end:2px}
+  .product-unit{font-size:13px; color:var(--ink-soft)}
+
+  /* quantity selector */
+  .qty{
+    display:flex; align-items:center; gap:10px;
+    margin-top:16px; justify-content:space-between;
+    background:var(--cream); border-radius:10px; padding:8px 12px;
+  }
+  .qty-label{font-size:13px; color:var(--ink-soft)}
+  .qty-controls{display:flex; align-items:center; gap:8px}
+  .qty-btn{
+    width:30px;height:30px;border-radius:50%;border:1px solid var(--gold);
+    background:#fff;color:var(--gold-dark); font-size:16px; cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition: all .15s ease;
+  }
+  .qty-btn:hover{background:var(--gold); color:#fff}
+  .qty-input{
+    width:48px; text-align:center; border:none; background:transparent;
+    font-family:'Heebo', sans-serif; font-size:16px; font-weight:600; color:var(--ink);
+  }
+  .qty-input:focus{outline:none}
+  .min-note{font-size:12px; color:#a06a3f; margin-top:8px; text-align:center}
+
+  /* ---------- ORDER SUMMARY (sticky bar) ---------- */
+  .summary-bar{
+    position:fixed; bottom:0; left:0; right:0; z-index:90;
+    background:rgba(26,22,18,.97); color:#fff;
+    box-shadow:0 -10px 30px rgba(0,0,0,.25);
+    padding:14px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:14px;
+    backdrop-filter: blur(10px);
+    transition: transform .3s ease;
+    transform: translateY(100%);
+  }
+  .summary-bar.visible{transform: translateY(0)}
+  .summary-info{display:flex; flex-direction:column; gap:2px}
+  .summary-count{font-size:13px; opacity:.8}
+  .summary-total{font-family:'Cormorant Garamond', serif; font-size:22px; color:var(--gold-light); font-weight:600}
+  .summary-total .currency{font-size:16px}
+
+  .btn-whatsapp{
+    display:inline-flex; align-items:center; gap:8px;
+    background:#25D366; color:#fff; padding:12px 22px;
+    border-radius:30px; font-weight:600; font-size:15px;
+    border:none; cursor:pointer; font-family:'Heebo', sans-serif;
+    box-shadow:0 6px 20px rgba(37,211,102,.35);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .btn-whatsapp:hover{transform: translateY(-1px); box-shadow:0 10px 26px rgba(37,211,102,.45)}
+  .btn-whatsapp .wa-icon{
+    width:20px;height:20px; fill:currentColor;
+  }
+
+  /* floating button (always visible) */
+  .float-wa{
+    position:fixed; bottom:90px; left:20px; z-index:80;
+    width:58px; height:58px; border-radius:50%;
+    background:#25D366; color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 10px 30px rgba(37,211,102,.45);
+    cursor:pointer; border:none;
+    animation: pulse 2.5s infinite;
+  }
+  .float-wa svg{width:30px;height:30px;fill:#fff}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(37,211,102,.55)}
+    70%{box-shadow:0 0 0 18px rgba(37,211,102,0)}
+    100%{box-shadow:0 0 0 0 rgba(37,211,102,0)}
+  }
+
+  /* ---------- ORDER FORM SECTION ---------- */
+  .order-section{
+    background:linear-gradient(180deg, #f4ead7 0%, #faf5ec 100%);
+    border-top:1px solid rgba(176,141,87,.2);
+    border-bottom:1px solid rgba(176,141,87,.2);
+  }
+  .order-card{
+    background:#fff; border-radius:20px; padding:32px;
+    box-shadow:var(--shadow); max-width:720px; margin:0 auto;
+    border:1px solid rgba(176,141,87,.18);
+  }
+  .form-row{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px}
+  .form-row.full{grid-template-columns:1fr}
+  .form-field label{display:block; font-size:13px; color:var(--ink-soft); margin-bottom:6px}
+  .form-field input, .form-field textarea{
+    width:100%; padding:11px 14px; border:1px solid rgba(176,141,87,.3);
+    border-radius:10px; font-family:'Heebo', sans-serif; font-size:15px;
+    background:var(--cream); color:var(--ink);
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .form-field input:focus, .form-field textarea:focus{
+    outline:none; border-color:var(--gold); background:#fff;
+  }
+  .form-field textarea{resize:vertical; min-height:80px}
+
+  .order-list{margin:18px 0; border-top:1px dashed rgba(176,141,87,.35); padding-top:16px}
+  .order-list-title{font-family:'Cormorant Garamond', serif; font-weight:600; font-size:18px; color:var(--ink); margin-bottom:10px}
+  .order-line{display:flex; justify-content:space-between; padding:6px 0; font-size:14.5px; color:var(--ink)}
+  .order-line.empty{color:var(--ink-soft); font-style:italic; text-align:center; padding:14px 0}
+  .order-total{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-top:10px; padding-top:14px; border-top:2px solid var(--gold);
+    font-family:'Cormorant Garamond', serif; font-size:24px; color:var(--ink); font-weight:600;
+  }
+  .order-total .amount{color:var(--gold-dark)}
+
+  .order-submit{
+    width:100%; padding:16px; margin-top:18px;
+    border:none; border-radius:14px; cursor:pointer;
+    background:#25D366; color:#fff;
+    font-family:'Heebo', sans-serif; font-size:17px; font-weight:600;
+    display:inline-flex; align-items:center; justify-content:center; gap:10px;
+    box-shadow:0 6px 20px rgba(37,211,102,.3);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .order-submit:hover{transform: translateY(-1px); box-shadow:0 10px 26px rgba(37,211,102,.4)}
+  .order-submit svg{width:22px;height:22px;fill:currentColor}
+
+  /* ---------- FOOTER ---------- */
+  footer{
+    background:var(--black); color:#e8d9bf; text-align:center;
+    padding:36px 20px 110px;
+    border-top:1px solid rgba(176,141,87,.2);
+  }
+  footer .brand-logo{color:var(--gold-light); font-size:48px}
+  footer .brand-sub{color:#bda77f; margin-bottom:18px}
+  .contact{display:inline-flex; align-items:center; gap:10px; font-size:18px; color:var(--gold-light); margin-top:10px}
+  .contact .icon-circle{
+    width:36px;height:36px;border-radius:50%;
+    background:var(--gold); color:var(--black);
+    display:flex;align-items:center;justify-content:center;
+    font-size:16px;
+  }
+  .copyright{font-size:12px; color:#7a6a52; margin-top:24px; opacity:.8}
+
+  /* ---------- RESPONSIVE ---------- */
+  @media (max-width: 600px){
+    .brand-logo{font-size:56px}
+    .form-row{grid-template-columns:1fr}
+    .order-card{padding:22px}
+    section{padding:36px 16px}
+    .hero{padding:44px 16px 32px}
+    .section-title h2{font-size:28px}
+    .float-wa{bottom:84px; left:14px; width:52px; height:52px}
+    .float-wa svg{width:26px;height:26px}
+    .summary-bar{padding:12px 14px}
+    .btn-whatsapp{padding:10px 16px; font-size:14px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============= HERO ============= -->
+<header class="hero">
+  <div class="brand-logo">Carmel</div>
+  <div class="brand-sub">DE-VRIES</div>
+  <div class="brand-sub" style="margin-top:6px; letter-spacing:.5em; font-size:11px;">HOMEMADE&nbsp;BAKED&nbsp;GOODS</div>
+  <div class="brand-tagline">
+    <span class="dot">❤</span>
+    <span>אפייה ביתית באהבה</span>
+    <span class="dot">❤</span>
+  </div>
+</header>
+
+<!-- ============= PRODUCTS ============= -->
+<section>
+  <div class="container">
+    <div class="section-title">
+      <h2>התפריט</h2>
+      <div class="ornament"><span class="line"></span><span class="heart">❤</span><span class="line"></span></div>
+    </div>
+
+    <div class="products" id="products">
+      <!-- products injected by JS -->
+    </div>
+  </div>
+</section>
+
+<!-- ============= ORDER FORM ============= -->
+<section class="order-section">
+  <div class="container">
+    <div class="section-title">
+      <h2>הזמנה</h2>
+      <div class="ornament"><span class="line"></span><span class="heart">❤</span><span class="line"></span></div>
+    </div>
+
+    <div class="order-card">
+      <div class="form-row">
+        <div class="form-field">
+          <label for="cust-name">שם מלא</label>
+          <input id="cust-name" type="text" placeholder="הכניסו שם" autocomplete="name">
+        </div>
+        <div class="form-field">
+          <label for="cust-phone">טלפון</label>
+          <input id="cust-phone" type="tel" placeholder="050-0000000" autocomplete="tel">
+        </div>
+      </div>
+      <div class="form-row full">
+        <div class="form-field">
+          <label for="cust-date">תאריך מבוקש לאיסוף</label>
+          <input id="cust-date" type="date">
+        </div>
+      </div>
+      <div class="form-row full">
+        <div class="form-field">
+          <label for="cust-notes">הערות (אופציונלי)</label>
+          <textarea id="cust-notes" placeholder="טעמים מועדפים, אריזה מיוחדת וכו'"></textarea>
+        </div>
+      </div>
+
+      <div class="order-list">
+        <div class="order-list-title">סיכום ההזמנה</div>
+        <div id="order-lines">
+          <div class="order-line empty">עדיין לא נבחרו פריטים</div>
+        </div>
+        <div class="order-total">
+          <span>סה"כ</span>
+          <span class="amount" id="order-total">0 ₪</span>
+        </div>
+      </div>
+
+      <button class="order-submit" id="submit-btn" type="button">
+        <svg viewBox="0 0 24 24"><path d="M20.52 3.48A11.94 11.94 0 0 0 12.04 0C5.46 0 .12 5.34.12 11.92c0 2.1.55 4.16 1.6 5.97L0 24l6.27-1.65a11.86 11.86 0 0 0 5.77 1.47h.01c6.58 0 11.92-5.34 11.92-11.92 0-3.18-1.24-6.17-3.45-8.42zM12.04 21.8h-.01a9.86 9.86 0 0 1-5.03-1.38l-.36-.21-3.72.98 1-3.62-.24-.37a9.84 9.84 0 0 1-1.51-5.28C2.17 6.45 6.6 2.02 12.05 2.02c2.62 0 5.08 1.02 6.93 2.87a9.74 9.74 0 0 1 2.87 6.93c0 5.45-4.43 9.88-9.81 9.88zm5.4-7.39c-.3-.15-1.74-.86-2.01-.96-.27-.1-.47-.15-.66.15-.2.3-.76.96-.93 1.16-.17.2-.34.22-.64.07-.3-.15-1.25-.46-2.39-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.61.13-.13.3-.34.45-.51.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.66-1.6-.91-2.18-.24-.57-.48-.5-.66-.51l-.56-.01c-.2 0-.5.07-.77.37-.27.3-1.02 1-1.02 2.43 0 1.43 1.04 2.81 1.19 3.01.15.2 2.05 3.13 4.97 4.39.69.3 1.23.48 1.66.61.7.22 1.33.19 1.83.12.56-.08 1.74-.71 1.99-1.4.25-.69.25-1.28.17-1.4-.07-.13-.27-.2-.57-.35z"/></svg>
+        שליחת הזמנה בווטסאפ
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ============= STICKY SUMMARY BAR ============= -->
+<div class="summary-bar" id="summary-bar">
+  <div class="summary-info">
+    <span class="summary-count" id="summary-count">0 פריטים</span>
+    <span class="summary-total"><span class="currency">₪</span><span id="summary-total">0</span></span>
+  </div>
+  <button class="btn-whatsapp" id="bar-submit" type="button">
+    <svg class="wa-icon" viewBox="0 0 24 24"><path d="M20.52 3.48A11.94 11.94 0 0 0 12.04 0C5.46 0 .12 5.34.12 11.92c0 2.1.55 4.16 1.6 5.97L0 24l6.27-1.65a11.86 11.86 0 0 0 5.77 1.47h.01c6.58 0 11.92-5.34 11.92-11.92 0-3.18-1.24-6.17-3.45-8.42zM12.04 21.8h-.01a9.86 9.86 0 0 1-5.03-1.38l-.36-.21-3.72.98 1-3.62-.24-.37a9.84 9.84 0 0 1-1.51-5.28C2.17 6.45 6.6 2.02 12.05 2.02c2.62 0 5.08 1.02 6.93 2.87a9.74 9.74 0 0 1 2.87 6.93c0 5.45-4.43 9.88-9.81 9.88zm5.4-7.39c-.3-.15-1.74-.86-2.01-.96-.27-.1-.47-.15-.66.15-.2.3-.76.96-.93 1.16-.17.2-.34.22-.64.07-.3-.15-1.25-.46-2.39-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.61.13-.13.3-.34.45-.51.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.66-1.6-.91-2.18-.24-.57-.48-.5-.66-.51l-.56-.01c-.2 0-.5.07-.77.37-.27.3-1.02 1-1.02 2.43 0 1.43 1.04 2.81 1.19 3.01.15.2 2.05 3.13 4.97 4.39.69.3 1.23.48 1.66.61.7.22 1.33.19 1.83.12.56-.08 1.74-.71 1.99-1.4.25-.69.25-1.28.17-1.4-.07-.13-.27-.2-.57-.35z"/></svg>
+    הזמנה
+  </button>
+</div>
+
+<!-- ============= FLOATING WA BUTTON ============= -->
+<a class="float-wa" id="float-wa" href="https://wa.me/972524809393" target="_blank" rel="noopener" title="פנייה בווטסאפ">
+  <svg viewBox="0 0 24 24"><path d="M20.52 3.48A11.94 11.94 0 0 0 12.04 0C5.46 0 .12 5.34.12 11.92c0 2.1.55 4.16 1.6 5.97L0 24l6.27-1.65a11.86 11.86 0 0 0 5.77 1.47h.01c6.58 0 11.92-5.34 11.92-11.92 0-3.18-1.24-6.17-3.45-8.42zM12.04 21.8h-.01a9.86 9.86 0 0 1-5.03-1.38l-.36-.21-3.72.98 1-3.62-.24-.37a9.84 9.84 0 0 1-1.51-5.28C2.17 6.45 6.6 2.02 12.05 2.02c2.62 0 5.08 1.02 6.93 2.87a9.74 9.74 0 0 1 2.87 6.93c0 5.45-4.43 9.88-9.81 9.88zm5.4-7.39c-.3-.15-1.74-.86-2.01-.96-.27-.1-.47-.15-.66.15-.2.3-.76.96-.93 1.16-.17.2-.34.22-.64.07-.3-.15-1.25-.46-2.39-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.61.13-.13.3-.34.45-.51.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.66-1.6-.91-2.18-.24-.57-.48-.5-.66-.51l-.56-.01c-.2 0-.5.07-.77.37-.27.3-1.02 1-1.02 2.43 0 1.43 1.04 2.81 1.19 3.01.15.2 2.05 3.13 4.97 4.39.69.3 1.23.48 1.66.61.7.22 1.33.19 1.83.12.56-.08 1.74-.71 1.99-1.4.25-.69.25-1.28.17-1.4-.07-.13-.27-.2-.57-.35z"/></svg>
+</a>
+
+<!-- ============= FOOTER ============= -->
+<footer>
+  <div class="brand-logo">Carmel</div>
+  <div class="brand-sub">DE-VRIES</div>
+  <div class="contact">
+    <span class="icon-circle">☎</span>
+    <span dir="ltr">052-4809393</span>
+  </div>
+  <div class="copyright">© Carmel De-vries · Homemade Baked Goods</div>
+</footer>
+
+<script>
+  // === Product data — taken EXACTLY from the menu, no edits ===
+  const products = [
+    {
+      id: 'maroc',
+      name: 'עוגיות מכונה מרוקאיות',
+      desc: 'עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.',
+      price: 55,
+      unit: 'מארז של כ-30 יח׳',
+      step: 1,
+      icon: '🍪',
+      img: 'images/maroc.jpg'
+    },
+    {
+      id: 'choco',
+      name: 'כדורי שוקולד',
+      desc: 'כדורים עשירים בכל טוב מצופים קוקוס / סוכריות.',
+      price: 4,
+      unit: 'ליחידה',
+      step: 1,
+      icon: '🍫',
+      img: 'images/chocoballs.jpg'
+    },
+    {
+      id: 'rolled',
+      name: 'מגולגלות במילויים',
+      desc: 'בצק עדין וניחוח במילוי עשיר וטעים לבחירה 3 טעמים. פיסטוק / קינדר / נוטלה',
+      price: 75,
+      unit: 'מארז של כ-12 יח׳',
+      step: 1,
+      icon: '🥐',
+      img: 'images/rolled.jpg'
+    },
+    {
+      id: 'tahini',
+      name: 'עוגיות טחינה קלאסיות',
+      desc: 'מרקם נימוח שנמס בפה.',
+      price: 55,
+      unit: 'מארז של כ-30 יח׳',
+      step: 1,
+      icon: '🍪',
+      img: 'images/tahini.jpg'
+    },
+    {
+      id: 'almond',
+      name: 'עוגיות חמאה שקדים',
+      desc: 'עוגיות פריכות על בסיס שקדים וחמאה.',
+      price: 35,
+      unit: 'מארז של כ-11 יח׳',
+      step: 1,
+      icon: '🥮',
+      img: 'images/almond.jpg'
+    },
+    {
+      id: 'yoyo',
+      name: 'עוגיות יויו',
+      desc: 'עוגיות טבולות בסירופ מתוק עטופות בקוקוס.',
+      price: 4,
+      unit: 'ליחידה',
+      step: 1,
+      minOrder: 30,
+      minNote: '* מינימום להזמנה כ-30 יח׳',
+      icon: '🍩',
+      img: 'images/yoyo.jpg'
+    }
+  ];
+
+  const cart = {}; // {id: qty}
+  const $ = (s, root=document) => root.querySelector(s);
+  const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
+  const fmt = n => (Math.round(n)).toLocaleString('he-IL');
+
+  // render products
+  function renderProducts(){
+    const grid = $('#products');
+    grid.innerHTML = products.map(p => `
+      <article class="product" data-id="${p.id}">
+        <div class="product-img ${p.img ? 'has-img':''}">
+          ${p.img ? `<img src="${p.img}" alt="${p.name}">` : `
+            <div class="placeholder">
+              <div class="icon">${p.icon}</div>
+              <div>${p.name}</div>
+            </div>`}
+        </div>
+        <div class="product-body">
+          <div class="product-name">${p.name}</div>
+          <div class="product-desc">${p.desc}</div>
+          <div class="product-price-row">
+            <div class="product-price"><span class="currency">₪</span>${p.price}</div>
+            <div class="product-unit">${p.unit}</div>
+          </div>
+          <div class="qty">
+            <span class="qty-label">כמות</span>
+            <div class="qty-controls">
+              <button class="qty-btn" data-act="dec" aria-label="הפחת">−</button>
+              <input class="qty-input" type="number" min="0" step="${p.step}" value="0" data-id="${p.id}" inputmode="numeric">
+              <button class="qty-btn" data-act="inc" aria-label="הוסף">+</button>
+            </div>
+          </div>
+          ${p.minNote ? `<div class="min-note">${p.minNote}</div>` : ''}
+        </div>
+      </article>
+    `).join('');
+
+    // bind quantity controls
+    $$('.product').forEach(card => {
+      const input = $('.qty-input', card);
+      const id = input.dataset.id;
+      const product = products.find(p => p.id === id);
+      const dec = $('[data-act="dec"]', card);
+      const inc = $('[data-act="inc"]', card);
+
+      const setVal = v => {
+        v = Math.max(0, Math.floor(Number(v) || 0));
+        input.value = v;
+        cart[id] = v;
+        updateSummary();
+      };
+      dec.addEventListener('click', () => setVal((Number(input.value)||0) - product.step));
+      inc.addEventListener('click', () => setVal((Number(input.value)||0) + product.step));
+      input.addEventListener('input', e => setVal(e.target.value));
+    });
+  }
+
+  function updateSummary(){
+    const lines = [];
+    let total = 0;
+    let count = 0;
+    products.forEach(p => {
+      const q = cart[p.id] || 0;
+      if(q > 0){
+        const sum = q * p.price;
+        total += sum;
+        count += q;
+        lines.push({name:p.name, qty:q, price:p.price, sum});
+      }
+    });
+
+    // sticky bar
+    const bar = $('#summary-bar');
+    if(total > 0){ bar.classList.add('visible'); }
+    else { bar.classList.remove('visible'); }
+    $('#summary-count').textContent = count + ' פריטים';
+    $('#summary-total').textContent = fmt(total);
+
+    // order list
+    const list = $('#order-lines');
+    if(lines.length === 0){
+      list.innerHTML = '<div class="order-line empty">עדיין לא נבחרו פריטים</div>';
+    } else {
+      list.innerHTML = lines.map(l => `
+        <div class="order-line">
+          <span>${l.name} × ${l.qty}</span>
+          <span>${fmt(l.sum)} ₪</span>
+        </div>
+      `).join('');
+    }
+    $('#order-total').textContent = fmt(total) + ' ₪';
+  }
+
+  function buildWhatsAppMessage(){
+    const name = $('#cust-name').value.trim();
+    const phone = $('#cust-phone').value.trim();
+    const date = $('#cust-date').value.trim();
+    const notes = $('#cust-notes').value.trim();
+
+    let msg = '*הזמנה חדשה — Carmel De-vries* 🍪\n\n';
+    let total = 0;
+    products.forEach(p => {
+      const q = cart[p.id] || 0;
+      if(q > 0){
+        const sum = q * p.price;
+        total += sum;
+        msg += `• ${p.name} × ${q} = ${fmt(sum)} ₪\n`;
+      }
+    });
+    msg += `\n*סה״כ: ${fmt(total)} ₪*\n`;
+    msg += '\n----------\n';
+    if(name)  msg += `שם: ${name}\n`;
+    if(phone) msg += `טלפון: ${phone}\n`;
+    if(date)  msg += `תאריך מבוקש: ${date}\n`;
+    if(notes) msg += `הערות: ${notes}\n`;
+    return msg;
+  }
+
+  function sendOrder(){
+    const total = products.reduce((s,p) => s + (cart[p.id]||0)*p.price, 0);
+    if(total === 0){
+      alert('בחרו לפחות פריט אחד להזמנה');
+      return;
+    }
+    // min order check for yoyo
+    const yoyo = products.find(p => p.id === 'yoyo');
+    if(yoyo.minOrder && (cart.yoyo||0) > 0 && cart.yoyo < yoyo.minOrder){
+      alert('כמות מינימום לעוגיות יויו: ' + yoyo.minOrder + ' יח׳');
+      return;
+    }
+    const text = encodeURIComponent(buildWhatsAppMessage());
+    window.open('https://wa.me/972524809393?text=' + text, '_blank');
+  }
+
+  $('#submit-btn').addEventListener('click', sendOrder);
+  $('#bar-submit').addEventListener('click', sendOrder);
+
+  renderProducts();
+  updateSummary();
+</script>
+
+</body>
+</html>
