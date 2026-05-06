@@ -72,6 +72,17 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .ff input:focus,.ff textarea:focus,.ff select:focus{outline:none;border-color:var(--gold);background:#fff}
 .ff textarea{resize:vertical;min-height:80px}
 .fh{font-size:13px;color:var(--is);background:rgba(176,141,87,.08);padding:10px 14px;border-radius:8px;border-right:3px solid var(--gold);line-height:1.7}
+.notice{background:#fff;border-radius:18px;padding:28px 30px;max-width:760px;margin:0 auto;border:1px solid rgba(176,141,87,.25);box-shadow:0 6px 20px rgba(42,31,21,.06)}
+.notice .nh{font-family:'Cormorant Garamond',serif;font-size:30px;color:var(--gd);text-align:center;margin-bottom:18px;font-weight:600}
+.notice .ng{display:flex;gap:12px;padding:10px 0;border-bottom:1px dashed rgba(176,141,87,.3);font-size:14.5px;line-height:1.7;color:var(--ink)}
+.notice .ng:last-of-type{border-bottom:none}
+.notice .ng .ic{font-size:18px;flex-shrink:0;margin-top:1px}
+.notice .ng b{color:var(--gd)}
+.notice .nf{margin-top:14px;padding-top:14px;border-top:1px solid rgba(176,141,87,.25);text-align:center;font-size:14px;color:var(--is)}
+.notice .nf a{color:var(--gd);font-weight:600;text-decoration:none}
+.notice .nf a:hover{color:var(--ink)}
+.notice-section{padding:36px 20px;background:linear-gradient(180deg,var(--cream),#fbf3e1)}
+
 .ol{margin:18px 0;border-top:1px dashed rgba(176,141,87,.35);padding-top:16px}
 .olt{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:18px;margin-bottom:10px}
 .oli{display:flex;justify-content:space-between;padding:6px 0;font-size:14.5px}
@@ -104,6 +115,15 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="st"><h2>התפריט</h2><div class="or"><span class="ln"></span><span class="ht">❤</span><span class="ln"></span></div></div>
 <div class="products" id="products"></div>
 </div></section>
+<section class="notice-section"><div class="cont">
+<div class="notice">
+<div class="nh">שימו ❤️</div>
+<div class="ng"><span class="ic">🍪</span><span><b>זמני הזמנה:</b> לימים א-ה יש להזמין לפחות יומיים מראש.<br>לימי שישי יש להזמין לפחות 3 ימים מראש.<br>הזמנות גדולות לפחות 4 ימים מראש.</span></div>
+<div class="ng"><span class="ic">🍪</span><span><b>איסוף ומשלוח:</b> איסוף עצמי מאופקים רחוב אורים 20, בתיאום מראש.<br>אופציה למשלוח באופקים בעלות סמלית של 10₪ או משלוח חינם בהזמנה מעל 150₪.</span></div>
+<div class="ng"><span class="ic">🍪</span><span><b>אלרגנים וכשרות:</b> המאפים מכילים אלרגנים שונים ועלולים שלא להתאים לבעלי רגישויות.<br>המאפים אינם נושאים תעודת כשרות.</span></div>
+<div class="nf">לכל שאלה ניתן לפנות / לסמס <a href="tel:+972524809393">052-4809393</a></div>
+</div>
+</div></section>
 <section class="os"><div class="cont">
 <div class="st"><h2>הזמנה</h2><div class="or"><span class="ln"></span><span class="ht">❤</span><span class="ln"></span></div></div>
 <div class="oc">
@@ -124,7 +144,6 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="oli" id="osl" style="display:none"><span>סכום פריטים</span><span id="osub">0 ₪</span></div>
 <div class="oli" id="odl" style="display:none"><span>משלוח</span><span id="od">—</span></div>
 <div class="ot"><span>סה"כ לתשלום</span><span class="am" id="ot">0 ₪</span></div>
-<div class="dn">🚚 משלוח באופקים — 10 ₪ · חינם בהזמנה מעל 150 ₪<br>🏠 איסוף עצמי: רח׳ אורים 20, אופקים — בתיאום מראש</div>
 </div>
 <button class="subm" id="sb" type="button"><svg viewBox="0 0 24 24"><path d="M20.5 3.5A11.9 11.9 0 0 0 12 0C5.4 0 .1 5.3.1 12c0 2.1.5 4.2 1.6 6L0 24l6.3-1.6c1.7 1 3.7 1.5 5.7 1.5C18.6 24 24 18.6 24 12c0-3.2-1.2-6.2-3.5-8.5z"/></svg>שליחת הזמנה בווטסאפ</button>
 </div>
@@ -138,7 +157,6 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="bl">Carmel</div>
 <div class="bs">DE-VRIES</div>
 <a class="cn" href="tel:+972524809393"><span class="ic">☎</span><span dir="ltr">052-4809393</span></a>
-<div class="an">המאפים מכילים אלרגנים שונים ועלולים שלא להתאים לבעלי רגישויות.<br>המאפים אינם נושאים תעודת כשרות.</div>
 <div class="cr">© Carmel De-vries · Homemade Baked Goods</div>
 </footer>
 <script>
