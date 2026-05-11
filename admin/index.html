@@ -1,383 +1,360 @@
-<!DOCTYPE html><html lang="he" dir="rtl"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Carmel De-vries · ניהול</title>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Heebo:wght@300;400;500;600;700&family=Great+Vibes&display=swap" rel="stylesheet">
+<title>Carmel De-vries — ניהול</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--gold:#b08d57;--gl:#c9a978;--gd:#8a6d3f;--cream:#faf5ec;--c2:#f4ead7;--ink:#2a1f15;--is:#5a4a38;--ix:#7a6a52;--bk:#1a1612;--ok:#27ae60;--warn:#e67e22;--err:#c0392b;--info:#3498db;--lilac:#9b6b9e;--shadow:0 10px 30px rgba(42,31,21,.10);--rad:14px}
+:root{--p:#8B4513;--p2:#A0522D;--ac:#D2691E;--bg:#FFF8F0;--card:#fff;--ink:#3E2723;--ink2:#5D4037;--mute:#8D6E63;--bd:#E8D5C4;--ok:#2e7d32;--warn:#ef6c00;--err:#c62828;--info:#1565c0;--shadow:0 4px 12px rgba(139,69,19,.08)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Heebo',sans-serif;background:var(--cream);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
-img{max-width:100%;display:block} a{color:inherit;text-decoration:none} button{font-family:inherit}
+html,body{font-family:'Heebo',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+body{padding-bottom:80px}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;font-size:14px}
 
-/* === PASSWORD GATE === */
-.gate{position:fixed;inset:0;z-index:100;background:linear-gradient(135deg,#1a1612 0%,#2a1f15 100%);display:flex;align-items:center;justify-content:center;padding:20px}
-.gate-card{background:#fff;border-radius:18px;padding:40px 36px;max-width:380px;width:100%;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.4)}
-.gate-logo{font-family:'Great Vibes',cursive;font-size:54px;color:var(--gd);line-height:1;margin-bottom:6px}
-.gate-sub{font-family:'Cormorant Garamond',serif;letter-spacing:.4em;font-size:12px;color:var(--ix);margin-bottom:24px}
-.gate-h{font-size:18px;color:var(--ink);margin-bottom:18px;font-weight:600}
-.gate-input{width:100%;padding:12px 16px;border:1px solid rgba(176,141,87,.3);border-radius:10px;font-family:'Heebo',sans-serif;font-size:16px;background:var(--cream);color:var(--ink);text-align:center}
-.gate-input:focus{outline:none;border-color:var(--gold);background:#fff}
-.gate-btn{width:100%;margin-top:14px;padding:12px;border:none;border-radius:10px;background:var(--gold);color:#fff;font-size:16px;font-weight:600;cursor:pointer;font-family:'Heebo',sans-serif}
-.gate-btn:hover{background:var(--gd)}
-.gate-err{color:var(--err);font-size:13px;margin-top:10px;min-height:18px}
-.gate.hidden{display:none}
+/* LOGIN SCREEN */
+#login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#8B4513,#D2691E)}
+.login-card{background:#fff;padding:40px 32px;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-width:420px;width:100%;text-align:center}
+.login-card h1{font-size:28px;color:var(--p);margin-bottom:8px;font-weight:800}
+.login-card .subtitle{color:var(--mute);margin-bottom:8px}
+.login-card .tagline{color:var(--ink2);margin-bottom:28px;font-size:14px}
+.login-card .ico{font-size:54px;margin-bottom:16px}
+#g-signin-btn{display:flex;justify-content:center;margin:20px 0}
+.login-note{font-size:13px;color:var(--mute);margin-top:20px;line-height:1.6}
+.login-err{color:var(--err);background:#ffebee;padding:12px;border-radius:8px;margin-top:16px;font-size:13px;display:none}
 
-/* === LAYOUT === */
-.app{min-height:100vh;display:flex;flex-direction:column}
-.topbar{background:var(--bk);color:#fff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:50;box-shadow:0 4px 20px rgba(0,0,0,.15)}
-.topbar-brand{display:flex;align-items:center;gap:10px}
-.topbar-logo{font-family:'Great Vibes',cursive;font-size:28px;color:var(--gl);line-height:1}
-.topbar-sub{font-family:'Cormorant Garamond',serif;letter-spacing:.35em;font-size:9.5px;color:var(--gl);text-transform:uppercase;margin-top:2px}
-.topbar-actions{display:flex;align-items:center;gap:8px}
-.topbar-btn{background:transparent;border:1px solid rgba(255,255,255,.15);color:#e8d9bf;padding:7px 12px;border-radius:8px;font-size:13px;cursor:pointer;transition:all .15s ease}
-.topbar-btn:hover{background:rgba(255,255,255,.05);border-color:var(--gold)}
-.topbar-btn.danger{color:#f0a4a4;border-color:rgba(192,57,43,.4)}
-.topbar-btn.danger:hover{background:rgba(192,57,43,.15)}
+/* HEADER */
+header{background:#fff;border-bottom:1px solid var(--bd);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;box-shadow:var(--shadow)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand h1{font-size:18px;color:var(--p);font-weight:800}
+.brand .badge{background:var(--ac);color:#fff;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600}
+.user-info{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.user-info .email{font-size:13px;color:var(--mute)}
+.sync-status{font-size:12px;padding:4px 10px;border-radius:12px;font-weight:500}
+.sync-status.ok{background:#e8f5e9;color:var(--ok)}
+.sync-status.syncing{background:#fff3e0;color:var(--warn)}
+.sync-status.err{background:#ffebee;color:var(--err)}
+.sync-status.offline{background:#eceff1;color:var(--mute)}
+.btn-out{background:#f5f5f5;color:var(--ink2);padding:6px 12px;border-radius:8px;font-size:13px;font-weight:500}
+.btn-out:hover{background:#e0e0e0}
 
-.tabs{background:#fff;border-bottom:1px solid rgba(176,141,87,.2);padding:0 18px;display:flex;gap:6px;overflow-x:auto;position:sticky;top:54px;z-index:40;-webkit-overflow-scrolling:touch}
-.tab{background:transparent;border:none;padding:14px 14px 12px;font-size:14.5px;color:var(--ix);cursor:pointer;font-family:inherit;font-weight:500;border-bottom:3px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:6px;transition:color .15s}
-.tab:hover{color:var(--ink)}
-.tab.act{color:var(--gd);border-bottom-color:var(--gold);font-weight:600}
-.tab .ic{font-size:16px}
+/* TABS */
+nav.tabs{background:#fff;border-bottom:1px solid var(--bd);padding:0 12px;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+.tab{padding:14px 16px;font-size:14px;font-weight:500;color:var(--mute);border-bottom:3px solid transparent;white-space:nowrap;transition:all .2s}
+.tab:hover{color:var(--p)}
+.tab.active{color:var(--p);border-bottom-color:var(--p);font-weight:600}
 
-main{flex:1;padding:18px;max-width:1400px;margin:0 auto;width:100%}
+/* MAIN */
+main{padding:20px;max-width:1400px;margin:0 auto}
 .page{display:none}
-.page.act{display:block;animation:fade .25s ease}
-@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.page.active{display:block}
+.page-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+.page-h h2{font-size:22px;color:var(--ink);font-weight:700}
+.page-h .actions{display:flex;gap:8px;flex-wrap:wrap}
 
-.page-h{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap}
-.page-h h1{font-family:'Cormorant Garamond',serif;font-size:28px;color:var(--ink);font-weight:600}
-.page-h-sub{font-size:13px;color:var(--ix)}
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
 
-.btn{display:inline-flex;align-items:center;gap:6px;background:var(--gold);color:#fff;border:none;padding:9px 16px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s ease}
-.btn:hover{background:var(--gd);transform:translateY(-1px)}
-.btn.sm{padding:6px 12px;font-size:13px}
-.btn.ghost{background:transparent;color:var(--gold);border:1px solid var(--gold)}
-.btn.ghost:hover{background:rgba(176,141,87,.1)}
-.btn.danger{background:var(--err)}
-.btn.success{background:var(--ok)}
-.btn.full{width:100%;justify-content:center}
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.kpi{background:#fff;border:1px solid var(--bd);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+.kpi .lab{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.kpi .val{font-size:30px;font-weight:800;color:var(--p);margin-top:6px;line-height:1}
+.kpi .sub{font-size:12px;color:var(--mute);margin-top:6px}
+.kpi.urgent .val{color:var(--err)}
+.kpi.good .val{color:var(--ok)}
 
-/* === KPI CARDS (Today screen) === */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:24px}
-.kpi{background:#fff;border-radius:var(--rad);padding:18px 20px;border:1px solid rgba(176,141,87,.18);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden}
-.kpi::before{content:"";position:absolute;top:0;right:0;width:4px;height:100%;background:var(--gold)}
-.kpi.green::before{background:var(--ok)} .kpi.orange::before{background:var(--warn)} .kpi.red::before{background:var(--err)} .kpi.blue::before{background:var(--info)} .kpi.lilac::before{background:var(--lilac)}
-.kpi-l{font-size:12.5px;color:var(--ix);font-weight:500;text-transform:uppercase;letter-spacing:.04em}
-.kpi-v{font-family:'Cormorant Garamond',serif;font-size:38px;color:var(--gd);font-weight:700;line-height:1}
-.kpi-d{font-size:12px;color:var(--ix);margin-top:2px}
-.kpi-d.pos{color:var(--ok)} .kpi-d.neg{color:var(--err)}
+/* BUTTONS */
+.btn{padding:10px 18px;border-radius:10px;font-weight:600;font-size:14px;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-p{background:var(--p);color:#fff}
+.btn-p:hover{background:var(--p2)}
+.btn-s{background:#fff;color:var(--p);border:1px solid var(--p)}
+.btn-s:hover{background:#fdf3e8}
+.btn-d{background:#ffebee;color:var(--err);border:1px solid #ffcdd2}
+.btn-d:hover{background:#ffcdd2}
+.btn-ok{background:var(--ok);color:#fff}
+.btn-ok:hover{background:#1b5e20}
 
-.section-h{display:flex;align-items:center;justify-content:space-between;margin:24px 0 12px}
-.section-h h2{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--ink);font-weight:600}
+/* FORMS */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.form-grid.cols-2{grid-template-columns:repeat(2,1fr)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13px;color:var(--ink2);font-weight:600}
+.field input,.field select,.field textarea{padding:10px 12px;border:1px solid var(--bd);border-radius:8px;background:#fff;color:var(--ink);transition:border-color .2s}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--p)}
+.field textarea{resize:vertical;min-height:80px}
+.field.full{grid-column:1/-1}
 
-/* === ORDER CARDS === */
-.order-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-.order-card{background:#fff;border-radius:12px;padding:14px;border:1px solid rgba(176,141,87,.18);box-shadow:0 4px 12px rgba(42,31,21,.05);cursor:pointer;transition:all .15s ease;position:relative}
-.order-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(42,31,21,.1)}
-.order-card.urgent{border-right:4px solid var(--err)}
-.order-card.soon{border-right:4px solid var(--warn)}
-.oc-top{display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:8px}
-.oc-name{font-weight:600;color:var(--ink);font-size:15px}
-.oc-phone{font-size:12px;color:var(--ix);direction:ltr;text-align:left}
-.oc-date{font-size:13px;color:var(--gd);font-weight:600;margin:6px 0;display:flex;align-items:center;gap:5px}
-.oc-items{font-size:13px;color:var(--is);line-height:1.5;background:var(--cream);padding:8px 10px;border-radius:8px;margin:6px 0}
-.oc-foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(176,141,87,.3)}
-.oc-tot{font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--gd);font-weight:700}
-.oc-fulfill{font-size:11px;color:var(--ix);background:#fff;border:1px solid rgba(176,141,87,.25);padding:3px 8px;border-radius:12px}
-.status-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px}
-.status-pill.new{background:#e3f2fd;color:#1565c0}
-.status-pill.confirmed{background:#fff3e0;color:#e65100}
-.status-pill.baking{background:#fff9c4;color:#f57f17}
-.status-pill.ready{background:#dcedc8;color:#33691e}
-.status-pill.delivered{background:#d7ccc8;color:#3e2723}
-.status-pill.cancelled{background:#ffcdd2;color:#b71c1c}
+/* KANBAN */
+.kanban{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:14px;overflow-x:auto;padding-bottom:10px}
+.kcol{background:#FAF1E8;border-radius:12px;padding:12px;min-height:300px}
+.kcol h3{font-size:14px;font-weight:700;color:var(--ink);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.kcol .count{background:#fff;color:var(--p);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600}
+.kcard{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:10px;cursor:grab;box-shadow:0 2px 4px rgba(0,0,0,.04);transition:all .2s}
+.kcard:hover{box-shadow:0 4px 12px rgba(0,0,0,.1);transform:translateY(-1px)}
+.kcard.dragging{opacity:.4}
+.kcard .n{font-weight:600;color:var(--ink);font-size:14px}
+.kcard .d{font-size:12px;color:var(--mute);margin-top:4px}
+.kcard .it{font-size:12px;color:var(--ink2);margin-top:6px;line-height:1.4}
+.kcard .ph{font-size:12px;color:var(--p);margin-top:4px}
+.kcard.urgent{border-right:4px solid var(--err)}
+.kcard.today{border-right:4px solid var(--warn)}
+.kcol.drag-over{background:#F5E4D0;border:2px dashed var(--p)}
 
-/* === KANBAN === */
-.kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;min-height:400px;overflow-x:auto}
-@media (max-width:900px){.kanban{grid-template-columns:repeat(5,280px);overflow-x:auto}}
-.kanban-col{background:rgba(255,255,255,.6);border-radius:var(--rad);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:240px}
-.kanban-col-h{display:flex;align-items:center;justify-content:space-between;padding:4px 8px 10px;border-bottom:1px solid rgba(176,141,87,.2)}
-.kanban-col-title{font-size:13px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:6px}
-.kanban-col-count{background:#fff;border:1px solid rgba(176,141,87,.25);color:var(--gd);font-size:11px;font-weight:700;padding:2px 7px;border-radius:10px;min-width:22px;text-align:center}
-.kanban-card{background:#fff;border-radius:10px;padding:10px;border:1px solid rgba(176,141,87,.18);cursor:grab;font-size:12.5px;box-shadow:0 2px 6px rgba(42,31,21,.04);transition:all .15s}
-.kanban-card:active{cursor:grabbing}
-.kanban-card:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(42,31,21,.08)}
-.kanban-card.dragging{opacity:.4}
-.kanban-card-name{font-weight:600;color:var(--ink);margin-bottom:4px}
-.kanban-card-date{color:var(--gd);font-size:11px;margin-bottom:4px}
-.kanban-card-tot{font-family:'Cormorant Garamond',serif;color:var(--gd);font-weight:700;font-size:15px;margin-top:6px}
-.kanban-empty{text-align:center;color:var(--ix);font-size:12px;font-style:italic;padding:20px 8px}
+/* TABLE */
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
+th,td{padding:10px 12px;text-align:right;border-bottom:1px solid var(--bd);font-size:14px}
+th{background:#FAF1E8;color:var(--ink);font-weight:700;font-size:13px;position:sticky;top:0}
+tr:hover{background:#FFF8F0}
+td .row-actions{display:flex;gap:6px}
+.tag{display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600}
+.tag.new{background:#e3f2fd;color:var(--info)}
+.tag.confirmed{background:#fff3e0;color:var(--warn)}
+.tag.baking{background:#fce4ec;color:#c2185b}
+.tag.ready{background:#e8f5e9;color:var(--ok)}
+.tag.delivered{background:#eceff1;color:var(--mute)}
 
-/* === MODAL === */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:80;display:none;align-items:center;justify-content:center;padding:18px;overflow-y:auto;-webkit-overflow-scrolling:touch}
-.modal-bg.show{display:flex;animation:fade .2s ease}
-.modal{background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 30px 80px rgba(0,0,0,.3)}
-.modal-h{padding:18px 22px;border-bottom:1px solid rgba(176,141,87,.18);display:flex;justify-content:space-between;align-items:center}
-.modal-h h2{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--ink)}
-.modal-x{background:transparent;border:none;font-size:24px;color:var(--ix);cursor:pointer;line-height:1}
-.modal-b{padding:22px}
-.modal-f{padding:14px 22px;border-top:1px solid rgba(176,141,87,.18);display:flex;justify-content:flex-end;gap:8px;background:var(--cream)}
-
-/* === FORM === */
-.f-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-.f-row.full{grid-template-columns:1fr}
-.f-field label{display:block;font-size:12.5px;color:var(--ix);margin-bottom:5px;font-weight:500}
-.f-field input,.f-field textarea,.f-field select{width:100%;padding:10px 12px;border:1px solid rgba(176,141,87,.3);border-radius:8px;font-family:inherit;font-size:14px;background:var(--cream);color:var(--ink)}
-.f-field input:focus,.f-field textarea:focus,.f-field select:focus{outline:none;border-color:var(--gold);background:#fff}
-.f-field textarea{min-height:60px;resize:vertical}
-.f-field-hint{font-size:11px;color:var(--ix);margin-top:4px}
-
-/* === TABLE / LIST === */
-.list-wrap{background:#fff;border-radius:var(--rad);border:1px solid rgba(176,141,87,.18);overflow:hidden}
-.list-search{padding:12px 16px;border-bottom:1px solid rgba(176,141,87,.15);display:flex;gap:8px;align-items:center}
-.list-search input{flex:1;padding:8px 12px;border:1px solid rgba(176,141,87,.25);border-radius:8px;font-family:inherit;font-size:14px;background:var(--cream)}
-.list-search input:focus{outline:none;border-color:var(--gold);background:#fff}
-.list-item{padding:14px 16px;border-bottom:1px solid rgba(176,141,87,.12);display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;cursor:pointer;transition:background .15s}
-.list-item:hover{background:rgba(176,141,87,.04)}
-.list-item:last-child{border-bottom:none}
-.li-main{display:flex;flex-direction:column;gap:2px}
-.li-name{font-weight:600;color:var(--ink);font-size:15px}
-.li-meta{font-size:12.5px;color:var(--ix)}
-.li-meta span{margin-inline-end:10px}
-.li-actions{display:flex;gap:6px;align-items:center}
-.li-stat{font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--gd);font-weight:700;min-width:60px;text-align:left;direction:ltr}
-.list-empty{text-align:center;color:var(--ix);padding:30px 18px;font-size:14px;font-style:italic}
-
-/* === CALENDAR === */
-.cal-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;background:#fff;padding:10px 14px;border-radius:var(--rad);border:1px solid rgba(176,141,87,.18)}
-.cal-nav-l{font-weight:600;color:var(--ink);font-size:15px}
+/* CALENDAR */
+.cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:16px}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-.cal-day{background:#fff;border-radius:10px;padding:8px 6px;min-height:120px;border:1px solid rgba(176,141,87,.15);position:relative;display:flex;flex-direction:column;gap:3px}
-.cal-day.today{background:linear-gradient(135deg,#fff,#fff8e7);border-color:var(--gold);box-shadow:0 4px 14px rgba(176,141,87,.2)}
-.cal-day.past{opacity:.5}
-.cal-day-h{display:flex;justify-content:space-between;align-items:center;padding-bottom:4px;border-bottom:1px solid rgba(176,141,87,.1);margin-bottom:3px}
-.cal-day-name{font-size:11px;color:var(--ix);font-weight:500}
-.cal-day-num{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:16px;color:var(--ink)}
-.cal-day.today .cal-day-num{color:var(--gd)}
-.cal-evt{font-size:10.5px;background:var(--cream);padding:3px 5px;border-radius:5px;cursor:pointer;border-right:3px solid var(--gold);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cal-evt:hover{background:#fff8e7}
-.cal-evt.s-new{border-right-color:var(--info)}
-.cal-evt.s-confirmed{border-right-color:var(--warn)}
-.cal-evt.s-baking{border-right-color:#f57f17}
-.cal-evt.s-ready{border-right-color:var(--ok)}
-.cal-evt.s-delivered{border-right-color:#7a6a52;opacity:.6}
+.cal-day{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:10px;min-height:120px}
+.cal-day .dt{font-weight:700;color:var(--ink);margin-bottom:8px;font-size:13px}
+.cal-day.today{border:2px solid var(--p);background:#FFF8F0}
+.cal-day.fri{background:#fff8e1}
+.cal-item{background:#FAF1E8;border-right:3px solid var(--p);padding:6px;border-radius:6px;margin-bottom:4px;font-size:11px;cursor:pointer}
+.cal-item:hover{background:#F5E4D0}
+.cal-item .name{font-weight:600}
+.cal-item .info{color:var(--mute);font-size:10px}
 
-/* === MOBILE === */
-@media (max-width:700px){
-  .topbar{padding:10px 14px}
-  .topbar-logo{font-size:24px}
-  .topbar-sub{display:none}
-  .tabs{top:48px;padding:0 10px}
-  .tab{padding:12px 10px;font-size:13.5px}
-  main{padding:14px}
-  .page-h h1{font-size:24px}
-  .kpi{padding:14px 16px}
-  .kpi-v{font-size:30px}
-  .kanban{grid-template-columns:repeat(5,250px);overflow-x:auto;padding-bottom:10px}
-  .modal{margin:10px;max-height:calc(100vh - 20px)}
-  .f-row{grid-template-columns:1fr}
-  .cal-grid{font-size:10px}
-  .cal-day{min-height:80px;padding:6px 3px}
-  .cal-day-num{font-size:13px}
-  .cal-evt{font-size:9.5px}
+/* MODAL */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal.show{display:flex}
+.modal-content{background:#fff;border-radius:14px;padding:24px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto}
+.modal-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.modal-h h3{font-size:20px;color:var(--p)}
+.modal-close{font-size:22px;color:var(--mute);width:32px;height:32px;border-radius:50%}
+.modal-close:hover{background:#f5f5f5}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;z-index:200;display:none;box-shadow:0 8px 20px rgba(0,0,0,.3);font-size:14px}
+.toast.show{display:block;animation:tin .3s}
+.toast.ok{background:var(--ok)}
+.toast.err{background:var(--err)}
+@keyframes tin{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* PRICING */
+.pricing-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px;align-items:center;margin-bottom:8px}
+.pricing-row input{padding:8px 10px;border:1px solid var(--bd);border-radius:6px;font-size:13px}
+.pricing-summary{background:#FAF1E8;border:1px solid var(--bd);border-radius:10px;padding:16px;margin-top:20px}
+.pricing-summary .line{display:flex;justify-content:space-between;padding:6px 0;font-size:14px}
+.pricing-summary .line.total{border-top:2px solid var(--p);margin-top:8px;padding-top:12px;font-weight:700;font-size:18px;color:var(--p)}
+
+/* P&L */
+.pl-month{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px}
+.pl-card{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:18px;box-shadow:var(--shadow)}
+.pl-card .lab{font-size:12px;color:var(--mute);font-weight:600;text-transform:uppercase}
+.pl-card .val{font-size:24px;font-weight:800;margin-top:6px}
+.pl-card.rev .val{color:var(--ok)}
+.pl-card.exp .val{color:var(--err)}
+.pl-card.net .val{color:var(--p)}
+
+/* SHOPPING LIST */
+.shop-grp{margin-bottom:24px}
+.shop-grp h3{color:var(--p);margin-bottom:10px;font-size:16px}
+.shop-grp ul{list-style:none;background:#fff;border:1px solid var(--bd);border-radius:10px;padding:8px}
+.shop-grp li{padding:8px 12px;border-bottom:1px solid #f5f5f5;display:flex;justify-content:space-between;align-items:center}
+.shop-grp li:last-child{border:none}
+
+/* MOBILE */
+@media(max-width:768px){
+.kanban{grid-template-columns:repeat(2,1fr)}
+.cal-grid{grid-template-columns:1fr;gap:4px}
+.cal-day{min-height:auto}
+.pl-month{grid-template-columns:1fr}
+.pricing-row{grid-template-columns:1fr;gap:6px}
+table{font-size:13px}
+th,td{padding:8px}
 }
-
-/* utilities */
-.muted{color:var(--ix)}
-.center{text-align:center}
-.flex-row{display:flex;gap:8px;align-items:center}
-.spacer{flex:1}
-.tag-pill{display:inline-flex;align-items:center;gap:3px;background:var(--cream);color:var(--ix);font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid rgba(176,141,87,.2)}
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--bk);color:#fff;padding:11px 22px;border-radius:30px;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:200;opacity:0;transition:opacity .2s}
-.toast.show{opacity:1}
 </style>
 </head>
 <body>
 
-<!-- Password Gate -->
-<div class="gate" id="gate">
-  <div class="gate-card">
-    <div class="gate-logo">Carmel</div>
-    <div class="gate-sub">DE-VRIES · ADMIN</div>
-    <div class="gate-h">סיסמת ניהול</div>
-    <input class="gate-input" id="gate-pw" type="password" placeholder="הקלידי סיסמה" autocomplete="off">
-    <button class="gate-btn" id="gate-btn">כניסה</button>
-    <div class="gate-err" id="gate-err"></div>
-  </div>
-</div>
-
-<!-- App -->
-<div class="app" id="app" style="display:none">
-
-<div class="topbar">
-  <div class="topbar-brand">
-    <div>
-      <div class="topbar-logo">Carmel</div>
-      <div class="topbar-sub">Admin</div>
+<!-- LOGIN SCREEN -->
+<div id="login">
+  <div class="login-card">
+    <div class="ico">🍪</div>
+    <h1>Carmel De-vries</h1>
+    <div class="subtitle">פאנל ניהול</div>
+    <div class="tagline">אפייה ביתית באהבה</div>
+    <div id="g-signin-btn"></div>
+    <div class="login-note">
+      רק טל וקרן מורשים להיכנס.<br>
+      התחבר עם חשבון Google כדי לסנכרן את כל הנתונים אוטומטית.
     </div>
-  </div>
-  <div class="topbar-actions">
-    <button class="topbar-btn" id="export-btn">📥 גיבוי</button>
-    <button class="topbar-btn" id="import-btn">📤 שחזור</button>
-    <button class="topbar-btn danger" id="logout-btn">יציאה</button>
+    <div id="login-err" class="login-err"></div>
   </div>
 </div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+<header>
+  <div class="brand"><h1>🍪 Carmel De-vries</h1><span class="badge">ADMIN</span></div>
+  <div class="user-info">
+    <span id="syncStatus" class="sync-status offline">לא מסונכרן</span>
+    <span class="email" id="userEmail"></span>
+    <button class="btn-out" onclick="signOut()">יציאה</button>
+  </div>
+</header>
 
 <nav class="tabs">
-  <button class="tab act" data-page="today"><span class="ic">🏠</span>היום</button>
-  <button class="tab" data-page="orders"><span class="ic">📦</span>הזמנות</button>
-  <button class="tab" data-page="customers"><span class="ic">👥</span>לקוחות</button>
-  <button class="tab" data-page="calendar"><span class="ic">📅</span>לוח שנה</button>
-  <button class="tab" data-page="new-order"><span class="ic">➕</span>הזמנה חדשה</button>
+  <button class="tab active" data-page="today">🏠 היום</button>
+  <button class="tab" data-page="orders">📦 הזמנות</button>
+  <button class="tab" data-page="customers">👥 לקוחות</button>
+  <button class="tab" data-page="calendar">📅 לוח שנה</button>
+  <button class="tab" data-page="neworder">➕ הזמנה חדשה</button>
+  <button class="tab" data-page="pricing">🧮 תמחור</button>
+  <button class="tab" data-page="expenses">💰 הוצאות</button>
+  <button class="tab" data-page="pnl">📊 דוח P&L</button>
+  <button class="tab" data-page="shopping">🛒 קניות</button>
 </nav>
 
 <main>
 
-<!-- TODAY PAGE -->
-<div class="page act" id="page-today">
-  <div class="page-h">
-    <h1 id="today-title">היום</h1>
-    <button class="btn" onclick="goTo('new-order')">➕ הזמנה חדשה</button>
-  </div>
-  <div class="kpi-grid">
-    <div class="kpi blue"><div class="kpi-l">הזמנות פעילות</div><div class="kpi-v" id="kpi-active">0</div><div class="kpi-d">חדשות + מאושרות + באפייה</div></div>
-    <div class="kpi orange"><div class="kpi-l">דחוף השבוע</div><div class="kpi-v" id="kpi-urgent">0</div><div class="kpi-d">מסירה ב-2 ימים הקרובים</div></div>
-    <div class="kpi green"><div class="kpi-l">הכנסה החודש</div><div class="kpi-v" id="kpi-revenue">₪0</div><div class="kpi-d" id="kpi-revenue-d">החודש</div></div>
-    <div class="kpi lilac"><div class="kpi-l">לקוחות פעילים</div><div class="kpi-v" id="kpi-customers">0</div><div class="kpi-d">בסך הכל</div></div>
-  </div>
+<!-- TODAY -->
+<section class="page active" id="page-today">
+  <div class="page-h"><h2>סקירת היום</h2><div class="actions"><button class="btn btn-s" onclick="syncAll()">🔄 סנכרון</button></div></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="card"><h3 style="margin-bottom:14px;color:var(--ink)">🔥 הזמנות דחופות (היום + מחר)</h3><div id="urgentOrders">טוען...</div></div>
+  <div class="card" style="margin-top:16px"><h3 style="margin-bottom:14px;color:var(--ink)">📰 פעילות אחרונה</h3><div id="activity">טוען...</div></div>
+</section>
 
-  <div class="section-h"><h2>🔥 הזמנות דחופות (2 ימים הקרובים)</h2></div>
-  <div class="order-list" id="urgent-list"><div class="list-empty">אין הזמנות דחופות 🎉</div></div>
-
-  <div class="section-h"><h2>📋 כל ההזמנות הפעילות</h2></div>
-  <div class="order-list" id="active-list"><div class="list-empty">אין הזמנות פעילות</div></div>
-</div>
-
-<!-- ORDERS KANBAN PAGE -->
-<div class="page" id="page-orders">
-  <div class="page-h">
-    <h1>הזמנות — קנבן</h1>
-    <button class="btn" onclick="goTo('new-order')">➕ חדש</button>
-  </div>
+<!-- ORDERS KANBAN -->
+<section class="page" id="page-orders">
+  <div class="page-h"><h2>קנבן הזמנות</h2><div class="actions"><button class="btn btn-s" onclick="syncAll()">🔄 סנכרון</button></div></div>
   <div class="kanban" id="kanban"></div>
-</div>
+</section>
 
-<!-- CUSTOMERS PAGE -->
-<div class="page" id="page-customers">
-  <div class="page-h">
-    <h1>לקוחות</h1>
-    <button class="btn ghost" onclick="openCustomerModal()">➕ לקוח חדש</button>
+<!-- CUSTOMERS -->
+<section class="page" id="page-customers">
+  <div class="page-h"><h2>מאגר לקוחות</h2><div class="actions"><input id="custSearch" placeholder="חיפוש..." style="padding:8px 12px;border:1px solid var(--bd);border-radius:8px"><button class="btn btn-p" onclick="showCustModal()">➕ חדש</button></div></div>
+  <div id="custList">טוען...</div>
+</section>
+
+<!-- CALENDAR -->
+<section class="page" id="page-calendar">
+  <div class="page-h"><h2>לוח שנה</h2></div>
+  <div class="cal-nav"><button class="btn btn-s" onclick="calNav(-1)">← קודם</button><h3 id="calLabel" style="flex:1;text-align:center"></h3><button class="btn btn-s" onclick="calNav(1)">הבא →</button><button class="btn btn-s" onclick="calNav(0)">היום</button></div>
+  <div class="cal-grid" id="calGrid"></div>
+</section>
+
+<!-- NEW ORDER -->
+<section class="page" id="page-neworder">
+  <div class="page-h"><h2>הזמנה חדשה</h2></div>
+  <div class="card" style="margin-bottom:16px">
+    <h3 style="margin-bottom:10px">📋 הדבק הודעה מווטסאפ</h3>
+    <textarea id="waPaste" placeholder="הדבק כאן את ההודעה ולחץ Parse..." style="width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;min-height:120px;direction:rtl"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-s" onclick="parseWA()">🔍 פענוח אוטומטי</button><button class="btn" onclick="document.getElementById('waPaste').value=''" style="background:#f5f5f5">נקה</button></div>
   </div>
-  <div class="list-wrap">
-    <div class="list-search">
-      <input type="text" id="cust-search" placeholder="🔍 חיפוש לפי שם או טלפון...">
+  <div class="card">
+    <h3 style="margin-bottom:14px">פרטי לקוח</h3>
+    <div class="form-grid">
+      <div class="field"><label>שם מלא*</label><input id="oName" required></div>
+      <div class="field"><label>טלפון*</label><input id="oPhone" type="tel" required></div>
+      <div class="field"><label>סוג מסירה</label><select id="oFulfill"><option value="pickup">איסוף עצמי</option><option value="delivery">משלוח באופקים</option></select></div>
+      <div class="field"><label>תאריך*</label><input id="oDate" type="date" required></div>
+      <div class="field full" id="addrField" style="display:none"><label>כתובת למשלוח</label><input id="oAddress"></div>
+      <div class="field full"><label>פריטים*</label><textarea id="oItems" placeholder="לדוגמה: 2 מארזי מרוקאיות, 30 כדורי שוקולד-קוקוס"></textarea></div>
+      <div class="field full"><label>הערות</label><textarea id="oNotes" placeholder="אלרגיות, הוראות מיוחדות..."></textarea></div>
     </div>
-    <div id="cust-list"><div class="list-empty">אין לקוחות עדיין</div></div>
+    <div style="display:flex;gap:8px;margin-top:18px"><button class="btn btn-p" onclick="saveNewOrder()">💾 שמירה</button><button class="btn btn-s" onclick="clearOrderForm()">נקה</button></div>
   </div>
-</div>
+</section>
 
-<!-- CALENDAR PAGE -->
-<div class="page" id="page-calendar">
-  <div class="page-h">
-    <h1>לוח שנה שבועי</h1>
+<!-- PRICING CALCULATOR -->
+<section class="page" id="page-pricing">
+  <div class="page-h"><h2>מחשבון תמחור</h2><div class="actions"><button class="btn btn-s" onclick="addIngrRow()">➕ מצרך</button></div></div>
+  <div class="card">
+    <h3 style="margin-bottom:14px">פרטי המתכון</h3>
+    <div class="form-grid">
+      <div class="field"><label>שם מוצר</label><input id="prName" placeholder="לדוגמה: עוגיות מרוקאיות"></div>
+      <div class="field"><label>תפוקה (יח׳)</label><input id="prYield" type="number" value="30"></div>
+      <div class="field"><label>שעות עבודה</label><input id="prHours" type="number" step="0.25" value="2"></div>
+      <div class="field"><label>שכר שעה (₪)</label><input id="prRate" type="number" value="50"></div>
+      <div class="field"><label>תקורה % (גז+חשמל+אריזה)</label><input id="prOver" type="number" value="15"></div>
+      <div class="field"><label>מכפיל רווח (×)</label><input id="prMult" type="number" step="0.1" value="2.5"></div>
+    </div>
+    <h4 style="margin:20px 0 10px">מצרכים</h4>
+    <div class="pricing-row" style="font-weight:600;color:var(--mute);font-size:12px"><div>שם המצרך</div><div>כמות</div><div>יחידה</div><div>מחיר/יח׳</div><div></div></div>
+    <div id="ingrList"></div>
+    <button class="btn btn-s" onclick="addIngrRow()" style="margin-top:8px">➕ הוסף מצרך</button>
+    <div class="pricing-summary" id="prSummary"></div>
+    <div style="display:flex;gap:8px;margin-top:16px"><button class="btn btn-p" onclick="calcPricing()">🧮 חישוב</button><button class="btn btn-s" onclick="clearPricing()">נקה</button></div>
   </div>
-  <div class="cal-nav">
-    <button class="btn sm ghost" onclick="prevWeek()">← שבוע קודם</button>
-    <div class="cal-nav-l" id="cal-week-label"></div>
-    <button class="btn sm ghost" onclick="nextWeek()">שבוע הבא →</button>
+</section>
+
+<!-- EXPENSES -->
+<section class="page" id="page-expenses">
+  <div class="page-h"><h2>מעקב הוצאות</h2><div class="actions"><button class="btn btn-p" onclick="showExpModal()">➕ הוצאה חדשה</button></div></div>
+  <div class="kpis">
+    <div class="kpi"><div class="lab">החודש</div><div class="val" id="expThis">₪0</div></div>
+    <div class="kpi"><div class="lab">חודש שעבר</div><div class="val" id="expLast">₪0</div></div>
+    <div class="kpi"><div class="lab">סה״כ השנה</div><div class="val" id="expYear">₪0</div></div>
   </div>
-  <div class="cal-grid" id="cal-grid"></div>
-</div>
+  <div id="expList">טוען...</div>
+</section>
 
-<!-- NEW ORDER PAGE -->
-<div class="page" id="page-new-order">
-  <div class="page-h"><h1>הזמנה חדשה</h1></div>
-  <div class="list-wrap" style="padding:20px;max-width:760px">
-    <div style="margin-bottom:18px;padding:14px;background:var(--cream);border-radius:10px;border-right:3px solid var(--gold)">
-      <div style="font-size:14px;color:var(--ink);margin-bottom:8px;font-weight:600">📋 הדבק הודעת ווטסאפ — אזהה אוטומטית</div>
-      <textarea id="wa-paste" placeholder="הדבק כאן את ההודעה שקיבלת בווטסאפ (אופציונלי)..." style="width:100%;min-height:80px;padding:10px;border:1px solid rgba(176,141,87,.25);border-radius:8px;font-family:inherit;font-size:13.5px;background:#fff"></textarea>
-      <button class="btn sm ghost" style="margin-top:8px" onclick="parseWA()">🔍 זיהוי אוטומטי</button>
+<!-- P&L -->
+<section class="page" id="page-pnl">
+  <div class="page-h"><h2>דוח רווח והפסד</h2>
+    <div class="actions">
+      <select id="plMonth" onchange="renderPL()"></select>
     </div>
-
-    <div class="f-row">
-      <div class="f-field"><label>שם לקוח</label><input type="text" id="no-name" autocomplete="off"></div>
-      <div class="f-field"><label>טלפון</label><input type="tel" id="no-phone" autocomplete="off"></div>
-    </div>
-    <div class="f-row">
-      <div class="f-field"><label>סוג קבלה</label><select id="no-fulfill"><option value="delivery">🚚 משלוח</option><option value="pickup">🏠 איסוף עצמי</option></select></div>
-      <div class="f-field"><label>תאריך מבוקש</label><input type="date" id="no-date"></div>
-    </div>
-    <div class="f-row full" id="no-addr-row">
-      <div class="f-field"><label>כתובת למשלוח</label><input type="text" id="no-address"></div>
-    </div>
-
-    <div style="margin:18px 0">
-      <div style="font-weight:600;margin-bottom:10px">פריטים</div>
-      <div id="no-items"></div>
-    </div>
-
-    <div class="f-row full">
-      <div class="f-field"><label>הערות</label><textarea id="no-notes"></textarea></div>
-    </div>
-
-    <div style="background:var(--cream);padding:14px;border-radius:10px;margin:14px 0">
-      <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span>סכום פריטים:</span><span id="no-sub">0 ₪</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span>משלוח:</span><span id="no-del">—</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:700;color:var(--gd);padding:8px 0 0;border-top:1px solid rgba(176,141,87,.3);margin-top:6px"><span>סה"כ:</span><span id="no-total">0 ₪</span></div>
-    </div>
-
-    <button class="btn full" onclick="saveNewOrder()">💾 שמירת הזמנה</button>
   </div>
-</div>
+  <div class="pl-month">
+    <div class="pl-card rev"><div class="lab">הכנסות</div><div class="val" id="plRev">₪0</div><div id="plOrders" style="font-size:12px;color:var(--mute);margin-top:6px"></div></div>
+    <div class="pl-card exp"><div class="lab">הוצאות</div><div class="val" id="plExp">₪0</div></div>
+    <div class="pl-card net"><div class="lab">רווח נקי</div><div class="val" id="plNet">₪0</div><div id="plMargin" style="font-size:12px;color:var(--mute);margin-top:6px"></div></div>
+  </div>
+  <div class="card">
+    <h3 style="margin-bottom:14px">פירוט הזמנות</h3>
+    <div id="plOrderList">טוען...</div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-bottom:14px">פירוט הוצאות</h3>
+    <div id="plExpList">טוען...</div>
+  </div>
+</section>
+
+<!-- SHOPPING LIST -->
+<section class="page" id="page-shopping">
+  <div class="page-h"><h2>רשימת קניות</h2><div class="actions"><button class="btn btn-s" onclick="generateShoppingList()">🔄 רענון</button><button class="btn btn-p" onclick="copyShoppingList()">📋 העתק</button></div></div>
+  <div class="card"><div style="background:#FAF1E8;padding:10px;border-radius:8px;margin-bottom:14px;font-size:13px;color:var(--ink2)">רשימה מחושבת אוטומטית מהזמנות פתוחות (חדשות + מאושרות + באפייה). מצטרפת מצרכים אופייניים לכל מוצר.</div><div id="shopList">לחץ "רענון" כדי לחשב</div></div>
+</section>
 
 </main>
-</div>
 
-<!-- Order Detail Modal -->
-<div class="modal-bg" id="order-modal">
-  <div class="modal">
-    <div class="modal-h">
-      <h2>פרטי הזמנה</h2>
-      <button class="modal-x" onclick="closeModal('order-modal')">×</button>
-    </div>
-    <div class="modal-b" id="order-modal-body"></div>
-    <div class="modal-f">
-      <button class="btn ghost danger" onclick="deleteCurrentOrder()">🗑 מחק</button>
-      <span class="spacer"></span>
-      <button class="btn ghost" onclick="closeModal('order-modal')">סגור</button>
-    </div>
-  </div>
-</div>
+<!-- ORDER DETAIL MODAL -->
+<div class="modal" id="orderModal"><div class="modal-content"><div class="modal-h"><h3 id="omTitle">הזמנה</h3><button class="modal-close" onclick="closeModal('orderModal')">✕</button></div><div id="omBody"></div></div></div>
+<!-- CUSTOMER MODAL -->
+<div class="modal" id="custModal"><div class="modal-content"><div class="modal-h"><h3 id="cmTitle">לקוח חדש</h3><button class="modal-close" onclick="closeModal('custModal')">✕</button></div>
+<div class="form-grid"><div class="field"><label>שם*</label><input id="cName"></div><div class="field"><label>טלפון*</label><input id="cPhone"></div><div class="field full"><label>כתובת</label><input id="cAddr"></div><div class="field full"><label>אלרגיות / מזהים</label><input id="cAllergy"></div><div class="field full"><label>הערות</label><textarea id="cNotes"></textarea></div></div>
+<div style="display:flex;gap:8px;margin-top:14px"><button class="btn btn-p" onclick="saveCust()">שמור</button><button class="btn btn-s" onclick="closeModal('custModal')">בטל</button></div></div></div>
+<!-- EXPENSE MODAL -->
+<div class="modal" id="expModal"><div class="modal-content"><div class="modal-h"><h3 id="emTitle">הוצאה חדשה</h3><button class="modal-close" onclick="closeModal('expModal')">✕</button></div>
+<div class="form-grid"><div class="field"><label>תאריך*</label><input id="eDate" type="date"></div><div class="field"><label>קטגוריה*</label><select id="eCat"><option>מצרכים</option><option>אריזה</option><option>גז</option><option>חשמל</option><option>כלים/ציוד</option><option>פרסום</option><option>משלוחים</option><option>אחר</option></select></div><div class="field full"><label>תיאור</label><input id="eDesc" placeholder="לדוגמה: קמח מ-Y.B."></div><div class="field"><label>סכום (₪)*</label><input id="eAmt" type="number" step="0.01"></div><div class="field"><label>ספק</label><input id="eVendor"></div></div>
+<div style="display:flex;gap:8px;margin-top:14px"><button class="btn btn-p" onclick="saveExp()">שמור</button><button class="btn btn-s" onclick="closeModal('expModal')">בטל</button></div></div></div>
 
-<!-- Customer Modal -->
-<div class="modal-bg" id="cust-modal">
-  <div class="modal">
-    <div class="modal-h">
-      <h2 id="cust-modal-title">לקוח חדש</h2>
-      <button class="modal-x" onclick="closeModal('cust-modal')">×</button>
-    </div>
-    <div class="modal-b">
-      <div class="f-row">
-        <div class="f-field"><label>שם</label><input type="text" id="cm-name"></div>
-        <div class="f-field"><label>טלפון</label><input type="tel" id="cm-phone"></div>
-      </div>
-      <div class="f-row full"><div class="f-field"><label>כתובת</label><input type="text" id="cm-address"></div></div>
-      <div class="f-row full"><div class="f-field"><label>אלרגיות / רגישויות</label><input type="text" id="cm-allergies" placeholder="לדוגמה: ללא אגוזים"></div></div>
-      <div class="f-row full"><div class="f-field"><label>הערות</label><textarea id="cm-notes"></textarea></div></div>
-      <div id="cm-history" style="margin-top:12px"></div>
-    </div>
-    <div class="modal-f">
-      <button class="btn ghost danger" onclick="deleteCustomer()" id="cm-del" style="display:none">🗑 מחק</button>
-      <span class="spacer"></span>
-      <button class="btn ghost" onclick="closeModal('cust-modal')">ביטול</button>
-      <button class="btn" onclick="saveCustomer()">💾 שמירה</button>
-    </div>
-  </div>
-</div>
+<div id="toast" class="toast"></div>
 
-<input type="file" id="import-file" accept=".json" style="display:none">
-<div class="toast" id="toast"></div>
+</div><!-- /app -->
 
-<script src="app.js"></script>
-</body></html>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="app.js?v=20"></script>
+</body>
+</html>
