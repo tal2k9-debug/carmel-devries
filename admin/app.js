@@ -27,33 +27,36 @@ let calCursor = new Date();
 let editingCustId=null, editingExpId=null;
 let pendingWrites = []; // queue for offline
 
-/* ============ GOOGLE SIGN-IN ============ */
+/* ============ GOOGLE SIGN-IN (Single-button OAuth flow) ============ */
 window.addEventListener('load', initApp);
 
 async function initApp() {
-  // Wait for google to load
   let tries = 0;
   while (!window.google && tries < 50) { await sleep(100); tries++; }
   if (!window.google) { showLoginError('שגיאה בטעינת Google'); return; }
+  console.log('[Carmel] google loaded');
 
-  google.accounts.id.initialize({
-    client_id: CLIENT_ID,
-    callback: handleCredential,
-    auto_select: false
-  });
-  google.accounts.id.renderButton(
-    document.getElementById('g-signin-btn'),
-    {theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', locale:'iw'}
-  );
-
-  // Token client for Sheets API access
+  // Initialize OAuth2 token client (gives us access_token directly)
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPES,
-    callback: handleToken
+    callback: handleToken,
+    error_callback: (err) => { console.error('[Carmel] oauth error', err); showLoginError('שגיאת הרשאות: ' + (err.type || err.message || JSON.stringify(err))); }
   });
 
-  // Load cache
+  // Render a simple "Sign in with Google" button that triggers OAuth popup directly
+  const btnEl = document.getElementById('g-signin-btn');
+  btnEl.innerHTML = '<button id="myGoogleBtn" style="background:#4285F4;color:#fff;padding:14px 28px;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:10px;box-shadow:0 4px 12px rgba(66,133,244,.3)"><svg width="20" height="20" viewBox="0 0 18 18"><path fill="#fff" d="M9 3.48c1.69 0 2.84.73 3.49 1.34l2.55-2.49C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z" opacity=".9"/><path fill="#fff" d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.1.83-.64 2.08-1.84 2.92l2.84 2.2c1.7-1.57 2.68-3.88 2.68-6.62z" opacity=".7"/><path fill="#fff" d="M3.88 10.78A5.54 5.54 0 0 1 3.58 9c0-.62.11-1.22.29-1.78L.96 4.96A9.008 9.008 0 0 0 0 9c0 1.45.35 2.82.96 4.04l2.92-2.26z" opacity=".5"/><path fill="#fff" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.84-2.2c-.76.53-1.78.9-3.12.9-2.38 0-4.4-1.57-5.12-3.74L.97 13.04C2.45 15.98 5.48 18 9 18z" opacity=".8"/></svg>כניסה באמצעות Google</button>';
+  document.getElementById('myGoogleBtn').onclick = () => {
+    console.log('[Carmel] sign-in clicked');
+    try {
+      tokenClient.requestAccessToken({prompt:'consent'});
+    } catch(e) {
+      console.error('[Carmel] requestAccessToken threw', e);
+      showLoginError('שגיאה: ' + e.message);
+    }
+  };
+
   loadCache();
 
   // Restore session if token still valid
@@ -71,29 +74,29 @@ async function initApp() {
   }
 }
 
-function handleCredential(resp) {
-  // Decode JWT to get email
-  const payload = parseJwt(resp.credential);
-  if (!payload) { showLoginError('פענוח כשל'); return; }
-  if (!ALLOWLIST.includes(payload.email.toLowerCase())) {
-    showLoginError(`האימייל ${payload.email} לא מורשה. רק טל וקרן יכולים להיכנס.`);
-    return;
-  }
-  user = {email: payload.email, name: payload.name, picture: payload.picture};
-  // Now request token for Sheets API
-  tokenClient.requestAccessToken({prompt:''});
-}
-
-function handleToken(resp) {
+async function handleToken(resp) {
+  console.log('[Carmel] token resp', resp);
   if (resp.error) {
-    showLoginError('שגיאת הרשאות: ' + resp.error);
+    showLoginError('שגיאה: ' + resp.error + ' - ' + (resp.error_description||''));
     return;
   }
   accessToken = resp.access_token;
-  user.token = accessToken;
-  user.expiry = Date.now() + (resp.expires_in*1000) - 60000;
-  localStorage.setItem('carmel_user', JSON.stringify(user));
-  showApp();
+  // Fetch user info using the token
+  try {
+    const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {headers:{Authorization:'Bearer '+accessToken}}).then(r=>r.json());
+    console.log('[Carmel] userinfo', ui);
+    if (!ALLOWLIST.includes((ui.email||'').toLowerCase())) {
+      showLoginError(`האימייל ${ui.email} לא מורשה. רק טל וקרן יכולים להיכנס.`);
+      accessToken = null;
+      return;
+    }
+    user = {email: ui.email, name: ui.name, picture: ui.picture, token: accessToken, expiry: Date.now() + (resp.expires_in*1000) - 60000};
+    localStorage.setItem('carmel_user', JSON.stringify(user));
+    showApp();
+  } catch(e) {
+    console.error('[Carmel] userinfo failed', e);
+    showLoginError('שגיאה בטעינת פרופיל: ' + e.message);
+  }
 }
 
 function signOut() {
