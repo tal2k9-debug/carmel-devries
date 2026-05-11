@@ -22,7 +22,7 @@ const PRODUCTS = [
 ];
 
 let tokenClient, accessToken=null, user=null;
-let db = {customers:[], orders:[], expenses:[]};
+let db = {customers:[], orders:[], expenses:[], recipes:[]};
 let calCursor = new Date();
 let editingCustId=null, editingExpId=null;
 let pendingWrites = []; // queue for offline
@@ -115,7 +115,7 @@ async function showApp() {
   setSync('syncing', 'מסנכרן...');
   try {
     await loadGapi();
-    await ensureExpensesTab();
+    await ensureTabs();
     await syncAll();
     setSync('ok', 'מסונכרן');
   } catch (e) {
@@ -149,23 +149,29 @@ async function loadGapi() {
   });
 }
 
-async function ensureExpensesTab() {
+async function ensureTabs() {
   try {
     const meta = await gapi.client.sheets.spreadsheets.get({spreadsheetId: SHEET_ID});
-    const sheets = meta.result.sheets.map(s=>s.properties.title);
-    if (!sheets.includes('Expenses')) {
-      await gapi.client.sheets.spreadsheets.batchUpdate({
-        spreadsheetId: SHEET_ID,
-        resource: {requests:[{addSheet:{properties:{title:'Expenses'}}}]}
-      });
+    const existing = meta.result.sheets.map(s=>s.properties.title);
+    const toAdd = [];
+    if (!existing.includes('Expenses')) toAdd.push({addSheet:{properties:{title:'Expenses'}}});
+    if (!existing.includes('Recipes')) toAdd.push({addSheet:{properties:{title:'Recipes'}}});
+    if (toAdd.length){
+      await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:SHEET_ID, resource:{requests:toAdd}});
+    }
+    if (!existing.includes('Expenses')) {
       await gapi.client.sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: 'Expenses!A1:F1',
-        valueInputOption: 'RAW',
+        spreadsheetId: SHEET_ID, range: 'Expenses!A1:F1', valueInputOption: 'RAW',
         resource: {values:[['id','date','category','description','amount','vendor']]}
       });
     }
-  } catch(e){ console.warn('ensureExpensesTab', e); }
+    if (!existing.includes('Recipes')) {
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID, range: 'Recipes!A1:H1', valueInputOption: 'RAW',
+        resource: {values:[['id','name','yield','hours','rate','over','mult','ingredients_json']]}
+      });
+    }
+  } catch(e){ console.warn('ensureTabs', e); }
 }
 
 async function readRange(range) {
@@ -197,14 +203,17 @@ async function updateRow(sheetName, rowNum, row) {
 async function syncAll() {
   setSync('syncing', 'מסנכרן...');
   try {
-    const [cust, ord, exp] = await Promise.all([
+    const [cust, ord, exp, rec] = await Promise.all([
       readRange('Customers!A2:H'),
       readRange('Orders!A2:L'),
-      readRange('Expenses!A2:F').catch(()=>[])
+      readRange('Expenses!A2:F').catch(()=>[]),
+      readRange('Recipes!A2:H').catch(()=>[])
     ]);
     db.customers = cust.map(r => rowToCust(r));
     db.orders = ord.map(r => rowToOrder(r));
     db.expenses = exp.map(r => rowToExp(r));
+    db.recipes = rec.map(r => rowToRecipe(r));
+    refreshRecipesList();
     saveCache();
     renderAll();
     setSync('ok', 'מסונכרן');
@@ -228,6 +237,7 @@ function loadCache() {
     if (!db.customers) db.customers = [];
     if (!db.orders) db.orders = [];
     if (!db.expenses) db.expenses = [];
+    if (!db.recipes) db.recipes = [];
   } catch(e){}
 }
 function saveCache(){ localStorage.setItem(CACHE_KEY, JSON.stringify(db)); }
@@ -238,6 +248,8 @@ function rowToOrder(r){ return {id:r[0]||'', customerId:r[1]||'', name:r[2]||'',
 function orderToRow(o){ return [o.id, o.customerId, o.name, o.phone, o.address, o.fulfillment, o.date, o.items, o.notes, o.status, o.createdAt, o.updatedAt]; }
 function rowToExp(r){ return {id:r[0]||'', date:r[1]||'', category:r[2]||'', description:r[3]||'', amount:parseFloat(r[4])||0, vendor:r[5]||''}; }
 function expToRow(e){ return [e.id, e.date, e.category, e.description, String(e.amount), e.vendor]; }
+function rowToRecipe(r){ let ing=[]; try{ ing=JSON.parse(r[7]||'[]'); }catch(e){} return {id:r[0]||'', name:r[1]||'', yield:r[2]||'30', hours:r[3]||'2', rate:r[4]||'50', over:r[5]||'15', mult:r[6]||'2.5', ingredients:ing}; }
+function recipeToRow(r){ return [r.id, r.name, String(r.yield), String(r.hours), String(r.rate), String(r.over), String(r.mult), JSON.stringify(r.ingredients||[])]; }
 
 /* ============ UI BINDING ============ */
 function bindUI() {
@@ -250,6 +262,8 @@ function bindUI() {
   for (let i=0; i<5; i++) addIngrRow();
   // Init P&L month select
   initMonthSelect();
+  // Init recipes dropdown
+  refreshRecipesList();
 }
 
 function switchTab(page) {
@@ -645,59 +659,178 @@ function renderPL(){
 
 /* ============ SHOPPING LIST ============ */
 function generateShoppingList(){
-  // From open orders, estimate ingredients
-  const open=db.orders.filter(o=>o.status==='new'||o.status==='confirmed'||o.status==='baking');
-  if(!open.length){document.getElementById('shopList').innerHTML='<div style="color:var(--mute);text-align:center;padding:20px">אין הזמנות פתוחות</div>';return;}
-  // Aggregate by product
-  const tally={};
+  const open = db.orders.filter(o=>o.status==='new'||o.status==='confirmed'||o.status==='baking');
+  if(!open.length){
+    document.getElementById('shopList').innerHTML='<div style="color:var(--mute);text-align:center;padding:20px">אין הזמנות פתוחות</div>';
+    return;
+  }
+  if (!db.recipes || db.recipes.length===0){
+    document.getElementById('shopList').innerHTML='<div style="background:#fff3e0;padding:14px;border-radius:8px;color:var(--ink2);text-align:center">⚠️ אין מתכונים שמורים עדיין.<br>היכנסי ל-🧮 תמחור, מלאי מתכון, ולחצי "💾 שמירת מתכון".<br>אחר כך הרשימה כאן תחושב אוטומטית מהמתכונים האמיתיים שלך.</div>';
+    return;
+  }
+  // For each open order, match items to recipes
+  const batchesPerRecipe = {}; // recipeId -> batches
+  const unmatched = []; // {orderName, line}
   open.forEach(o=>{
-    const lines=(o.items||'').split(/[,\n]/);
+    const lines = (o.items||'').split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
     lines.forEach(line=>{
-      const m=line.match(/(\d+)\s*(מארז|יח׳?|כדור|יחידות)?/);
-      if(!m)return;
-      const qty=parseInt(m[1]);
-      const lt=line.toLowerCase();
-      for(const p of PRODUCTS){
-        if(lt.includes(p.n.slice(0,4))||(p.id==='maroc'&&lt.includes('מרוק'))||(p.id==='choco'&&lt.includes('שוקול'))||(p.id==='rolled'&&lt.includes('מגולגל'))||(p.id==='tahini'&&lt.includes('טחינ'))||(p.id==='butter'&&(lt.includes('חמאה')||lt.includes('שקד')))||(p.id==='yoyo'&&lt.includes('יויו'))){
-          tally[p.id]=(tally[p.id]||0)+qty; return;
-        }
+      const m = line.match(/(\d+(?:\.\d+)?)/);
+      if (!m) { unmatched.push({order:o.name, line}); return; }
+      const qty = parseFloat(m[1]);
+      // Match recipe by name substring
+      const lt = line;
+      const recipe = db.recipes.find(r => r.name && lt.includes(r.name.slice(0,5)));
+      if (!recipe){ unmatched.push({order:o.name, line}); return; }
+      // Determine batches: if "מארז" in line, qty == batches; else qty / yield
+      let batches;
+      const isBatch = /מארז|מארזי/.test(line);
+      if (isBatch) batches = qty;
+      else {
+        const y = parseFloat(recipe.yield) || 30;
+        batches = qty / y;
       }
+      batchesPerRecipe[recipe.id] = (batchesPerRecipe[recipe.id]||0) + batches;
     });
   });
-  // Estimate ingredients per product (rough)
-  const INGRED = {
-    maroc: [{n:'קמח',u:'ק״ג',per:0.012},{n:'סוכר',u:'ק״ג',per:0.008},{n:'מרגרינה',u:'ק״ג',per:0.01},{n:'ביצים',u:'יח׳',per:0.03}],
-    choco: [{n:'ביסקויטים',u:'ק״ג',per:0.02},{n:'קקאו',u:'ק״ג',per:0.005},{n:'חלב מרוכז',u:'יח׳',per:0.02},{n:'קוקוס/סוכריות',u:'ק״ג',per:0.005}],
-    rolled: [{n:'בצק עלים',u:'ק״ג',per:0.05},{n:'מילוי (פיסטוק/קינדר/נוטלה)',u:'ק״ג',per:0.03},{n:'ביצים',u:'יח׳',per:0.5}],
-    tahini: [{n:'קמח',u:'ק״ג',per:0.012},{n:'טחינה',u:'ק״ג',per:0.015},{n:'סוכר',u:'ק״ג',per:0.008}],
-    butter: [{n:'קמח',u:'ק״ג',per:0.015},{n:'חמאה',u:'ק״ג',per:0.012},{n:'שקדים',u:'ק״ג',per:0.008},{n:'אבקת סוכר',u:'ק״ג',per:0.005}],
-    yoyo: [{n:'קמח',u:'ק״ג',per:0.01},{n:'ריבת חלב',u:'ק״ג',per:0.005},{n:'שמן',u:'ל׳',per:0.005}]
-  };
-  const need={};
-  Object.entries(tally).forEach(([pid,qty])=>{
-    (INGRED[pid]||[]).forEach(ing=>{
-      const key=ing.n+'|'+ing.u;
-      need[key]=(need[key]||0)+(qty*ing.per);
+  // Aggregate ingredients
+  const need = {}; // "name|unit" -> qty
+  const recipeBatches = []; // for display
+  Object.entries(batchesPerRecipe).forEach(([rid, batches])=>{
+    const r = db.recipes.find(x=>x.id===rid);
+    if (!r) return;
+    recipeBatches.push({name:r.name, batches:batches, yield:r.yield});
+    (r.ingredients||[]).forEach(ing=>{
+      const q = parseFloat(ing.q) || 0;
+      if (q===0) return;
+      const key = ing.n + '|' + (ing.u||'');
+      need[key] = (need[key]||0) + (q * batches);
     });
   });
-  // Group products and ingredients
-  let html=`<div class="shop-grp"><h3>📦 מוצרים להכין</h3><ul>`;
-  Object.entries(tally).forEach(([pid,qty])=>{
-    const p=PRODUCTS.find(x=>x.id===pid);
-    html+=`<li><span><strong>${p?p.n:pid}</strong></span><span>${qty} ${pid==='choco'||pid==='yoyo'?'יח׳':'מארזים'}</span></li>`;
-  });
-  html+=`</ul></div><div class="shop-grp"><h3>🛒 מצרכים לקנות (אומדן)</h3><ul>`;
-  Object.entries(need).sort().forEach(([key,amt])=>{
-    const [n,u]=key.split('|');
-    html+=`<li><span>${n}</span><span><strong>${amt.toFixed(2)} ${u}</strong></span></li>`;
-  });
-  html+=`</ul></div><div style="background:#fff3e0;padding:12px;border-radius:8px;font-size:13px;color:var(--ink2)">💡 האומדנים הם ממוצעים כלליים. בדקי את המתכון שלך לפני קנייה.</div>`;
-  document.getElementById('shopList').innerHTML=html;
+
+  let html = '<div class="shop-grp"><h3>📦 לאפות (מנות לפי מתכון)</h3><ul>';
+  if (recipeBatches.length === 0){
+    html += '<li style="color:var(--mute)">לא נמצאו התאמות בין ההזמנות למתכונים השמורים</li>';
+  } else {
+    recipeBatches.forEach(rb=>{
+      html += `<li><span><strong>${esc(rb.name)}</strong></span><span>${rb.batches.toFixed(2)} מנות (≈${Math.round(rb.batches*(parseFloat(rb.yield)||30))} יח׳)</span></li>`;
+    });
+  }
+  html += '</ul></div>';
+
+  html += '<div class="shop-grp"><h3>🛒 מצרכים לקנות</h3><ul>';
+  if (Object.keys(need).length === 0){
+    html += '<li style="color:var(--mute)">לא נמצאו מצרכים — ודאי שיש מתכונים שמורים</li>';
+  } else {
+    Object.entries(need).sort().forEach(([key,amt])=>{
+      const [n,u] = key.split('|');
+      html += `<li><span>${esc(n)}</span><span><strong>${amt.toFixed(2)} ${esc(u)}</strong></span></li>`;
+    });
+  }
+  html += '</ul></div>';
+
+  if (unmatched.length){
+    html += '<div class="shop-grp"><h3>⚠️ לא זוהו (חסר מתכון)</h3><ul>';
+    unmatched.forEach(u=>{ html += `<li><span>${esc(u.order)}</span><span style="color:var(--mute);font-size:12px">${esc(u.line)}</span></li>`; });
+    html += '</ul><div style="font-size:13px;color:var(--ink2);padding:8px">הוסיפי מתכון תואם ב-🧮 תמחור כדי שאלה יחושבו אוטומטית.</div></div>';
+  }
+  document.getElementById('shopList').innerHTML = html;
 }
 
 function copyShoppingList(){
   const txt=document.getElementById('shopList').innerText;
   navigator.clipboard.writeText(txt).then(()=>toast('הועתק ✓','ok'));
+}
+
+
+/* ============ RECIPES (saved in Google Sheets) ============ */
+async function saveRecipe(){
+  const name = document.getElementById('prName').value.trim();
+  if (!name) { toast('יש למלא שם מוצר','err'); return; }
+  const rows=document.querySelectorAll('#ingrList .pricing-row');
+  const ingredients=[];
+  rows.forEach(r=>{
+    const n=r.querySelector('.ingr-name').value.trim();
+    const q=r.querySelector('.ingr-qty').value;
+    const u=r.querySelector('.ingr-unit').value;
+    const p=r.querySelector('.ingr-price').value;
+    if (n) ingredients.push({n,q,u,p});
+  });
+  const existing = db.recipes.find(r => r.name === name);
+  const recipe = {
+    id: existing ? existing.id : uid('r'),
+    name,
+    yield: document.getElementById('prYield').value,
+    hours: document.getElementById('prHours').value,
+    rate: document.getElementById('prRate').value,
+    over: document.getElementById('prOver').value,
+    mult: document.getElementById('prMult').value,
+    ingredients
+  };
+  if (existing) {
+    const idx = db.recipes.findIndex(r => r.id === existing.id);
+    db.recipes[idx] = recipe;
+    saveCache(); refreshRecipesList();
+    if (accessToken){
+      setSync('syncing','שומר...');
+      try{ await updateRow('Recipes', idx+2, recipeToRow(recipe)); setSync('ok','מסונכרן'); toast('המתכון "'+name+'" עודכן ✓','ok'); }
+      catch(e){ setSync('err','שגיאה'); toast('שגיאת שמירה','err'); console.error(e); }
+    } else { toast('נשמר במטמון','ok'); }
+  } else {
+    db.recipes.push(recipe);
+    saveCache(); refreshRecipesList();
+    if (accessToken){
+      setSync('syncing','שומר...');
+      try{ await appendRow('Recipes', recipeToRow(recipe)); setSync('ok','מסונכרן'); toast('המתכון "'+name+'" נשמר ✓','ok'); }
+      catch(e){ setSync('err','שגיאה'); toast('שגיאת שמירה','err'); console.error(e); }
+    } else { toast('נשמר במטמון','ok'); }
+  }
+}
+
+function loadRecipe(name){
+  if (!name) return;
+  const r = db.recipes.find(x => x.name === name);
+  if (!r) { toast('לא נמצא','err'); return; }
+  document.getElementById('prName').value = r.name;
+  document.getElementById('prYield').value = r.yield;
+  document.getElementById('prHours').value = r.hours;
+  document.getElementById('prRate').value = r.rate;
+  document.getElementById('prOver').value = r.over;
+  document.getElementById('prMult').value = r.mult;
+  document.getElementById('ingrList').innerHTML='';
+  (r.ingredients||[]).forEach(ing=>{
+    addIngrRow();
+    const last = document.querySelector('#ingrList .pricing-row:last-child');
+    last.querySelector('.ingr-name').value = ing.n;
+    last.querySelector('.ingr-qty').value = ing.q;
+    last.querySelector('.ingr-unit').value = ing.u;
+    last.querySelector('.ingr-price').value = ing.p;
+  });
+  if (!r.ingredients || r.ingredients.length===0) for (let i=0;i<3;i++) addIngrRow();
+  calcPricing();
+  toast('נטען: '+name,'ok');
+}
+
+async function deleteRecipe(){
+  const name = document.getElementById('prName').value.trim();
+  if (!name) { toast('בחר/י קודם מתכון לטעון','err'); return; }
+  if (!confirm('למחוק את המתכון "'+name+'"?')) return;
+  const idx = db.recipes.findIndex(r => r.name === name);
+  if (idx < 0) { toast('לא נמצא','err'); return; }
+  db.recipes.splice(idx,1);
+  saveCache(); refreshRecipesList(); clearPricing();
+  if (accessToken){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:SHEET_ID,resource:{requests:[{deleteDimension:{range:{sheetId:await getSheetId('Recipes'),dimension:'ROWS',startIndex:idx+1,endIndex:idx+2}}}]}});
+      toast('המתכון נמחק','ok');
+    } catch(e){ console.error(e); toast('שגיאת מחיקה','err'); }
+  }
+}
+
+function refreshRecipesList(){
+  const sel = document.getElementById('recipeLoad');
+  if (!sel) return;
+  const names = (db.recipes||[]).map(r=>r.name).sort();
+  sel.innerHTML = '<option value="">-- טען מתכון שמור --</option>' + names.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">${n}</option>`).join('');
 }
 
 /* ============ HELPERS ============ */

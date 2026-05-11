@@ -235,7 +235,7 @@ th,td{padding:8px}
 
 <!-- ORDERS KANBAN -->
 <section class="page" id="page-orders">
-  <div class="page-h"><h2>קנבן הזמנות</h2><div class="actions"><button class="btn btn-s" onclick="syncAll()">🔄 סנכרון</button></div></div>
+  <div class="page-h"><h2>הזמנות פתוחות</h2><div class="actions"><button class="btn btn-s" onclick="syncAll()">🔄 סנכרון</button></div></div>
   <div class="kanban" id="kanban"></div>
 </section>
 
@@ -277,7 +277,7 @@ th,td{padding:8px}
 
 <!-- PRICING CALCULATOR -->
 <section class="page" id="page-pricing">
-  <div class="page-h"><h2>מחשבון תמחור</h2><div class="actions"><button class="btn btn-s" onclick="addIngrRow()">➕ מצרך</button></div></div>
+  <div class="page-h"><h2>מחשבון תמחור</h2><div class="actions"><select id="recipeLoad" onchange="loadRecipe(this.value)" style="padding:8px 12px;border:1px solid var(--bd);border-radius:8px;background:#fff"><option value="">-- טען מתכון שמור --</option></select><button class="btn btn-s" onclick="addIngrRow()">➕ מצרך</button></div></div>
   <div class="card">
     <h3 style="margin-bottom:14px">פרטי המתכון</h3>
     <div class="form-grid">
@@ -293,7 +293,7 @@ th,td{padding:8px}
     <div id="ingrList"></div>
     <button class="btn btn-s" onclick="addIngrRow()" style="margin-top:8px">➕ הוסף מצרך</button>
     <div class="pricing-summary" id="prSummary"></div>
-    <div style="display:flex;gap:8px;margin-top:16px"><button class="btn btn-p" onclick="calcPricing()">🧮 חישוב</button><button class="btn btn-s" onclick="clearPricing()">נקה</button></div>
+    <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn btn-p" onclick="calcPricing()">🧮 חישוב</button><button class="btn btn-ok" onclick="saveRecipe()">💾 שמירת מתכון</button><button class="btn btn-d" onclick="deleteRecipe()">🗑 מחיקת מתכון</button><button class="btn btn-s" onclick="clearPricing()">נקה</button></div>
   </div>
 </section>
 
@@ -333,7 +333,7 @@ th,td{padding:8px}
 <!-- SHOPPING LIST -->
 <section class="page" id="page-shopping">
   <div class="page-h"><h2>רשימת קניות</h2><div class="actions"><button class="btn btn-s" onclick="generateShoppingList()">🔄 רענון</button><button class="btn btn-p" onclick="copyShoppingList()">📋 העתק</button></div></div>
-  <div class="card"><div style="background:#FAF1E8;padding:10px;border-radius:8px;margin-bottom:14px;font-size:13px;color:var(--ink2)">רשימה מחושבת אוטומטית מהזמנות פתוחות (חדשות + מאושרות + באפייה). מצטרפת מצרכים אופייניים לכל מוצר.</div><div id="shopList">לחץ "רענון" כדי לחשב</div></div>
+  <div class="card"><div style="background:#FAF1E8;padding:10px;border-radius:8px;margin-bottom:14px;font-size:13px;color:var(--ink2)">רשימה מחושבת מההזמנות הפתוחות לפי המתכונים שאת/ה שומר/ת ב-🧮 תמחור. רק עם מתכון שמור — מצרך אמיתי נכנס לרשימה.</div><div id="shopList">לחץ "רענון" כדי לחשב</div></div>
 </section>
 
 </main>
@@ -355,6 +355,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=24"></script>
 </body>
 </html>
