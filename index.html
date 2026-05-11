@@ -53,6 +53,13 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .qi{width:48px;text-align:center;border:none;background:transparent;font-family:'Heebo',sans-serif;font-size:16px;font-weight:600;color:var(--ink)}
 .qi:focus{outline:none}
 .mn{font-size:12px;color:#a06a3f;margin-top:8px;text-align:center}
+.flavs{margin-top:14px;background:var(--cream);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.flavs-title{font-size:12px;color:var(--is);letter-spacing:.05em;text-align:center;padding-bottom:4px;border-bottom:1px dashed rgba(176,141,87,.3)}
+.flav-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0}
+.flav-name{font-size:14px;color:var(--ink);font-weight:500}
+.flav-qc{display:flex;align-items:center;gap:6px}
+.flav-qc .qb{width:26px;height:26px;font-size:14px}
+.flav-qc .qi{width:36px;font-size:14px}
 .bar{position:fixed;bottom:0;left:0;right:0;z-index:90;background:rgba(26,22,18,.97);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:14px;transition:transform .3s ease;transform:translateY(100%)}
 .bar.vis{transform:translateY(0)}
 .bi{display:flex;flex-direction:column;gap:2px}
@@ -71,7 +78,6 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .ff input,.ff textarea,.ff select{width:100%;padding:11px 14px;border:1px solid rgba(176,141,87,.3);border-radius:10px;font-family:'Heebo',sans-serif;font-size:15px;background:var(--cream);color:var(--ink)}
 .ff input:focus,.ff textarea:focus,.ff select:focus{outline:none;border-color:var(--gold);background:#fff}
 .ff textarea{resize:vertical;min-height:80px}
-.fh{font-size:13px;color:var(--is);background:rgba(176,141,87,.08);padding:10px 14px;border-radius:8px;border-right:3px solid var(--gold);line-height:1.7}
 .notice{background:#fff;border-radius:18px;padding:28px 30px;max-width:760px;margin:0 auto;border:1px solid rgba(176,141,87,.25);box-shadow:0 6px 20px rgba(42,31,21,.06)}
 .notice .nh{font-family:'Cormorant Garamond',serif;font-size:30px;color:var(--gd);text-align:center;margin-bottom:18px;font-weight:600}
 .notice .ng{display:flex;gap:12px;padding:10px 0;border-bottom:1px dashed rgba(176,141,87,.3);font-size:14.5px;line-height:1.7;color:var(--ink)}
@@ -82,7 +88,6 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .notice .nf a{color:var(--gd);font-weight:600;text-decoration:none}
 .notice .nf a:hover{color:var(--ink)}
 .notice-section{padding:36px 20px;background:linear-gradient(180deg,var(--cream),#fbf3e1)}
-
 .ol{margin:18px 0;border-top:1px dashed rgba(176,141,87,.35);padding-top:16px}
 .olt{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:18px;margin-bottom:10px}
 .oli{display:flex;justify-content:space-between;padding:6px 0;font-size:14.5px}
@@ -99,8 +104,6 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 .cn{display:inline-flex;align-items:center;gap:10px;font-size:18px;color:var(--gl);margin-top:10px;text-decoration:none}
 .cn:hover{color:#fff}
 .cn .ic{width:36px;height:36px;border-radius:50%;background:var(--gold);color:var(--bk);display:flex;align-items:center;justify-content:center;font-size:16px}
-.fi{margin-top:20px;padding:12px 22px;background:rgba(176,141,87,.12);border:1px solid rgba(176,141,87,.25);border-radius:24px;color:var(--gl);font-size:14px;display:inline-block;line-height:1.7}
-.an{margin:18px auto 0;max-width:560px;font-size:11.5px;color:#9a8870;line-height:1.7;font-style:italic;padding:0 16px}
 .cr{font-size:12px;color:#7a6a52;margin-top:18px;opacity:.8}
 @media (max-width:600px){.bl{font-size:56px}.fr{grid-template-columns:1fr}.oc{padding:22px}section{padding:36px 16px}.hero{padding:44px 16px 32px}.st h2{font-size:28px}.fwa{bottom:84px;left:14px;width:52px;height:52px}}
 </style></head>
@@ -136,7 +139,6 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="ff"><label for="cust-date">תאריך מבוקש</label><input id="cust-date" type="date"></div>
 </div>
 <div class="fr fl" id="addr-row"><div class="ff"><label for="cust-address">כתובת למשלוח (באופקים)</label><input id="cust-address" type="text" placeholder="רחוב, מספר" autocomplete="street-address"></div></div>
-<div class="fr fl"><div class="fh">⏰ <b>זמני הזמנה:</b> ימים א-ה — יומיים מראש · יום ו׳ — 3 ימים מראש · הזמנות גדולות — 4 ימים מראש</div></div>
 <div class="fr fl"><div class="ff"><label for="cust-notes">הערות (אופציונלי)</label><textarea id="cust-notes" placeholder="טעמים מועדפים, אריזה מיוחדת וכו'"></textarea></div></div>
 <div class="ol">
 <div class="olt">סיכום ההזמנה</div>
@@ -144,6 +146,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="oli" id="osl" style="display:none"><span>סכום פריטים</span><span id="osub">0 ₪</span></div>
 <div class="oli" id="odl" style="display:none"><span>משלוח</span><span id="od">—</span></div>
 <div class="ot"><span>סה"כ לתשלום</span><span class="am" id="ot">0 ₪</span></div>
+<div class="dn">🚚 משלוח באופקים — 10 ₪ · חינם בהזמנה מעל 150 ₪<br>🏠 איסוף עצמי: רח׳ אורים 20, אופקים — בתיאום מראש</div>
 </div>
 <button class="subm" id="sb" type="button"><svg viewBox="0 0 24 24"><path d="M20.5 3.5A11.9 11.9 0 0 0 12 0C5.4 0 .1 5.3.1 12c0 2.1.5 4.2 1.6 6L0 24l6.3-1.6c1.7 1 3.7 1.5 5.7 1.5C18.6 24 24 18.6 24 12c0-3.2-1.2-6.2-3.5-8.5z"/></svg>שליחת הזמנה בווטסאפ</button>
 </div>
@@ -162,70 +165,134 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <script>
 const products=[
 {id:'maroc',name:'עוגיות מכונה מרוקאיות',desc:'עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.',price:55,unit:'מארז של כ-30 יח׳',img:'images/maroc.jpg'},
-{id:'choco',name:'כדורי שוקולד',desc:'כדורים עשירים בכל טוב מצופים קוקוס / סוכריות.',price:4,unit:'ליחידה',img:'images/chocoballs.jpg'},
-{id:'rolled',name:'מגולגלות במילויים',desc:'בצק עדין וניחוח במילוי עשיר וטעים לבחירה 3 טעמים. פיסטוק / קינדר / נוטלה',price:75,unit:'מארז של כ-12 יח׳',img:'images/rolled.jpg'},
+{id:'choco',name:'כדורי שוקולד',desc:'כדורים עשירים בכל טוב, מצופים לבחירה.',price:4,unit:'ליחידה',img:'images/chocoballs.jpg',flavors:['קוקוס','סוכריות']},
+{id:'rolled',name:'מגולגלות במילויים',desc:'בצק עדין וניחוח במילוי עשיר וטעים, 3 טעמים לבחירה.',price:75,unit:'מארז של כ-12 יח׳',img:'images/rolled.jpg',flavors:['פיסטוק','קינדר','נוטלה']},
 {id:'tahini',name:'עוגיות טחינה קלאסיות',desc:'מרקם נימוח שנמס בפה.',price:55,unit:'מארז של כ-30 יח׳',img:'images/tahini.jpg'},
 {id:'almond',name:'עוגיות חמאה שקדים',desc:'עוגיות פריכות על בסיס שקדים וחמאה.',price:35,unit:'מארז של כ-11 יח׳',img:'images/almond.jpg'},
 {id:'yoyo',name:'עוגיות יויו',desc:'עוגיות טבולות בסירופ מתוק עטופות בקוקוס.',price:4,unit:'ליחידה',minOrder:30,minNote:'* מינימום להזמנה כ-30 יח׳',img:'images/yoyo.jpg'}
 ];
+// Cart structure: cart[id] = { 'flavor1': qty, 'flavor2': qty } (for non-flavor products, use empty string '')
 const cart={};
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
 const fmt=n=>Math.round(n).toLocaleString('he-IL');
 const FEE=10,FREE=150;
+
+function getQty(id,flav=''){return (cart[id]&&cart[id][flav])||0;}
+function setQty(id,flav,qty){
+  qty=Math.max(0,Math.floor(Number(qty)||0));
+  if(!cart[id])cart[id]={};
+  if(qty===0){delete cart[id][flav];if(Object.keys(cart[id]).length===0)delete cart[id];}
+  else cart[id][flav]=qty;
+}
+function totalQty(id){if(!cart[id])return 0;return Object.values(cart[id]).reduce((a,b)=>a+b,0);}
+
 function ful(){return $('#cust-fulfill').value;}
 function calcD(s){if(ful()==='pickup')return 0;if(s<=0||s>=FREE)return 0;return FEE;}
 function setupDate(){const d=$('#cust-date');const t=new Date();t.setDate(t.getDate()+2);d.min=t.toISOString().split('T')[0];d.addEventListener('change',validateDate);}
 function validateDate(){const d=$('#cust-date');if(!d.value)return;const sel=new Date(d.value);const now=new Date();now.setHours(0,0,0,0);const diff=Math.ceil((sel-now)/(86400000));const day=sel.getDay();let need=2;if(day===5)need=3;if(diff<need){alert('שימי לב: '+(day===5?'ליום שישי':'לתאריך זה')+' יש להזמין '+need+' ימים מראש לפחות. להזמנה גדולה — 4 ימים מראש.');d.value='';}}
 function updAddr(){$('#addr-row').style.display=ful()==='delivery'?'':'none';}
+
+function buildQtyRow(id,flav,placeholder){
+  return '<div class="qc"><button class="qb" data-id="'+id+'" data-flav="'+flav+'" data-act="dec">−</button><input class="qi" type="number" min="0" value="0" data-id="'+id+'" data-flav="'+flav+'" inputmode="numeric"><button class="qb" data-id="'+id+'" data-flav="'+flav+'" data-act="inc">+</button></div>';
+}
+
 function render(){
-$('#products').innerHTML=products.map(p=>'<article class="product" data-id="'+p.id+'"><div class="pi has"><img src="'+p.img+'" alt="'+p.name+'"></div><div class="pb"><div class="pn">'+p.name+'</div><div class="pd">'+p.desc+'</div><div class="pr"><div class="pp"><span class="cu">₪</span>'+p.price+'</div><div class="pu">'+p.unit+'</div></div><div class="qty"><span class="ql">כמות</span><div class="qc"><button class="qb" data-act="dec">−</button><input class="qi" type="number" min="0" value="0" data-id="'+p.id+'" inputmode="numeric"><button class="qb" data-act="inc">+</button></div></div>'+(p.minNote?'<div class="mn">'+p.minNote+'</div>':'')+'</div></article>').join('');
-$$('.product').forEach(c=>{
-const i=c.querySelector('.qi'),id=i.dataset.id;
-const sv=v=>{v=Math.max(0,Math.floor(Number(v)||0));i.value=v;cart[id]=v;upd();};
-c.querySelector('[data-act="dec"]').onclick=()=>sv((Number(i.value)||0)-1);
-c.querySelector('[data-act="inc"]').onclick=()=>sv((Number(i.value)||0)+1);
-i.oninput=e=>sv(e.target.value);
-});
+  $('#products').innerHTML=products.map(p=>{
+    let qtyHtml='';
+    if(p.flavors&&p.flavors.length){
+      qtyHtml='<div class="flavs"><div class="flavs-title">בחירת טעמים</div>';
+      p.flavors.forEach(f=>{
+        qtyHtml+='<div class="flav-row"><span class="flav-name">'+f+'</span><div class="flav-qc"><button class="qb" data-id="'+p.id+'" data-flav="'+f+'" data-act="dec">−</button><input class="qi" type="number" min="0" value="0" data-id="'+p.id+'" data-flav="'+f+'" inputmode="numeric"><button class="qb" data-id="'+p.id+'" data-flav="'+f+'" data-act="inc">+</button></div></div>';
+      });
+      qtyHtml+='</div>';
+    } else {
+      qtyHtml='<div class="qty"><span class="ql">כמות</span>'+buildQtyRow(p.id,'')+'</div>';
+    }
+    return '<article class="product" data-id="'+p.id+'"><div class="pi has"><img src="'+p.img+'" alt="'+p.name+'"></div><div class="pb"><div class="pn">'+p.name+'</div><div class="pd">'+p.desc+'</div><div class="pr"><div class="pp"><span class="cu">₪</span>'+p.price+'</div><div class="pu">'+p.unit+'</div></div>'+qtyHtml+(p.minNote?'<div class="mn">'+p.minNote+'</div>':'')+'</div></article>';
+  }).join('');
+
+  $$('.qb').forEach(b=>{
+    b.onclick=()=>{
+      const id=b.dataset.id,flav=b.dataset.flav||'',act=b.dataset.act;
+      const cur=getQty(id,flav);
+      setQty(id,flav,act==='inc'?cur+1:cur-1);
+      const inp=document.querySelector('.qi[data-id="'+id+'"][data-flav="'+flav+'"]');
+      if(inp)inp.value=getQty(id,flav);
+      upd();
+    };
+  });
+  $$('.qi').forEach(i=>{
+    i.oninput=e=>{
+      const id=i.dataset.id,flav=i.dataset.flav||'';
+      setQty(id,flav,e.target.value);
+      upd();
+    };
+  });
 }
+
 function upd(){
-const lines=[];let sub=0,cnt=0;
-products.forEach(p=>{const q=cart[p.id]||0;if(q>0){const s=q*p.price;sub+=s;cnt+=q;lines.push({n:p.name,q:q,s:s});}});
-const dl=calcD(sub),tot=sub+dl;
-$('#bar').classList.toggle('vis',sub>0);
-$('#sc').textContent=cnt+' פריטים';$('#st').textContent=fmt(tot);
-const lst=$('#ol-lines');
-if(!lines.length){lst.innerHTML='<div class="oli em">עדיין לא נבחרו פריטים</div>';$('#osl').style.display='none';$('#odl').style.display='none';}
-else{lst.innerHTML=lines.map(l=>'<div class="oli"><span>'+l.n+' × '+l.q+'</span><span>'+fmt(l.s)+' ₪</span></div>').join('');
-$('#osl').style.display='flex';$('#osub').textContent=fmt(sub)+' ₪';
-$('#odl').style.display='flex';
-const ln=$('#odl'),lb=ln.querySelector('span');
-if(ful()==='pickup'){lb.textContent='איסוף עצמי';$('#od').textContent='בתיאום 🏠';ln.classList.add('fre');}
-else if(dl===0){lb.textContent='משלוח';$('#od').textContent='חינם 🎉';ln.classList.add('fre');}
-else{lb.textContent='משלוח';$('#od').textContent=fmt(dl)+' ₪';ln.classList.remove('fre');}}
-$('#ot').textContent=fmt(tot)+' ₪';
+  const lines=[];let sub=0,cnt=0;
+  products.forEach(p=>{
+    if(!cart[p.id])return;
+    Object.entries(cart[p.id]).forEach(([flav,q])=>{
+      if(q>0){
+        const s=q*p.price;
+        sub+=s;cnt+=q;
+        lines.push({n:p.name,flav:flav,q:q,s:s});
+      }
+    });
+  });
+  const dl=calcD(sub),tot=sub+dl;
+  $('#bar').classList.toggle('vis',sub>0);
+  $('#sc').textContent=cnt+' פריטים';$('#st').textContent=fmt(tot);
+  const lst=$('#ol-lines');
+  if(!lines.length){lst.innerHTML='<div class="oli em">עדיין לא נבחרו פריטים</div>';$('#osl').style.display='none';$('#odl').style.display='none';}
+  else{
+    lst.innerHTML=lines.map(l=>'<div class="oli"><span>'+l.n+(l.flav?' · '+l.flav:'')+' × '+l.q+'</span><span>'+fmt(l.s)+' ₪</span></div>').join('');
+    $('#osl').style.display='flex';$('#osub').textContent=fmt(sub)+' ₪';
+    $('#odl').style.display='flex';
+    const ln=$('#odl'),lb=ln.querySelector('span');
+    if(ful()==='pickup'){lb.textContent='איסוף עצמי';$('#od').textContent='בתיאום 🏠';ln.classList.add('fre');}
+    else if(dl===0){lb.textContent='משלוח';$('#od').textContent='חינם 🎉';ln.classList.add('fre');}
+    else{lb.textContent='משלוח';$('#od').textContent=fmt(dl)+' ₪';ln.classList.remove('fre');}
+  }
+  $('#ot').textContent=fmt(tot)+' ₪';
 }
+
 function buildMsg(){
-const n=$('#cust-name').value.trim(),p=$('#cust-phone').value.trim(),a=$('#cust-address').value.trim(),d=$('#cust-date').value.trim(),no=$('#cust-notes').value.trim(),f=ful();
-let m='*הזמנה חדשה — Carmel De-vries* 🍪\n\n',sub=0;
-products.forEach(pr=>{const q=cart[pr.id]||0;if(q>0){const s=q*pr.price;sub+=s;m+='• '+pr.name+' × '+q+' = '+fmt(s)+' ₪\n';}});
-const dl=calcD(sub),tot=sub+dl;
-m+='\nסכום פריטים: '+fmt(sub)+' ₪\n';
-m+=f==='pickup'?'איסוף: עצמי באורים 20, אופקים 🏠\n':'משלוח: '+(dl===0?'חינם 🎉':fmt(dl)+' ₪')+' (אופקים) 🚚\n';
-m+='*סה״כ: '+fmt(tot)+' ₪*\n\n----------\n';
-if(n)m+='שם: '+n+'\n';
-if(p)m+='טלפון: '+p+'\n';
-if(d)m+='תאריך מבוקש: '+d+'\n';
-if(f==='delivery'&&a)m+='כתובת: '+a+', אופקים\n';
-if(no)m+='הערות: '+no+'\n';
-return m;
+  const n=$('#cust-name').value.trim(),p=$('#cust-phone').value.trim(),a=$('#cust-address').value.trim(),d=$('#cust-date').value.trim(),no=$('#cust-notes').value.trim(),f=ful();
+  let m='*הזמנה חדשה — Carmel De-vries* 🍪\n\n',sub=0;
+  products.forEach(pr=>{
+    if(!cart[pr.id])return;
+    Object.entries(cart[pr.id]).forEach(([flav,q])=>{
+      if(q>0){
+        const s=q*pr.price;sub+=s;
+        m+='• '+pr.name+(flav?' ('+flav+')':'')+' × '+q+' = '+fmt(s)+' ₪\n';
+      }
+    });
+  });
+  const dl=calcD(sub),tot=sub+dl;
+  m+='\nסכום פריטים: '+fmt(sub)+' ₪\n';
+  m+=f==='pickup'?'איסוף: עצמי באורים 20, אופקים 🏠\n':'משלוח: '+(dl===0?'חינם 🎉':fmt(dl)+' ₪')+' (אופקים) 🚚\n';
+  m+='*סה״כ: '+fmt(tot)+' ₪*\n\n----------\n';
+  if(n)m+='שם: '+n+'\n';
+  if(p)m+='טלפון: '+p+'\n';
+  if(d)m+='תאריך מבוקש: '+d+'\n';
+  if(f==='delivery'&&a)m+='כתובת: '+a+', אופקים\n';
+  if(no)m+='הערות: '+no+'\n';
+  return m;
 }
+
 function send(){
-const sub=products.reduce((s,p)=>s+(cart[p.id]||0)*p.price,0);
-if(!sub){alert('בחרו לפחות פריט אחד');return;}
-const y=products.find(p=>p.id==='yoyo');
-if(y.minOrder&&(cart.yoyo||0)>0&&cart.yoyo<y.minOrder){alert('כמות מינימום לעוגיות יויו: '+y.minOrder+' יח׳');return;}
-window.open('https://wa.me/972524809393?text='+encodeURIComponent(buildMsg()),'_blank');
+  const sub=Object.values(cart).reduce((a,c)=>a+Object.values(c).reduce((x,y)=>x+y,0)*0,0); // dummy
+  let subtotal=0;
+  products.forEach(p=>{if(cart[p.id])Object.values(cart[p.id]).forEach(q=>subtotal+=q*p.price);});
+  if(!subtotal){alert('בחרו לפחות פריט אחד');return;}
+  const y=products.find(p=>p.id==='yoyo');
+  const yoyoTotal=totalQty('yoyo');
+  if(y.minOrder&&yoyoTotal>0&&yoyoTotal<y.minOrder){alert('כמות מינימום לעוגיות יויו: '+y.minOrder+' יח׳');return;}
+  window.open('https://wa.me/972524809393?text='+encodeURIComponent(buildMsg()),'_blank');
 }
 $('#sb').onclick=send;$('#bsb').onclick=send;
 $('#cust-fulfill').onchange=()=>{updAddr();upd();};
