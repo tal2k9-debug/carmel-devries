@@ -35,9 +35,14 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .products{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
 .product{background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 10px 30px rgba(42,31,21,.10);border:1px solid rgba(176,141,87,.18);display:flex;flex-direction:column;transition:transform .25s ease}
 .product:hover{transform:translateY(-4px)}
-.pi{width:100%;height:260px;background:linear-gradient(135deg,#1a1612,#2a1f15);display:flex;align-items:center;justify-content:center;color:var(--gl);overflow:hidden;flex-shrink:0}
+.pi{width:100%;height:260px;background:linear-gradient(135deg,#1a1612,#2a1f15);display:flex;align-items:center;justify-content:center;color:var(--gl);overflow:hidden;flex-shrink:0;position:relative}
 .pi.has{background:transparent}
 .pi img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+.pi .copyr{position:absolute;bottom:8px;right:10px;background:rgba(0,0,0,.45);color:#fff;font-size:11px;padding:3px 8px;border-radius:8px;letter-spacing:.02em;pointer-events:none;font-weight:500}
+.kbadge{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;padding:3px 10px;border-radius:10px;margin-inline-start:8px;vertical-align:middle}
+.kbadge.parve{background:#e8f5e9;color:#2e7d32}
+.kbadge.dairy{background:#fff3e0;color:#c2185b}
+.soldout{display:inline-block;background:#fbe9e7;color:#bf360c;font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;margin-inline-start:6px}
 @media (max-width:600px){.pi{height:220px}}
 .pb{padding:22px 22px 18px;flex:1;display:flex;flex-direction:column}
 .pn{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:24px;color:var(--ink);margin-bottom:8px}
@@ -163,14 +168,19 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="cr">© Carmel De-vries · Homemade Baked Goods · <a href="admin/" style="color:#5a5040;text-decoration:none;opacity:.55;font-size:13px;margin-inline-start:4px;cursor:pointer" title="ניהול">🔐</a></div>
 </footer>
 <script>
-const products=[
-{id:'maroc',name:'עוגיות מכונה מרוקאיות',desc:'עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.',price:55,unit:'מארז של כ-30 יח׳',img:'images/maroc.jpg'},
-{id:'choco',name:'כדורי שוקולד',desc:'כדורים עשירים בכל טוב, מצופים לבחירה.',price:4,unit:'ליחידה',img:'images/chocoballs.jpg',flavors:['קוקוס','סוכריות']},
-{id:'rolled',name:'מגולגלות במילויים',desc:'בצק עדין וניחוח במילוי עשיר וטעים, 3 טעמים לבחירה.',price:75,unit:'מארז של כ-12 יח׳',img:'images/rolled.jpg',flavors:['פיסטוק','קינדר','נוטלה']},
-{id:'tahini',name:'עוגיות טחינה קלאסיות',desc:'מרקם נימוח שנמס בפה.',price:55,unit:'מארז של כ-30 יח׳',img:'images/tahini.jpg'},
-{id:'almond',name:'עוגיות חמאה שקדים',desc:'עוגיות פריכות על בסיס שקדים וחמאה.',price:35,unit:'מארז של כ-11 יח׳',img:'images/almond.jpg'},
-{id:'yoyo',name:'עוגיות יויו',desc:'עוגיות טבולות בסירופ מתוק עטופות בקוקוס.',price:4,unit:'ליחידה',minOrder:30,minNote:'* מינימום להזמנה כ-30 יח׳',img:'images/yoyo.jpg'}
+// Fallback list — rendered immediately so the page never appears empty.
+// On load we try to fetch the live list from the admin Google Sheet (Products tab)
+// and overwrite this array. See loadProductsFromSheet() below.
+const PRODUCTS_FALLBACK=[
+{id:'maroc',name:'עוגיות מכונה מרוקאיות',desc:'עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.',price:55,unit:'מארז של כ-30 יח׳',img:'images/maroc.jpg',kosher:'פרווה'},
+{id:'choco',name:'כדורי שוקולד',desc:'כדורים עשירים בכל טוב, מצופים לבחירה.',price:4,unit:'ליחידה',img:'images/chocoballs.jpg',flavors:['קוקוס','סוכריות'],kosher:'פרווה'},
+{id:'rolled',name:'מגולגלות במילויים',desc:'בצק עדין וניחוח במילוי עשיר וטעים, 3 טעמים לבחירה.',price:75,unit:'מארז של כ-12 יח׳',img:'images/rolled.jpg',flavors:['פיסטוק','קינדר','נוטלה'],kosher:'פרווה'},
+{id:'tahini',name:'עוגיות טחינה קלאסיות',desc:'מרקם נימוח שנמס בפה.',price:55,unit:'מארז של כ-30 יח׳',img:'images/tahini.jpg',kosher:'פרווה'},
+{id:'almond',name:'עוגיות חמאה שקדים',desc:'עוגיות פריכות על בסיס שקדים וחמאה.',price:35,unit:'מארז של כ-11 יח׳',img:'images/almond.jpg',kosher:'חלבי'},
+{id:'yoyo',name:'עוגיות יויו',desc:'עוגיות טבולות בסירופ מתוק עטופות בקוקוס.',price:4,unit:'ליחידה',minOrder:30,minNote:'* מינימום להזמנה כ-30 יח׳',img:'images/yoyo.jpg',kosher:'פרווה'}
 ];
+let products = PRODUCTS_FALLBACK.slice();
+const SHEET_ID='1NOdPG_jdhVfD_Du24E6i3fWTOjPSqfoarJ1tkq6OIRk';
 // Cart structure: cart[id] = { 'flavor1': qty, 'flavor2': qty } (for non-flavor products, use empty string '')
 const cart={};
 const $=s=>document.querySelector(s);
@@ -209,7 +219,9 @@ function render(){
     } else {
       qtyHtml='<div class="qty"><span class="ql">כמות</span>'+buildQtyRow(p.id,'')+'</div>';
     }
-    return '<article class="product" data-id="'+p.id+'"><div class="pi has"><img src="'+p.img+'" alt="'+p.name+'"></div><div class="pb"><div class="pn">'+p.name+'</div><div class="pd">'+p.desc+'</div><div class="pr"><div class="pp"><span class="cu">₪</span>'+p.price+'</div><div class="pu">'+p.unit+'</div></div>'+qtyHtml+(p.minNote?'<div class="mn">'+p.minNote+'</div>':'')+'</div></article>';
+    const kbadge = p.kosher === 'חלבי' ? '<span class="kbadge dairy">חלבי</span>' : (p.kosher === 'פרווה' ? '<span class="kbadge parve">פרווה</span>' : '');
+    const stockBadge = (typeof p.qty === 'number' && p.qty > 0 && p.qty <= 3) ? '<span class="soldout">נותרו '+p.qty+'</span>' : '';
+    return '<article class="product" data-id="'+p.id+'"><div class="pi has"><img src="'+p.img+'" alt="'+p.name+'" oncontextmenu="return false" draggable="false"><span class="copyr">© Carmel De-vries · כל הזכויות שמורות</span></div><div class="pb"><div class="pn">'+p.name+kbadge+stockBadge+'</div><div class="pd">'+p.desc+'</div><div class="pr"><div class="pp"><span class="cu">₪</span>'+p.price+'</div><div class="pu">'+p.unit+'</div></div>'+qtyHtml+(p.minNote?'<div class="mn">'+p.minNote+'</div>':'')+'</div></article>';
   }).join('');
 
   $$('.qb').forEach(b=>{
@@ -297,5 +309,49 @@ function send(){
 $('#sb').onclick=send;$('#bsb').onclick=send;
 $('#cust-fulfill').onchange=()=>{updAddr();upd();};
 setupDate();updAddr();render();upd();
+
+// Try to load live product data from the admin Google Sheet (Products tab).
+// Sheet must be shared "Anyone with the link can view" for this to work.
+// On any failure (sheet private, network, parse) we silently keep PRODUCTS_FALLBACK.
+function loadProductsFromSheet(){
+  const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet=Products';
+  fetch(url,{cache:'no-store'}).then(r=>r.text()).then(text=>{
+    const m=text.match(/google\.visualization\.Query\.setResponse\((.*)\);?\s*$/s);
+    if(!m)throw new Error('gviz parse failed');
+    const data=JSON.parse(m[1]);
+    if(!data.table||!data.table.rows)throw new Error('no rows');
+    const cols=data.table.cols.map(c=>(c.label||c.id||'').toLowerCase());
+    const idx=name=>cols.indexOf(name);
+    const live=data.table.rows.map(r=>{
+      const c=r.c||[];
+      const get=name=>{const i=idx(name);return i<0||!c[i]?'':(c[i].v!==undefined?c[i].v:'');};
+      return {
+        id:String(get('id')||''),
+        name:String(get('name')||''),
+        desc:String(get('desc')||''),
+        price:Number(get('price'))||0,
+        unit:String(get('unit')||''),
+        qty:Number(get('qty'))||0,
+        kosher:String(get('kosher')||''),
+        img:String(get('img')||''),
+        published:(()=>{const v=get('published');return v===1||v==='1'||v===true||String(v).toLowerCase()==='true';})(),
+        sortOrder:Number(get('sortorder'))||100,
+        minOrder:Number(get('minorder'))||0,
+        minNote:String(get('minnote')||''),
+        flavors:(()=>{const f=String(get('flavors')||'').trim();return f?f.split('|').map(x=>x.trim()).filter(Boolean):undefined;})()
+      };
+    }).filter(p=>p.id&&p.name&&p.published&&p.qty>0)
+      .sort((a,b)=>a.sortOrder-b.sortOrder);
+    if(live.length){
+      products.length=0;
+      live.forEach(p=>products.push(p));
+      // Reset cart entries that no longer exist
+      Object.keys(cart).forEach(id=>{if(!products.find(p=>p.id===id))delete cart[id];});
+      render();upd();
+      console.log('[Carmel] Loaded',live.length,'products from sheet');
+    }
+  }).catch(e=>console.log('[Carmel] Using fallback products:',e.message));
+}
+loadProductsFromSheet();
 </script>
 </body></html>

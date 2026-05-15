@@ -12,19 +12,21 @@ const STATUSES = [
   {id:'ready', label:'מוכן', color:'ready'},
   {id:'delivered', label:'נמסר', color:'delivered'}
 ];
-const PRODUCTS = [
-  {id:'maroc', n:'עוגיות מכונה מרוקאיות', price:55},
-  {id:'choco', n:'כדורי שוקולד', price:4, flavors:['קוקוס','סוכריות']},
-  {id:'rolled', n:'מגולגלות במילויים', price:75, flavors:['פיסטוק','קינדר','נוטלה']},
-  {id:'tahini', n:'עוגיות טחינה', price:55},
-  {id:'butter', n:'עוגיות חמאה שקדים', price:35},
-  {id:'yoyo', n:'עוגיות יויו', price:4}
+// Default products — used to seed the Products sheet on first load if it's empty.
+// After seeding, the sheet is the source of truth.
+const PRODUCTS_SEED = [
+  {id:'maroc',  name:'עוגיות מכונה מרוקאיות', desc:'עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.', price:55, unit:'מארז של כ-30 יח׳', qty:10, kosher:'פרווה', img:'images/maroc.jpg',     published:1, sortOrder:10,  minOrder:0,  minNote:'', flavors:''},
+  {id:'choco',  name:'כדורי שוקולד',           desc:'כדורים עשירים בכל טוב, מצופים לבחירה.',                  price:4,  unit:'ליחידה',           qty:80, kosher:'פרווה', img:'images/chocoballs.jpg',published:1, sortOrder:20,  minOrder:0,  minNote:'', flavors:'קוקוס|סוכריות'},
+  {id:'rolled', name:'מגולגלות במילויים',      desc:'בצק עדין וניחוח במילוי עשיר וטעים, 3 טעמים לבחירה.',     price:75, unit:'מארז של כ-12 יח׳', qty:6,  kosher:'פרווה', img:'images/rolled.jpg',    published:1, sortOrder:30,  minOrder:0,  minNote:'', flavors:'פיסטוק|קינדר|נוטלה'},
+  {id:'tahini', name:'עוגיות טחינה קלאסיות',   desc:'מרקם נימוח שנמס בפה.',                                   price:55, unit:'מארז של כ-30 יח׳', qty:10, kosher:'פרווה', img:'images/tahini.jpg',    published:1, sortOrder:40,  minOrder:0,  minNote:'', flavors:''},
+  {id:'almond', name:'עוגיות חמאה שקדים',      desc:'עוגיות פריכות על בסיס שקדים וחמאה.',                     price:35, unit:'מארז של כ-11 יח׳', qty:8,  kosher:'חלבי',  img:'images/almond.jpg',    published:1, sortOrder:50,  minOrder:0,  minNote:'', flavors:''},
+  {id:'yoyo',   name:'עוגיות יויו',             desc:'עוגיות טבולות בסירופ מתוק עטופות בקוקוס.',               price:4,  unit:'ליחידה',           qty:60, kosher:'פרווה', img:'images/yoyo.jpg',      published:1, sortOrder:60,  minOrder:30, minNote:'* מינימום להזמנה כ-30 יח׳', flavors:''}
 ];
 
 let tokenClient, accessToken=null, user=null;
-let db = {customers:[], orders:[], expenses:[], recipes:[]};
+let db = {customers:[], orders:[], expenses:[], recipes:[], products:[]};
 let calCursor = new Date();
-let editingCustId=null, editingExpId=null;
+let editingCustId=null, editingExpId=null, editingProdId=null;
 let pendingWrites = []; // queue for offline
 
 /* ============ GOOGLE SIGN-IN (Single-button OAuth flow) ============ */
@@ -155,7 +157,8 @@ async function ensureTabs() {
     const existing = meta.result.sheets.map(s=>s.properties.title);
     const toAdd = [];
     if (!existing.includes('Expenses')) toAdd.push({addSheet:{properties:{title:'Expenses'}}});
-    if (!existing.includes('Recipes')) toAdd.push({addSheet:{properties:{title:'Recipes'}}});
+    if (!existing.includes('Recipes'))  toAdd.push({addSheet:{properties:{title:'Recipes'}}});
+    if (!existing.includes('Products')) toAdd.push({addSheet:{properties:{title:'Products'}}});
     if (toAdd.length){
       await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:SHEET_ID, resource:{requests:toAdd}});
     }
@@ -169,6 +172,15 @@ async function ensureTabs() {
       await gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_ID, range: 'Recipes!A1:H1', valueInputOption: 'RAW',
         resource: {values:[['id','name','yield','hours','rate','over','mult','ingredients_json']]}
+      });
+    }
+    if (!existing.includes('Products')) {
+      // Header + seed initial 6 products so the site keeps working immediately
+      const header = ['id','name','desc','price','unit','qty','kosher','img','published','sortOrder','minOrder','minNote','flavors','updatedAt'];
+      const rows = [header, ...PRODUCTS_SEED.map(p => prodToRow(Object.assign({updatedAt:new Date().toISOString()}, p)))];
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID, range: 'Products!A1:N' + rows.length, valueInputOption: 'RAW',
+        resource: {values: rows}
       });
     }
   } catch(e){ console.warn('ensureTabs', e); }
@@ -203,16 +215,18 @@ async function updateRow(sheetName, rowNum, row) {
 async function syncAll() {
   setSync('syncing', 'מסנכרן...');
   try {
-    const [cust, ord, exp, rec] = await Promise.all([
+    const [cust, ord, exp, rec, prod] = await Promise.all([
       readRange('Customers!A2:H'),
       readRange('Orders!A2:L'),
       readRange('Expenses!A2:F').catch(()=>[]),
-      readRange('Recipes!A2:H').catch(()=>[])
+      readRange('Recipes!A2:H').catch(()=>[]),
+      readRange('Products!A2:N').catch(()=>[])
     ]);
     db.customers = cust.map(r => rowToCust(r));
     db.orders = ord.map(r => rowToOrder(r));
     db.expenses = exp.map(r => rowToExp(r));
     db.recipes = rec.map(r => rowToRecipe(r));
+    db.products = prod.map(r => rowToProd(r));
     refreshRecipesList();
     saveCache();
     renderAll();
@@ -238,6 +252,7 @@ function loadCache() {
     if (!db.orders) db.orders = [];
     if (!db.expenses) db.expenses = [];
     if (!db.recipes) db.recipes = [];
+    if (!db.products) db.products = [];
   } catch(e){}
 }
 function saveCache(){ localStorage.setItem(CACHE_KEY, JSON.stringify(db)); }
@@ -250,6 +265,35 @@ function rowToExp(r){ return {id:r[0]||'', date:r[1]||'', category:r[2]||'', des
 function expToRow(e){ return [e.id, e.date, e.category, e.description, String(e.amount), e.vendor]; }
 function rowToRecipe(r){ let ing=[]; try{ ing=JSON.parse(r[7]||'[]'); }catch(e){} return {id:r[0]||'', name:r[1]||'', yield:r[2]||'30', hours:r[3]||'2', rate:r[4]||'50', over:r[5]||'15', mult:r[6]||'2.5', ingredients:ing}; }
 function recipeToRow(r){ return [r.id, r.name, String(r.yield), String(r.hours), String(r.rate), String(r.over), String(r.mult), JSON.stringify(r.ingredients||[])]; }
+function rowToProd(r){
+  return {
+    id:        r[0]||'',
+    name:      r[1]||'',
+    desc:      r[2]||'',
+    price:     parseFloat(r[3])||0,
+    unit:      r[4]||'',
+    qty:       parseInt(r[5])||0,
+    kosher:    r[6]||'',
+    img:       r[7]||'',
+    published: (r[8]==='1'||r[8]===1||r[8]===true||String(r[8]).toLowerCase()==='true') ? 1 : 0,
+    sortOrder: parseInt(r[9])||100,
+    minOrder:  parseInt(r[10])||0,
+    minNote:   r[11]||'',
+    flavors:   r[12]||'',
+    updatedAt: r[13]||''
+  };
+}
+function prodToRow(p){
+  return [
+    p.id||'', p.name||'', p.desc||'',
+    String(p.price||0), p.unit||'',
+    String(p.qty||0), p.kosher||'',
+    p.img||'', String(p.published?1:0),
+    String(p.sortOrder||100),
+    String(p.minOrder||0), p.minNote||'',
+    p.flavors||'', p.updatedAt||''
+  ];
+}
 
 /* ============ UI BINDING ============ */
 function bindUI() {
@@ -273,10 +317,11 @@ function switchTab(page) {
   if (page==='pnl') renderPL();
   if (page==='expenses') renderExpenses();
   if (page==='shopping') generateShoppingList();
+  if (page==='products') renderProducts();
 }
 
 function renderAll() {
-  renderToday(); renderKanban(); renderCustomers();
+  renderToday(); renderKanban(); renderCustomers(); renderProducts();
   if (document.getElementById('page-calendar').classList.contains('active')) renderCalendar();
   if (document.getElementById('page-pnl').classList.contains('active')) renderPL();
   if (document.getElementById('page-expenses').classList.contains('active')) renderExpenses();
@@ -310,22 +355,37 @@ function renderToday() {
     '<div style="color:var(--mute)">אין פעילות</div>';
 }
 
+// Match an order-item line to a product in db.products. Returns {product, qty} or null.
+// Heuristics: numeric qty + substring match on product name (first 4 chars) or known aliases.
+const PRODUCT_ALIASES = {
+  maroc:  ['מרוק'],
+  choco:  ['שוקול'],
+  rolled: ['מגולגל'],
+  tahini: ['טחינ'],
+  almond: ['חמאה','שקד'],
+  butter: ['חמאה','שקד'], // legacy id
+  yoyo:   ['יויו']
+};
+function matchProductLine(line) {
+  const m = line.match(/(\d+)\s*(מארז|יח׳?|כדור|יחידות)?/);
+  if (!m) return null;
+  const qty = parseInt(m[1]);
+  if (!qty) return null;
+  for (const p of (db.products||[])) {
+    if (!p.name) continue;
+    const aliases = PRODUCT_ALIASES[p.id] || [];
+    if (line.includes(p.name.slice(0,4)) || aliases.some(a => line.includes(a))) {
+      return {product:p, qty};
+    }
+  }
+  return null;
+}
 function orderTotal(o) {
-  // Rough estimate: try to parse numeric prefixes from items text
   let total = 0;
   if (!o.items) return 0;
-  const lines = o.items.split(/[,\n]/);
-  lines.forEach(line => {
-    const m = line.match(/(\d+)\s*(מארז|יח׳?|כדור|יחידות)?/);
-    if (!m) return;
-    const qty = parseInt(m[1]);
-    const lt = line.toLowerCase();
-    for (const p of PRODUCTS) {
-      if (lt.includes(p.n.slice(0,4)) || (p.id==='maroc' && lt.includes('מרוק')) || (p.id==='choco' && lt.includes('שוקול')) || (p.id==='rolled' && lt.includes('מגולגל')) || (p.id==='tahini' && lt.includes('טחינ')) || (p.id==='butter' && (lt.includes('חמאה')||lt.includes('שקד'))) || (p.id==='yoyo' && lt.includes('יויו'))) {
-        total += qty * p.price;
-        return;
-      }
-    }
+  o.items.split(/[,\n]/).forEach(line => {
+    const m = matchProductLine(line);
+    if (m) total += m.qty * m.product.price;
   });
   return total;
 }
@@ -512,6 +572,14 @@ async function saveNewOrder() {
       setSync('ok','מסונכרן'); toast('הזמנה נשמרה ✓','ok');
     } catch(e){ console.error(e); setSync('err','שגיאת שמירה'); }
   }
+  // Decrement matching products from inventory (best-effort, runs after order save)
+  try {
+    const dec = await decrementProductsForOrder(o);
+    if (dec.length) {
+      const summary = dec.map(d => `${d.name} −${d.qty} (נשאר ${d.remaining})`).join(' · ');
+      toast('עודכן מלאי: ' + summary, 'ok');
+    }
+  } catch(e) { console.error('decrement failed', e); }
 }
 
 function clearOrderForm() {
@@ -621,6 +689,196 @@ function renderExpenses(){
   const list=[...db.expenses].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   if(!list.length){document.getElementById('expList').innerHTML='<div style="text-align:center;padding:40px;color:var(--mute)">אין הוצאות עדיין</div>';return;}
   document.getElementById('expList').innerHTML=`<table><thead><tr><th>תאריך</th><th>קטגוריה</th><th>תיאור</th><th>ספק</th><th>סכום</th><th></th></tr></thead><tbody>${list.map(e=>`<tr><td>${esc(e.date)}</td><td><span class="tag confirmed">${esc(e.category)}</span></td><td>${esc(e.description||'-')}</td><td>${esc(e.vendor||'-')}</td><td><strong>₪${e.amount.toFixed(2)}</strong></td><td class="row-actions"><button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="editExp('${e.id}')">✎</button><button class="btn btn-d" style="padding:4px 10px;font-size:12px" onclick="deleteExp('${e.id}')">🗑</button></td></tr>`).join('')}</tbody></table>`;
+}
+
+/* ============ PRODUCTS ============ */
+function renderProducts() {
+  const el = document.getElementById('prodList');
+  if (!el) return;
+  const list = [...(db.products||[])].sort((a,b)=>(a.sortOrder||100)-(b.sortOrder||100));
+  if (!list.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--mute)">אין מוצרים עדיין. לחצי "➕ מוצר חדש".</div>';
+    return;
+  }
+  el.innerHTML = '<table><thead><tr>'
+    + '<th style="width:60px">פעיל</th>'
+    + '<th style="width:60px">תמונה</th>'
+    + '<th>שם</th>'
+    + '<th style="width:80px">מחיר</th>'
+    + '<th style="width:160px">כמות זמינה</th>'
+    + '<th style="width:80px">כשרות</th>'
+    + '<th style="width:120px">פעולות</th>'
+    + '</tr></thead><tbody>'
+    + list.map(p => {
+        const lowStock = p.published && p.qty>0 && p.qty<=3;
+        const outOfStock = p.published && p.qty<=0;
+        const qtyStyle = outOfStock ? 'color:var(--err);font-weight:700' : (lowStock ? 'color:var(--warn);font-weight:700' : '');
+        const imgCell = p.img
+          ? `<img src="${esc(p.img)}" alt="" style="width:46px;height:46px;border-radius:6px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`
+          : '<span style="color:var(--mute);font-size:11px">—</span>';
+        const kosherTag = p.kosher
+          ? `<span class="tag ${p.kosher==='חלבי'?'baking':'ready'}">${esc(p.kosher)}</span>`
+          : '<span style="color:var(--mute);font-size:11px">—</span>';
+        const stockBadge = outOfStock ? ' · אזל ✖' : (lowStock ? ' · עומד להיגמר ⚠' : '');
+        return `<tr>
+          <td><label style="display:inline-flex;align-items:center;cursor:pointer" title="הצג/הסתר באתר">
+            <input type="checkbox" ${p.published?'checked':''} onchange="togglePublish('${esc(p.id)}', this.checked)" style="width:20px;height:20px;cursor:pointer">
+          </label></td>
+          <td>${imgCell}</td>
+          <td><div style="font-weight:600">${esc(p.name)}</div><div style="font-size:11px;color:var(--mute)">${esc(p.unit||'')}${p.flavors?' · '+esc(p.flavors.replace(/\\|/g,', ')):''}</div></td>
+          <td><strong>₪${p.price}</strong></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:4px">
+              <button class="btn btn-d" style="padding:4px 8px;font-size:13px" onclick="adjustQty('${esc(p.id)}', -1)" title="הורדה ב-1">−</button>
+              <input type="number" value="${p.qty}" min="0" onchange="setQtyDirect('${esc(p.id)}', this.value)" style="width:60px;padding:4px 6px;border:1px solid var(--bd);border-radius:6px;text-align:center;${qtyStyle}">
+              <button class="btn btn-ok" style="padding:4px 8px;font-size:13px" onclick="adjustQty('${esc(p.id)}', 1)" title="הוספה ב-1">+</button>
+            </div>
+            <div style="font-size:11px;color:var(--mute);margin-top:2px;text-align:center">${stockBadge}</div>
+          </td>
+          <td>${kosherTag}</td>
+          <td class="row-actions">
+            <button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="editProduct('${esc(p.id)}')">✎ ערוך</button>
+          </td>
+        </tr>`;
+      }).join('')
+    + '</tbody></table>';
+}
+
+function showProductModal() {
+  editingProdId = null;
+  document.getElementById('pmTitle').textContent = 'מוצר חדש';
+  document.getElementById('pmDelBtn').style.display = 'none';
+  ['pName','pPrice','pUnit','pDesc','pImg','pFlavors','pMinNote'].forEach(i => document.getElementById(i).value = '');
+  document.getElementById('pQty').value = 0;
+  document.getElementById('pSort').value = 100;
+  document.getElementById('pMinOrder').value = '';
+  document.getElementById('pKosher').value = '';
+  document.getElementById('pPublished').checked = true;
+  document.getElementById('prodModal').classList.add('show');
+}
+function editProduct(id) {
+  const p = (db.products||[]).find(x => x.id === id); if (!p) return;
+  editingProdId = id;
+  document.getElementById('pmTitle').textContent = 'עריכת ' + p.name;
+  document.getElementById('pmDelBtn').style.display = 'inline-flex';
+  document.getElementById('pName').value = p.name;
+  document.getElementById('pPrice').value = p.price;
+  document.getElementById('pUnit').value = p.unit;
+  document.getElementById('pQty').value = p.qty;
+  document.getElementById('pKosher').value = p.kosher;
+  document.getElementById('pSort').value = p.sortOrder;
+  document.getElementById('pDesc').value = p.desc;
+  document.getElementById('pImg').value = p.img;
+  document.getElementById('pFlavors').value = p.flavors;
+  document.getElementById('pMinOrder').value = p.minOrder || '';
+  document.getElementById('pMinNote').value = p.minNote;
+  document.getElementById('pPublished').checked = !!p.published;
+  document.getElementById('prodModal').classList.add('show');
+}
+
+async function saveProduct() {
+  const name = document.getElementById('pName').value.trim();
+  const price = parseFloat(document.getElementById('pPrice').value);
+  if (!name) { toast('שם חובה','err'); return; }
+  if (!(price>0)) { toast('מחיר לא תקין','err'); return; }
+  const p = editingProdId
+    ? db.products.find(x => x.id === editingProdId)
+    : {id: uid('p')};
+  p.name = name;
+  p.price = price;
+  p.unit = document.getElementById('pUnit').value.trim();
+  p.qty = Math.max(0, parseInt(document.getElementById('pQty').value)||0);
+  p.kosher = document.getElementById('pKosher').value;
+  p.sortOrder = parseInt(document.getElementById('pSort').value)||100;
+  p.desc = document.getElementById('pDesc').value.trim();
+  p.img = document.getElementById('pImg').value.trim();
+  p.flavors = document.getElementById('pFlavors').value.trim();
+  p.minOrder = parseInt(document.getElementById('pMinOrder').value)||0;
+  p.minNote = document.getElementById('pMinNote').value.trim();
+  p.published = document.getElementById('pPublished').checked ? 1 : 0;
+  p.updatedAt = new Date().toISOString();
+  if (editingProdId) {
+    const idx = db.products.findIndex(x => x.id === editingProdId);
+    saveCache(); closeModal('prodModal'); renderProducts();
+    if (accessToken) { setSync('syncing','שומר...'); try { await updateRow('Products', idx+2, prodToRow(p)); setSync('ok','מסונכרן'); toast('עודכן','ok'); } catch(e){ console.error(e); setSync('err','שגיאה'); toast('שגיאת שמירה','err'); } }
+  } else {
+    db.products.push(p);
+    saveCache(); closeModal('prodModal'); renderProducts();
+    if (accessToken) { setSync('syncing','שומר...'); try { await appendRow('Products', prodToRow(p)); setSync('ok','מסונכרן'); toast('נשמר','ok'); } catch(e){ console.error(e); setSync('err','שגיאה'); toast('שגיאת שמירה','err'); } }
+  }
+}
+
+async function deleteProduct() {
+  if (!editingProdId) return;
+  const p = db.products.find(x => x.id === editingProdId);
+  if (!p) return;
+  if (!confirm(`למחוק את "${p.name}"? המוצר יוסר מהאתר ומהדשבורד.`)) return;
+  const idx = db.products.findIndex(x => x.id === editingProdId);
+  db.products.splice(idx, 1);
+  saveCache(); closeModal('prodModal'); renderProducts();
+  if (accessToken) {
+    try {
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SHEET_ID,
+        resource: {requests: [{deleteDimension: {range: {sheetId: await getSheetId('Products'), dimension:'ROWS', startIndex:idx+1, endIndex:idx+2}}}]}
+      });
+      toast('נמחק','ok');
+    } catch(e){ console.error(e); toast('שגיאת מחיקה','err'); }
+  }
+}
+
+async function togglePublish(id, val) {
+  const p = db.products.find(x => x.id === id); if (!p) return;
+  p.published = val ? 1 : 0;
+  p.updatedAt = new Date().toISOString();
+  saveCache(); renderProducts();
+  await persistProductRow(p);
+}
+async function adjustQty(id, delta) {
+  const p = db.products.find(x => x.id === id); if (!p) return;
+  p.qty = Math.max(0, (parseInt(p.qty)||0) + delta);
+  p.updatedAt = new Date().toISOString();
+  saveCache(); renderProducts();
+  await persistProductRow(p);
+}
+async function setQtyDirect(id, v) {
+  const p = db.products.find(x => x.id === id); if (!p) return;
+  p.qty = Math.max(0, parseInt(v)||0);
+  p.updatedAt = new Date().toISOString();
+  saveCache(); renderProducts();
+  await persistProductRow(p);
+}
+async function persistProductRow(p) {
+  const idx = db.products.findIndex(x => x.id === p.id);
+  if (idx < 0 || !accessToken) return;
+  setSync('syncing','שומר...');
+  try { await updateRow('Products', idx+2, prodToRow(p)); setSync('ok','מסונכרן'); }
+  catch(e){ console.error(e); setSync('err','שגיאת שמירה'); }
+}
+
+// Decrement product quantities based on parsed order items.
+// Best-effort: matches by name prefix or aliases. Returns array of {name, qty} actually decremented.
+async function decrementProductsForOrder(o) {
+  if (!o.items || !db.products.length) return [];
+  const decremented = [];
+  o.items.split(/[,\n]/).forEach(line => {
+    const m = matchProductLine(line);
+    if (!m) return;
+    const newQty = Math.max(0, (parseInt(m.product.qty)||0) - m.qty);
+    m.product.qty = newQty;
+    m.product.updatedAt = new Date().toISOString();
+    decremented.push({name:m.product.name, qty:m.qty, remaining:newQty});
+  });
+  if (!decremented.length) return [];
+  saveCache(); renderProducts();
+  // Persist all touched rows in parallel
+  if (accessToken) {
+    await Promise.all(decremented.map(d => {
+      const p = db.products.find(x => x.name === d.name);
+      return p ? persistProductRow(p) : null;
+    }));
+  }
+  return decremented;
 }
 
 /* ============ P&L ============ */
