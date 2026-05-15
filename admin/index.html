@@ -369,7 +369,14 @@ th,td{padding:8px}
   <div class="field"><label>סדר תצוגה</label><input id="pSort" type="number" step="1" value="100"></div>
   <div class="field full"><label>תיאור</label><textarea id="pDesc" placeholder="תיאור המוצר באתר..."></textarea></div>
   <div class="field full"><label>תמונה (קובץ או URL)</label><input id="pImg" placeholder="images/maroc.jpg או https://..."></div>
-  <div class="field"><label>טעמים (מופרד ב |)</label><input id="pFlavors" placeholder="פיסטוק|קינדר|נוטלה"></div>
+  <div class="field full" style="background:#FAF1E8;padding:14px;border-radius:10px">
+    <label style="display:flex;justify-content:space-between;align-items:center">
+      <span>טעמים (אופציונלי) — מלאי נפרד לכל טעם</span>
+      <button type="button" class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="addFlavorRow()">➕ טעם</button>
+    </label>
+    <div id="pFlavorRows" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
+    <div style="font-size:12px;color:var(--mute);margin-top:6px">השאר ריק אם המוצר אינו מחולק לטעמים. הכמות בכל טעם תרד אוטומטית כשנשמרת הזמנה.</div>
+  </div>
   <div class="field"><label>מינ׳ הזמנה</label><input id="pMinOrder" type="number" min="0" placeholder="30"></div>
   <div class="field full"><label>הערת מינ׳ (טקסט באתר)</label><input id="pMinNote" placeholder="* מינימום 30 יח׳"></div>
   <div class="field full" style="background:#FAF1E8;padding:12px;border-radius:8px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input id="pPublished" type="checkbox" checked style="width:18px;height:18px"> <span style="font-weight:600">פעיל ומוצג באתר</span></label></div>
@@ -397,6 +404,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>

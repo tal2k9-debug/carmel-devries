@@ -171,16 +171,27 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 // Fallback list — rendered immediately so the page never appears empty.
 // On load we try to fetch the live list from the admin Google Sheet (Products tab)
 // and overwrite this array. See loadProductsFromSheet() below.
+// Flavor format from sheet: "name:qty|name:qty"; here we use objects with per-flavor qty.
 const PRODUCTS_FALLBACK=[
 {id:'maroc',name:'עוגיות מכונה מרוקאיות',desc:'עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.',price:55,unit:'מארז של כ-30 יח׳',img:'images/maroc.jpg',kosher:'פרווה'},
-{id:'choco',name:'כדורי שוקולד',desc:'כדורים עשירים בכל טוב, מצופים לבחירה.',price:4,unit:'ליחידה',img:'images/chocoballs.jpg',flavors:['קוקוס','סוכריות'],kosher:'פרווה'},
-{id:'rolled',name:'מגולגלות במילויים',desc:'בצק עדין וניחוח במילוי עשיר וטעים, 3 טעמים לבחירה.',price:75,unit:'מארז של כ-12 יח׳',img:'images/rolled.jpg',flavors:['פיסטוק','קינדר','נוטלה'],kosher:'פרווה'},
+{id:'choco',name:'כדורי שוקולד',desc:'כדורים עשירים בכל טוב, מצופים לבחירה.',price:4,unit:'ליחידה',img:'images/chocoballs.jpg',flavors:[{name:'קוקוס',qty:99},{name:'סוכריות',qty:99}],kosher:'פרווה'},
+{id:'rolled',name:'מגולגלות במילויים',desc:'בצק עדין וניחוח במילוי עשיר וטעים, 3 טעמים לבחירה.',price:75,unit:'מארז של כ-12 יח׳',img:'images/rolled.jpg',flavors:[{name:'פיסטוק',qty:99},{name:'קינדר',qty:99},{name:'נוטלה',qty:99}],kosher:'פרווה'},
 {id:'tahini',name:'עוגיות טחינה קלאסיות',desc:'מרקם נימוח שנמס בפה.',price:55,unit:'מארז של כ-30 יח׳',img:'images/tahini.jpg',kosher:'פרווה'},
 {id:'almond',name:'עוגיות חמאה שקדים',desc:'עוגיות פריכות על בסיס שקדים וחמאה.',price:35,unit:'מארז של כ-11 יח׳',img:'images/almond.jpg',kosher:'חלבי'},
 {id:'yoyo',name:'עוגיות יויו',desc:'עוגיות טבולות בסירופ מתוק עטופות בקוקוס.',price:4,unit:'ליחידה',minOrder:30,minNote:'* מינימום להזמנה כ-30 יח׳',img:'images/yoyo.jpg',kosher:'פרווה'}
 ];
 let products = PRODUCTS_FALLBACK.slice();
 const SHEET_ID='1NOdPG_jdhVfD_Du24E6i3fWTOjPSqfoarJ1tkq6OIRk';
+// Get available qty for a specific flavor (or whole product when flavor is '')
+function flavorAvail(p, flavorName){
+  if(!flavorName){
+    if(p.flavors&&p.flavors.length){return p.flavors.reduce((s,f)=>s+(f.qty||0),0);}
+    return typeof p.qty==='number'?p.qty:Infinity;
+  }
+  if(!p.flavors)return 0;
+  const f=p.flavors.find(x=>x.name===flavorName);
+  return f?(f.qty||0):0;
+}
 // Cart structure: cart[id] = { 'flavor1': qty, 'flavor2': qty } (for non-flavor products, use empty string '')
 const cart={};
 const $=s=>document.querySelector(s);
@@ -191,6 +202,12 @@ const FEE=10,FREE=150;
 function getQty(id,flav=''){return (cart[id]&&cart[id][flav])||0;}
 function setQty(id,flav,qty){
   qty=Math.max(0,Math.floor(Number(qty)||0));
+  // Cap at available stock for this flavor (or whole product when no flavor)
+  const p=products.find(x=>x.id===id);
+  if(p){
+    const avail=flavorAvail(p,flav);
+    if(qty>avail){qty=avail;}
+  }
   if(!cart[id])cart[id]={};
   if(qty===0){delete cart[id][flav];if(Object.keys(cart[id]).length===0)delete cart[id];}
   else cart[id][flav]=qty;
@@ -213,11 +230,18 @@ function render(){
     if(p.flavors&&p.flavors.length){
       qtyHtml='<div class="flavs"><div class="flavs-title">בחירת טעמים</div>';
       p.flavors.forEach(f=>{
-        qtyHtml+='<div class="flav-row"><span class="flav-name">'+f+'</span><div class="flav-qc"><button class="qb" data-id="'+p.id+'" data-flav="'+f+'" data-act="dec">−</button><input class="qi" type="number" min="0" value="0" data-id="'+p.id+'" data-flav="'+f+'" inputmode="numeric"><button class="qb" data-id="'+p.id+'" data-flav="'+f+'" data-act="inc">+</button></div></div>';
+        const fName=typeof f==='string'?f:f.name;
+        const fQty=typeof f==='string'?Infinity:(f.qty||0);
+        const sold=fQty<=0;
+        const lowFlav=fQty>0&&fQty<=3;
+        const stockTxt=sold?'<span style="color:#bf360c;font-size:11px;font-weight:600;margin-inline-start:6px">אזל</span>':(lowFlav?'<span style="color:#bf360c;font-size:11px;margin-inline-start:6px">נותרו '+fQty+'</span>':'');
+        qtyHtml+='<div class="flav-row" '+(sold?'style="opacity:.45"':'')+'><span class="flav-name">'+fName+stockTxt+'</span><div class="flav-qc"><button class="qb" '+(sold?'disabled':'')+' data-id="'+p.id+'" data-flav="'+fName+'" data-act="dec">−</button><input class="qi" type="number" min="0" max="'+(typeof fQty==='number'&&isFinite(fQty)?fQty:'')+'" value="0" '+(sold?'disabled':'')+' data-id="'+p.id+'" data-flav="'+fName+'" inputmode="numeric"><button class="qb" '+(sold?'disabled':'')+' data-id="'+p.id+'" data-flav="'+fName+'" data-act="inc">+</button></div></div>';
       });
       qtyHtml+='</div>';
     } else {
-      qtyHtml='<div class="qty"><span class="ql">כמות</span>'+buildQtyRow(p.id,'')+'</div>';
+      const avail=typeof p.qty==='number'?p.qty:Infinity;
+      const sold=avail<=0;
+      qtyHtml='<div class="qty"'+(sold?' style="opacity:.45"':'')+'><span class="ql">כמות'+(sold?' · אזל':'')+'</span>'+(sold?'':buildQtyRow(p.id,''))+'</div>';
     }
     const kbadge = p.kosher === 'חלבי' ? '<span class="kbadge dairy">חלבי</span>' : (p.kosher === 'פרווה' ? '<span class="kbadge parve">פרווה</span>' : '');
     const stockBadge = (typeof p.qty === 'number' && p.qty > 0 && p.qty <= 3) ? '<span class="soldout">נותרו '+p.qty+'</span>' : '';
@@ -338,7 +362,18 @@ function loadProductsFromSheet(){
         sortOrder:Number(get('sortorder'))||100,
         minOrder:Number(get('minorder'))||0,
         minNote:String(get('minnote')||''),
-        flavors:(()=>{const f=String(get('flavors')||'').trim();return f?f.split('|').map(x=>x.trim()).filter(Boolean):undefined;})()
+        flavors:(()=>{
+          const f=String(get('flavors')||'').trim();
+          if(!f)return undefined;
+          const productQty=Number(get('qty'))||0;
+          return f.split('|').map(x=>x.trim()).filter(Boolean).map(piece=>{
+            const ci=piece.lastIndexOf(':');
+            if(ci>0&&/^\d+$/.test(piece.slice(ci+1).trim())){
+              return {name:piece.slice(0,ci).trim(),qty:parseInt(piece.slice(ci+1).trim())||0};
+            }
+            return {name:piece,qty:productQty}; // legacy fallback
+          });
+        })()
       };
     }).filter(p=>p.id&&p.name&&p.published&&p.qty>0)
       .sort((a,b)=>a.sortOrder-b.sortOrder);

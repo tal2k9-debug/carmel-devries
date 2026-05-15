@@ -294,6 +294,27 @@ function prodToRow(p){
     p.flavors||'', p.updatedAt||''
   ];
 }
+// === FLAVORS HELPERS ===
+// Format on disk: "name:qty|name:qty|..."
+// Legacy format (no colon): "name|name|..." — when parsed, each flavor inherits productQty as fallback
+//   so existing data keeps working until the admin opens & re-saves the product.
+function parseFlavors(str, productQty) {
+  if (!str) return [];
+  return String(str).split('|').map(s => s.trim()).filter(Boolean).map(piece => {
+    const colonIdx = piece.lastIndexOf(':');
+    if (colonIdx > 0 && /^\d+$/.test(piece.slice(colonIdx+1).trim())) {
+      return {name: piece.slice(0, colonIdx).trim(), qty: parseInt(piece.slice(colonIdx+1).trim())||0};
+    }
+    return {name: piece, qty: parseInt(productQty)||0};
+  });
+}
+function serializeFlavors(arr) {
+  if (!arr || !arr.length) return '';
+  return arr.filter(f => f.name).map(f => `${f.name}:${Math.max(0, parseInt(f.qty)||0)}`).join('|');
+}
+function flavorsTotalQty(arr) {
+  return (arr || []).reduce((s, f) => s + (parseInt(f.qty)||0), 0);
+}
 
 /* ============ UI BINDING ============ */
 function bindUI() {
@@ -710,8 +731,11 @@ function renderProducts() {
     + '<th style="width:120px">פעולות</th>'
     + '</tr></thead><tbody>'
     + list.map(p => {
-        const lowStock = p.published && p.qty>0 && p.qty<=3;
-        const outOfStock = p.published && p.qty<=0;
+        const flavors = parseFlavors(p.flavors, p.qty);
+        const hasFlavors = flavors.length > 0;
+        const totalQty = hasFlavors ? flavorsTotalQty(flavors) : p.qty;
+        const lowStock = p.published && totalQty>0 && totalQty<=3;
+        const outOfStock = p.published && totalQty<=0;
         const qtyStyle = outOfStock ? 'color:var(--err);font-weight:700' : (lowStock ? 'color:var(--warn);font-weight:700' : '');
         const imgCell = p.img
           ? `<img src="${esc(p.img)}" alt="" style="width:46px;height:46px;border-radius:6px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`
@@ -720,21 +744,41 @@ function renderProducts() {
           ? `<span class="tag ${p.kosher==='חלבי'?'baking':'ready'}">${esc(p.kosher)}</span>`
           : '<span style="color:var(--mute);font-size:11px">—</span>';
         const stockBadge = outOfStock ? ' · אזל ✖' : (lowStock ? ' · עומד להיגמר ⚠' : '');
-        return `<tr>
-          <td><label style="display:inline-flex;align-items:center;cursor:pointer" title="הצג/הסתר באתר">
-            <input type="checkbox" ${p.published?'checked':''} onchange="togglePublish('${esc(p.id)}', this.checked)" style="width:20px;height:20px;cursor:pointer">
-          </label></td>
-          <td>${imgCell}</td>
-          <td><div style="font-weight:600">${esc(p.name)}</div><div style="font-size:11px;color:var(--mute)">${esc(p.unit||'')}${p.flavors?' · '+esc(p.flavors.replace(/\\|/g,', ')):''}</div></td>
-          <td><strong>₪${p.price}</strong></td>
-          <td>
+        const subtitle = hasFlavors
+          ? esc(p.unit||'') + ' · ' + flavors.length + ' טעמים'
+          : esc(p.unit||'');
+        let qtyCell;
+        if (hasFlavors) {
+          // For products with flavors, show ± per flavor inline
+          qtyCell = `<div style="display:flex;flex-direction:column;gap:4px">
+            ${flavors.map((f, i) => {
+              const fQtyStyle = f.qty<=0 ? 'color:var(--err);font-weight:600' : (f.qty<=3 ? 'color:var(--warn);font-weight:600' : '');
+              return `<div style="display:grid;grid-template-columns:1fr 24px 50px 24px;gap:4px;align-items:center">
+                <span style="font-size:12px;color:var(--ink2);text-align:start;padding-inline-start:4px">${esc(f.name)}</span>
+                <button class="btn btn-d" style="padding:2px 0;font-size:12px" onclick="adjustFlavorQty('${esc(p.id)}', ${i}, -1)" title="−1">−</button>
+                <input type="number" value="${f.qty}" min="0" onchange="setFlavorQty('${esc(p.id)}', ${i}, this.value)" style="padding:2px 4px;border:1px solid var(--bd);border-radius:4px;text-align:center;font-size:12px;${fQtyStyle}">
+                <button class="btn btn-ok" style="padding:2px 0;font-size:12px" onclick="adjustFlavorQty('${esc(p.id)}', ${i}, 1)" title="+1">+</button>
+              </div>`;
+            }).join('')}
+            <div style="font-size:11px;color:var(--mute);text-align:center;border-top:1px dashed var(--bd);padding-top:3px;margin-top:2px;${qtyStyle}">סה״כ: ${totalQty}${stockBadge}</div>
+          </div>`;
+        } else {
+          qtyCell = `
             <div style="display:flex;align-items:center;gap:4px">
               <button class="btn btn-d" style="padding:4px 8px;font-size:13px" onclick="adjustQty('${esc(p.id)}', -1)" title="הורדה ב-1">−</button>
               <input type="number" value="${p.qty}" min="0" onchange="setQtyDirect('${esc(p.id)}', this.value)" style="width:60px;padding:4px 6px;border:1px solid var(--bd);border-radius:6px;text-align:center;${qtyStyle}">
               <button class="btn btn-ok" style="padding:4px 8px;font-size:13px" onclick="adjustQty('${esc(p.id)}', 1)" title="הוספה ב-1">+</button>
             </div>
-            <div style="font-size:11px;color:var(--mute);margin-top:2px;text-align:center">${stockBadge}</div>
-          </td>
+            <div style="font-size:11px;color:var(--mute);margin-top:2px;text-align:center">${stockBadge}</div>`;
+        }
+        return `<tr>
+          <td><label style="display:inline-flex;align-items:center;cursor:pointer" title="הצג/הסתר באתר">
+            <input type="checkbox" ${p.published?'checked':''} onchange="togglePublish('${esc(p.id)}', this.checked)" style="width:20px;height:20px;cursor:pointer">
+          </label></td>
+          <td>${imgCell}</td>
+          <td><div style="font-weight:600">${esc(p.name)}</div><div style="font-size:11px;color:var(--mute)">${subtitle}</div></td>
+          <td><strong>₪${p.price}</strong></td>
+          <td>${qtyCell}</td>
           <td>${kosherTag}</td>
           <td class="row-actions">
             <button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="editProduct('${esc(p.id)}')">✎ ערוך</button>
@@ -748,12 +792,13 @@ function showProductModal() {
   editingProdId = null;
   document.getElementById('pmTitle').textContent = 'מוצר חדש';
   document.getElementById('pmDelBtn').style.display = 'none';
-  ['pName','pPrice','pUnit','pDesc','pImg','pFlavors','pMinNote'].forEach(i => document.getElementById(i).value = '');
+  ['pName','pPrice','pUnit','pDesc','pImg','pMinNote'].forEach(i => document.getElementById(i).value = '');
   document.getElementById('pQty').value = 0;
   document.getElementById('pSort').value = 100;
   document.getElementById('pMinOrder').value = '';
   document.getElementById('pKosher').value = '';
   document.getElementById('pPublished').checked = true;
+  setFlavorRows([]);
   document.getElementById('prodModal').classList.add('show');
 }
 function editProduct(id) {
@@ -769,11 +814,34 @@ function editProduct(id) {
   document.getElementById('pSort').value = p.sortOrder;
   document.getElementById('pDesc').value = p.desc;
   document.getElementById('pImg').value = p.img;
-  document.getElementById('pFlavors').value = p.flavors;
+  setFlavorRows(parseFlavors(p.flavors, p.qty));
   document.getElementById('pMinOrder').value = p.minOrder || '';
   document.getElementById('pMinNote').value = p.minNote;
   document.getElementById('pPublished').checked = !!p.published;
   document.getElementById('prodModal').classList.add('show');
+}
+
+function setFlavorRows(arr) {
+  const c = document.getElementById('pFlavorRows');
+  c.innerHTML = '';
+  (arr||[]).forEach(f => addFlavorRow(f.name, f.qty));
+}
+function addFlavorRow(name, qty) {
+  const c = document.getElementById('pFlavorRows');
+  const row = document.createElement('div');
+  row.className = 'flavor-row';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 90px auto;gap:8px;align-items:center';
+  row.innerHTML = `
+    <input class="fr-name" placeholder="שם הטעם" value="${esc(name||'')}" style="padding:8px 10px;border:1px solid var(--bd);border-radius:6px;background:#fff">
+    <input class="fr-qty" type="number" min="0" placeholder="כמות" value="${qty!=null?qty:''}" style="padding:8px 10px;border:1px solid var(--bd);border-radius:6px;background:#fff;text-align:center">
+    <button type="button" class="btn btn-d" style="padding:6px 10px;font-size:13px" onclick="this.parentElement.remove()">✕</button>`;
+  c.appendChild(row);
+}
+function readFlavorsFromForm() {
+  return Array.from(document.querySelectorAll('#pFlavorRows .flavor-row')).map(r => ({
+    name: r.querySelector('.fr-name').value.trim(),
+    qty:  Math.max(0, parseInt(r.querySelector('.fr-qty').value)||0)
+  })).filter(f => f.name);
 }
 
 async function saveProduct() {
@@ -781,30 +849,34 @@ async function saveProduct() {
   const price = parseFloat(document.getElementById('pPrice').value);
   if (!name) { toast('שם חובה','err'); return; }
   if (!(price>0)) { toast('מחיר לא תקין','err'); return; }
+  const flavors = readFlavorsFromForm();
   const p = editingProdId
     ? db.products.find(x => x.id === editingProdId)
     : {id: uid('p')};
   p.name = name;
   p.price = price;
   p.unit = document.getElementById('pUnit').value.trim();
-  p.qty = Math.max(0, parseInt(document.getElementById('pQty').value)||0);
   p.kosher = document.getElementById('pKosher').value;
   p.sortOrder = parseInt(document.getElementById('pSort').value)||100;
   p.desc = document.getElementById('pDesc').value.trim();
   p.img = document.getElementById('pImg').value.trim();
-  p.flavors = document.getElementById('pFlavors').value.trim();
+  p.flavors = serializeFlavors(flavors);
   p.minOrder = parseInt(document.getElementById('pMinOrder').value)||0;
   p.minNote = document.getElementById('pMinNote').value.trim();
   p.published = document.getElementById('pPublished').checked ? 1 : 0;
+  // When flavors exist, total qty = sum of per-flavor qty (auto). Otherwise read from pQty input.
+  p.qty = flavors.length
+    ? flavorsTotalQty(flavors)
+    : Math.max(0, parseInt(document.getElementById('pQty').value)||0);
   p.updatedAt = new Date().toISOString();
   if (editingProdId) {
     const idx = db.products.findIndex(x => x.id === editingProdId);
     saveCache(); closeModal('prodModal'); renderProducts();
-    if (accessToken) { setSync('syncing','שומר...'); try { await updateRow('Products', idx+2, prodToRow(p)); setSync('ok','מסונכרן'); toast('עודכן','ok'); } catch(e){ console.error(e); setSync('err','שגיאה'); toast('שגיאת שמירה','err'); } }
+    if (accessToken) { setSync('syncing','שומר...'); try { await updateRow('Products', idx+2, prodToRow(p)); setSync('ok','מסונכרן'); toast('עודכן','ok'); } catch(e){ console.error('saveProduct update failed:', e); setSync('err','שגיאה'); toast('שגיאת שמירה: '+(e.result&&e.result.error&&e.result.error.message||e.message||'unknown'),'err'); } }
   } else {
     db.products.push(p);
     saveCache(); closeModal('prodModal'); renderProducts();
-    if (accessToken) { setSync('syncing','שומר...'); try { await appendRow('Products', prodToRow(p)); setSync('ok','מסונכרן'); toast('נשמר','ok'); } catch(e){ console.error(e); setSync('err','שגיאה'); toast('שגיאת שמירה','err'); } }
+    if (accessToken) { setSync('syncing','שומר...'); try { await appendRow('Products', prodToRow(p)); setSync('ok','מסונכרן'); toast('נשמר','ok'); } catch(e){ console.error('saveProduct append failed:', e); setSync('err','שגיאה'); toast('שגיאת שמירה: '+(e.result&&e.result.error&&e.result.error.message||e.message||'unknown'),'err'); } }
   }
 }
 
@@ -848,6 +920,28 @@ async function setQtyDirect(id, v) {
   saveCache(); renderProducts();
   await persistProductRow(p);
 }
+async function adjustFlavorQty(id, flavorIdx, delta) {
+  const p = db.products.find(x => x.id === id); if (!p) return;
+  const flavors = parseFlavors(p.flavors, p.qty);
+  if (!flavors[flavorIdx]) return;
+  flavors[flavorIdx].qty = Math.max(0, (parseInt(flavors[flavorIdx].qty)||0) + delta);
+  p.flavors = serializeFlavors(flavors);
+  p.qty = flavorsTotalQty(flavors);
+  p.updatedAt = new Date().toISOString();
+  saveCache(); renderProducts();
+  await persistProductRow(p);
+}
+async function setFlavorQty(id, flavorIdx, v) {
+  const p = db.products.find(x => x.id === id); if (!p) return;
+  const flavors = parseFlavors(p.flavors, p.qty);
+  if (!flavors[flavorIdx]) return;
+  flavors[flavorIdx].qty = Math.max(0, parseInt(v)||0);
+  p.flavors = serializeFlavors(flavors);
+  p.qty = flavorsTotalQty(flavors);
+  p.updatedAt = new Date().toISOString();
+  saveCache(); renderProducts();
+  await persistProductRow(p);
+}
 async function persistProductRow(p) {
   const idx = db.products.findIndex(x => x.id === p.id);
   if (idx < 0 || !accessToken) return;
@@ -857,24 +951,49 @@ async function persistProductRow(p) {
 }
 
 // Decrement product quantities based on parsed order items.
-// Best-effort: matches by name prefix or aliases. Returns array of {name, qty} actually decremented.
+// Best-effort: matches by name prefix or aliases. For products with flavors, also tries
+// to match a flavor name in the same line and decrement only that flavor.
+// Returns array of {name, qty, remaining} actually decremented.
 async function decrementProductsForOrder(o) {
   if (!o.items || !db.products.length) return [];
   const decremented = [];
+  const touched = new Set(); // product ids whose row needs to be persisted once
   o.items.split(/[,\n]/).forEach(line => {
     const m = matchProductLine(line);
     if (!m) return;
-    const newQty = Math.max(0, (parseInt(m.product.qty)||0) - m.qty);
-    m.product.qty = newQty;
+    const flavors = parseFlavors(m.product.flavors, m.product.qty);
+    if (flavors.length) {
+      // Try to match a flavor name in the same line
+      const matchedFlavor = flavors.find(f => f.name && line.includes(f.name));
+      if (matchedFlavor) {
+        matchedFlavor.qty = Math.max(0, matchedFlavor.qty - m.qty);
+        m.product.flavors = serializeFlavors(flavors);
+        m.product.qty = flavorsTotalQty(flavors);
+        decremented.push({name:`${m.product.name} (${matchedFlavor.name})`, qty:m.qty, remaining:matchedFlavor.qty});
+      } else {
+        // No specific flavor — split decrement evenly across flavors with stock (best-effort)
+        let remaining = m.qty;
+        for (const f of flavors) {
+          if (remaining <= 0) break;
+          const take = Math.min(f.qty, remaining);
+          f.qty -= take; remaining -= take;
+        }
+        m.product.flavors = serializeFlavors(flavors);
+        m.product.qty = flavorsTotalQty(flavors);
+        decremented.push({name:m.product.name+' (לא צוין טעם)', qty:m.qty, remaining:m.product.qty});
+      }
+    } else {
+      m.product.qty = Math.max(0, (parseInt(m.product.qty)||0) - m.qty);
+      decremented.push({name:m.product.name, qty:m.qty, remaining:m.product.qty});
+    }
     m.product.updatedAt = new Date().toISOString();
-    decremented.push({name:m.product.name, qty:m.qty, remaining:newQty});
+    touched.add(m.product.id);
   });
   if (!decremented.length) return [];
   saveCache(); renderProducts();
-  // Persist all touched rows in parallel
   if (accessToken) {
-    await Promise.all(decremented.map(d => {
-      const p = db.products.find(x => x.name === d.name);
+    await Promise.all(Array.from(touched).map(id => {
+      const p = db.products.find(x => x.id === id);
       return p ? persistProductRow(p) : null;
     }));
   }
