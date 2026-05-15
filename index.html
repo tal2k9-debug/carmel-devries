@@ -340,10 +340,8 @@ setupDate();updAddr();render();upd();
 // Sheet must be shared "Anyone with the link can view" for this to work.
 // On any failure (sheet private, network, parse) we silently keep PRODUCTS_FALLBACK.
 function loadProductsFromSheet(){
-  // Cache-buster: round timestamp to nearest minute so we still benefit from CDN
-  // cache on rapid reloads, but never see data older than ~60 seconds.
-  const t=Math.floor(Date.now()/60000);
-  const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet=Products&t='+t;
+  // Cache-buster: unique URL each load so Google's CDN never serves stale data.
+  const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet=Products&t='+Date.now();
   fetch(url,{cache:'no-store'}).then(r=>r.text()).then(text=>{
     const m=text.match(/google\.visualization\.Query\.setResponse\((.*)\);?\s*$/s);
     if(!m)throw new Error('gviz parse failed');
@@ -351,7 +349,7 @@ function loadProductsFromSheet(){
     if(!data.table||!data.table.rows)throw new Error('no rows');
     const cols=data.table.cols.map(c=>(c.label||c.id||'').toLowerCase());
     const idx=name=>cols.indexOf(name);
-    const live=data.table.rows.map(r=>{
+    const allRows=data.table.rows.map(r=>{
       const c=r.c||[];
       const get=name=>{const i=idx(name);return i<0||!c[i]?'':(c[i].v!==undefined?c[i].v:'');};
       return {
@@ -376,19 +374,24 @@ function loadProductsFromSheet(){
             if(ci>0&&/^\d+$/.test(piece.slice(ci+1).trim())){
               return {name:piece.slice(0,ci).trim(),qty:parseInt(piece.slice(ci+1).trim())||0};
             }
-            return {name:piece,qty:productQty}; // legacy fallback
+            return {name:piece,qty:productQty};
           });
         })()
       };
-    }).filter(p=>p.id&&p.name&&p.published&&p.qty>0)
-      .sort((a,b)=>a.sortOrder-b.sortOrder);
-    if(live.length){
+    });
+    // If we got rows back at all, sheet data is authoritative — even an empty
+    // visible set means "everything is unpublished" and we should show nothing.
+    if(allRows.length){
+      const live=allRows.filter(p=>p.id&&p.name&&p.published&&p.qty>0)
+                       .sort((a,b)=>a.sortOrder-b.sortOrder);
       products.length=0;
       live.forEach(p=>products.push(p));
-      // Reset cart entries that no longer exist
       Object.keys(cart).forEach(id=>{if(!products.find(p=>p.id===id))delete cart[id];});
       render();upd();
-      console.log('[Carmel] Loaded',live.length,'products from sheet');
+      console.log('[Carmel] Sheet has',allRows.length,'rows, showing',live.length,'published in-stock');
+      if(!live.length){
+        $('#products').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--is);font-size:16px">כרגע אין מוצרים זמינים. נסו שוב מאוחר יותר 💛</div>';
+      }
     }
   }).catch(e=>console.log('[Carmel] Using fallback products:',e.message));
 }
