@@ -396,5 +396,9 @@ function loadProductsFromSheet(){
   }).catch(e=>console.log('[Carmel] Using fallback products:',e.message));
 }
 loadProductsFromSheet();
+// Re-fetch every 60s so admin edits propagate to long-open tabs
+setInterval(loadProductsFromSheet, 60000);
+// Re-fetch immediately when the user returns to the tab
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) loadProductsFromSheet(); });
 </script>
 </body></html>
