@@ -321,13 +321,15 @@ function buildMsg(){
 }
 
 function send(){
-  const sub=Object.values(cart).reduce((a,c)=>a+Object.values(c).reduce((x,y)=>x+y,0)*0,0); // dummy
   let subtotal=0;
   products.forEach(p=>{if(cart[p.id])Object.values(cart[p.id]).forEach(q=>subtotal+=q*p.price);});
   if(!subtotal){alert('בחרו לפחות פריט אחד');return;}
-  const y=products.find(p=>p.id==='yoyo');
-  const yoyoTotal=totalQty('yoyo');
-  if(y.minOrder&&yoyoTotal>0&&yoyoTotal<y.minOrder){alert('כמות מינימום לעוגיות יויו: '+y.minOrder+' יח׳');return;}
+  // Generic minOrder enforcement — for any product that has minOrder set
+  for(const p of products){
+    if(!p.minOrder)continue;
+    const t=totalQty(p.id);
+    if(t>0&&t<p.minOrder){alert('כמות מינימום ל'+p.name+': '+p.minOrder+' יח׳');return;}
+  }
   window.open('https://wa.me/972524809393?text='+encodeURIComponent(buildMsg()),'_blank');
 }
 $('#sb').onclick=send;$('#bsb').onclick=send;
