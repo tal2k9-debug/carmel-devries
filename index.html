@@ -340,7 +340,10 @@ setupDate();updAddr();render();upd();
 // Sheet must be shared "Anyone with the link can view" for this to work.
 // On any failure (sheet private, network, parse) we silently keep PRODUCTS_FALLBACK.
 function loadProductsFromSheet(){
-  const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet=Products';
+  // Cache-buster: round timestamp to nearest minute so we still benefit from CDN
+  // cache on rapid reloads, but never see data older than ~60 seconds.
+  const t=Math.floor(Date.now()/60000);
+  const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet=Products&t='+t;
   fetch(url,{cache:'no-store'}).then(r=>r.text()).then(text=>{
     const m=text.match(/google\.visualization\.Query\.setResponse\((.*)\);?\s*$/s);
     if(!m)throw new Error('gviz parse failed');
