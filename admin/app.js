@@ -792,7 +792,7 @@ function showProductModal() {
   editingProdId = null;
   document.getElementById('pmTitle').textContent = 'מוצר חדש';
   document.getElementById('pmDelBtn').style.display = 'none';
-  ['pName','pPrice','pUnit','pDesc','pImg','pMinNote'].forEach(i => document.getElementById(i).value = '');
+  ['pName','pPrice','pUnit','pDesc','pImg'].forEach(i => document.getElementById(i).value = '');
   document.getElementById('pQty').value = 0;
   document.getElementById('pSort').value = 100;
   document.getElementById('pMinOrder').value = '';
@@ -822,7 +822,6 @@ function editProduct(id) {
   updateImagePreview(p.img);
   setFlavorRows(parseFlavors(p.flavors, p.qty));
   document.getElementById('pMinOrder').value = p.minOrder || '';
-  document.getElementById('pMinNote').value = p.minNote;
   document.getElementById('pPublished').checked = !!p.published;
   document.getElementById('prodModal').classList.add('show');
 }
@@ -950,7 +949,8 @@ async function saveProduct() {
   p.img = document.getElementById('pImg').value.trim();
   p.flavors = serializeFlavors(flavors);
   p.minOrder = parseInt(document.getElementById('pMinOrder').value)||0;
-  p.minNote = document.getElementById('pMinNote').value.trim();
+  // Auto-derive the note from minOrder so the user only has to fill one field.
+  p.minNote = p.minOrder > 0 ? `* מינימום להזמנה ${p.minOrder} יח׳` : '';
   p.published = document.getElementById('pPublished').checked ? 1 : 0;
   // When flavors exist, total qty = sum of per-flavor qty (auto). Otherwise read from pQty input.
   p.qty = flavors.length
