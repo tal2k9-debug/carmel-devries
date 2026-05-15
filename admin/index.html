@@ -368,7 +368,22 @@ th,td{padding:8px}
   <div class="field"><label>כשרות</label><select id="pKosher"><option value="">— ללא ציון —</option><option value="פרווה">פרווה</option><option value="חלבי">חלבי</option></select></div>
   <div class="field"><label>סדר תצוגה</label><input id="pSort" type="number" step="1" value="100"></div>
   <div class="field full"><label>תיאור</label><textarea id="pDesc" placeholder="תיאור המוצר באתר..."></textarea></div>
-  <div class="field full"><label>תמונה (קובץ או URL)</label><input id="pImg" placeholder="images/maroc.jpg או https://..."></div>
+  <div class="field full">
+    <label>תמונה</label>
+    <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+      <div id="pImgPreview" style="width:90px;height:90px;border-radius:10px;border:2px dashed var(--bd);background:#FAF1E8;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:11px;text-align:center;flex-shrink:0;overflow:hidden">בלי תמונה</div>
+      <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:6px">
+        <input type="file" id="pImgFile" accept="image/*" style="display:none" onchange="handleImageUpload(this.files[0])">
+        <button type="button" class="btn btn-p" onclick="document.getElementById('pImgFile').click()" style="justify-content:center">📷 העלה תמונה</button>
+        <button type="button" class="btn btn-d" onclick="clearImage()" style="justify-content:center;display:none" id="pImgRemoveBtn">🗑 הסר תמונה</button>
+        <details style="font-size:12px">
+          <summary style="cursor:pointer;color:var(--mute)">או הדבק קישור / נתיב קיים</summary>
+          <input id="pImg" placeholder="images/maroc.jpg או https://..." style="margin-top:6px;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;width:100%" oninput="updateImagePreview(this.value)">
+        </details>
+        <div id="pImgStatus" style="font-size:11px;color:var(--mute)"></div>
+      </div>
+    </div>
+  </div>
   <div class="field full" style="background:#FAF1E8;padding:14px;border-radius:10px">
     <label style="display:flex;justify-content:space-between;align-items:center">
       <span>טעמים (אופציונלי) — מלאי נפרד לכל טעם</span>
@@ -404,6 +419,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>

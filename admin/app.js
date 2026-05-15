@@ -798,6 +798,9 @@ function showProductModal() {
   document.getElementById('pMinOrder').value = '';
   document.getElementById('pKosher').value = '';
   document.getElementById('pPublished').checked = true;
+  document.getElementById('pImgFile').value = '';
+  document.getElementById('pImgStatus').textContent = '';
+  updateImagePreview('');
   setFlavorRows([]);
   document.getElementById('prodModal').classList.add('show');
 }
@@ -814,6 +817,9 @@ function editProduct(id) {
   document.getElementById('pSort').value = p.sortOrder;
   document.getElementById('pDesc').value = p.desc;
   document.getElementById('pImg').value = p.img;
+  document.getElementById('pImgFile').value = '';
+  document.getElementById('pImgStatus').textContent = '';
+  updateImagePreview(p.img);
   setFlavorRows(parseFlavors(p.flavors, p.qty));
   document.getElementById('pMinOrder').value = p.minOrder || '';
   document.getElementById('pMinNote').value = p.minNote;
@@ -842,6 +848,88 @@ function readFlavorsFromForm() {
     name: r.querySelector('.fr-name').value.trim(),
     qty:  Math.max(0, parseInt(r.querySelector('.fr-qty').value)||0)
   })).filter(f => f.name);
+}
+
+// === IMAGE UPLOAD ===
+// Resize image client-side and store as base64 data URL in pImg.
+// Target size keeps us under Google Sheets' ~50,000 chars-per-cell limit.
+const IMG_MAX_DIM = 600;
+const IMG_TARGET_BYTES = 38000; // base64 ratio ~1.37 → keeps cell under ~52KB
+
+function updateImagePreview(src) {
+  const el = document.getElementById('pImgPreview');
+  const removeBtn = document.getElementById('pImgRemoveBtn');
+  if (src && src.length > 0) {
+    el.innerHTML = `<img src="${esc(src)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentElement.textContent='טעינה נכשלה'">`;
+    if (removeBtn) removeBtn.style.display = 'inline-flex';
+  } else {
+    el.innerHTML = 'בלי תמונה';
+    if (removeBtn) removeBtn.style.display = 'none';
+  }
+}
+function clearImage() {
+  document.getElementById('pImg').value = '';
+  document.getElementById('pImgFile').value = '';
+  document.getElementById('pImgStatus').textContent = '';
+  updateImagePreview('');
+}
+
+async function handleImageUpload(file) {
+  if (!file) return;
+  const status = document.getElementById('pImgStatus');
+  status.textContent = 'מעבד תמונה...';
+  status.style.color = 'var(--mute)';
+  try {
+    if (file.size > 10 * 1024 * 1024) {
+      status.textContent = 'הקובץ גדול מ-10MB, בחרי קובץ קטן יותר';
+      status.style.color = 'var(--err)';
+      return;
+    }
+    const dataUrl = await resizeImageToFit(file, IMG_MAX_DIM, IMG_TARGET_BYTES);
+    document.getElementById('pImg').value = dataUrl;
+    updateImagePreview(dataUrl);
+    const kb = Math.round(dataUrl.length * 0.75 / 1024);
+    status.textContent = `נשמר ✓ (${kb} KB)`;
+    status.style.color = 'var(--ok)';
+  } catch (e) {
+    console.error('image upload failed:', e);
+    status.textContent = 'שגיאה בעיבוד התמונה: ' + (e.message||'');
+    status.style.color = 'var(--err)';
+  }
+}
+
+// Resize an image to fit within maxDim and target byte budget for the data URL.
+// Tries decreasing JPEG quality until it fits or floor is reached.
+async function resizeImageToFit(file, maxDim, targetBytes) {
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  try {
+    await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('פורמט לא נתמך')); img.src = url; });
+    let {width: w, height: h} = img;
+    if (w > maxDim || h > maxDim) {
+      const r = Math.min(maxDim / w, maxDim / h);
+      w = Math.round(w * r); h = Math.round(h * r);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    // Try qualities from 0.85 down to 0.4 until size fits
+    for (const q of [0.85, 0.75, 0.65, 0.55, 0.45]) {
+      const dataUrl = canvas.toDataURL('image/jpeg', q);
+      // Approximate bytes from base64 string length
+      const bytes = Math.round((dataUrl.length - dataUrl.indexOf(',') - 1) * 0.75);
+      if (bytes <= targetBytes) return dataUrl;
+    }
+    // Last resort: shrink dimensions further
+    const smallCanvas = document.createElement('canvas');
+    smallCanvas.width = Math.round(w * 0.7); smallCanvas.height = Math.round(h * 0.7);
+    smallCanvas.getContext('2d').drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
+    return smallCanvas.toDataURL('image/jpeg', 0.55);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 async function saveProduct() {
