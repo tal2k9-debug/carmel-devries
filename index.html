@@ -341,7 +341,8 @@ setupDate();updAddr();render();upd();
 // On any failure (sheet private, network, parse) we silently keep PRODUCTS_FALLBACK.
 function loadProductsFromSheet(){
   // Cache-buster: unique URL each load so Google's CDN never serves stale data.
-  const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet=Products&t='+Date.now();
+  // headers=1 makes gviz recognise row 1 as column labels; without it, our get('published') etc lookups all return empty.
+  const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet=Products&headers=1&t='+Date.now();
   fetch(url,{cache:'no-store'}).then(r=>r.text()).then(text=>{
     const m=text.match(/google\.visualization\.Query\.setResponse\((.*)\);?\s*$/s);
     if(!m)throw new Error('gviz parse failed');
