@@ -154,7 +154,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="ot"><span>סה"כ לתשלום</span><span class="am" id="ot">0 ₪</span></div>
 <div class="dn">🚚 משלוח באופקים — 10 ₪ · חינם בהזמנה מעל 150 ₪<br>🏠 איסוף עצמי: רח׳ אורים 20, אופקים — בתיאום מראש</div>
 </div>
-<button class="subm" id="sb" type="button"><svg viewBox="0 0 24 24"><path d="M20.5 3.5A11.9 11.9 0 0 0 12 0C5.4 0 .1 5.3.1 12c0 2.1.5 4.2 1.6 6L0 24l6.3-1.6c1.7 1 3.7 1.5 5.7 1.5C18.6 24 24 18.6 24 12c0-3.2-1.2-6.2-3.5-8.5z"/></svg>שליחת הזמנה בווטסאפ</button>
+<button class="subm" id="sb" type="button">🍪 שליחת הזמנה</button>
 </div>
 </div></section>
 <div class="bar" id="bar">
@@ -360,21 +360,20 @@ function send(){
     const t=totalQty(p.id);
     if(t>0&&t<p.minOrder){alert('כמות מינימום ל'+p.name+': '+p.minOrder+' יח׳');return;}
   }
-  const waUrl='https://wa.me/972524809393?text='+encodeURIComponent(buildMsg());
   if(!WEBAPP_URL){
-    // No backend configured yet — plain WhatsApp flow
-    window.open(waUrl,'_blank');
+    // No backend configured yet — WhatsApp is the only delivery channel
+    window.open('https://wa.me/972524809393?text='+encodeURIComponent(buildMsg()),'_blank');
     return;
   }
-  // Open the WhatsApp tab now (inside the click gesture) to avoid popup blocking,
-  // then submit the order to the backend and either navigate or close it.
-  const waWin=window.open('about:blank','_blank');
-  submitOrder(waWin,waUrl);
+  // Backend active — submit the order directly, no WhatsApp.
+  submitOrder();
 }
 
-async function submitOrder(waWin,waUrl){
+async function submitOrder(){
   const btns=[$('#sb'),$('#bsb')].filter(Boolean);
+  const sb=$('#sb'),orig=sb.innerHTML;
   btns.forEach(b=>b.disabled=true);
+  sb.textContent='שולח...';
   try{
     const resp=await fetch(WEBAPP_URL,{
       method:'POST',
@@ -383,28 +382,40 @@ async function submitOrder(waWin,waUrl){
     });
     const data=await resp.json();
     if(data.ok){
-      if(waWin)waWin.location.href=waUrl; else window.open(waUrl,'_blank');
+      Object.keys(cart).forEach(k=>delete cart[k]);
       loadProductsFromSheet();
+      showOrderSuccess();
     }else if(data.error==='stock'){
-      if(waWin)waWin.close();
       const lines=(data.problems||[]).map(p=>'• '+p.name+(p.available!=null?' — נותרו רק '+p.available:' — אזל')).join('\n');
       alert('חלק מהפריטים אזלו בזמן שהזמנת:\n'+lines+'\n\nעדכנו את הכמויות בסל ונסו שוב 🙏');
       loadProductsFromSheet();
     }else if(data.error==='busy'){
-      if(waWin)waWin.close();
       alert('המערכת עמוסה כרגע, נסו שוב בעוד רגע 🙏');
     }else{
-      // Unknown server error — don't block the customer, still let them WhatsApp
       console.error('[Carmel] order error',data);
-      if(waWin)waWin.location.href=waUrl; else window.open(waUrl,'_blank');
+      alert('משהו השתבש בשליחת ההזמנה. נסו שוב, או צרו קשר בווטסאפ 052-4809393.');
     }
   }catch(err){
-    // Network failure — fall back so the order still reaches Keren via WhatsApp
     console.error('[Carmel] order POST failed',err);
-    if(waWin)waWin.location.href=waUrl; else window.open(waUrl,'_blank');
+    alert('שליחת ההזמנה נכשלה (בעיית רשת). נסו שוב, או צרו קשר בווטסאפ 052-4809393.');
   }finally{
     btns.forEach(b=>b.disabled=false);
+    sb.innerHTML=orig;
   }
+}
+
+function showOrderSuccess(){
+  const oc=document.querySelector('.oc');
+  if(oc){
+    oc.innerHTML='<div style="text-align:center;padding:34px 12px">'
+      +'<div style="font-size:56px">🍪</div>'
+      +'<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:27px;color:var(--gd);margin:14px 0 10px">ההזמנה נקלטה!</h3>'
+      +'<p style="color:var(--is);font-size:15px;line-height:1.8">תודה רבה 💛<br>קרן תיצור איתך קשר בקרוב לאישור ההזמנה ותיאום הפרטים.</p>'
+      +'<button class="subm" style="max-width:240px;margin:24px auto 0" type="button" onclick="location.reload()">הזמנה נוספת</button>'
+      +'</div>';
+  }
+  $('#bar').classList.remove('vis');
+  if(oc)window.scrollTo({top:Math.max(0,oc.getBoundingClientRect().top+window.scrollY-40),behavior:'smooth'});
 }
 $('#sb').onclick=send;$('#bsb').onclick=send;
 $('#cust-fulfill').onchange=()=>{updAddr();upd();};
