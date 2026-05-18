@@ -42,6 +42,7 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .kbadge{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;padding:3px 10px;border-radius:10px;margin-inline-start:8px;vertical-align:middle}
 .kbadge.parve{background:#e8f5e9;color:#2e7d32}
 .kbadge.dairy{background:#fff3e0;color:#c2185b}
+.kbadge.mixed{background:#ede7f6;color:#5e35b1}
 .soldout{display:inline-block;background:#fbe9e7;color:#bf360c;font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;margin-inline-start:6px}
 @media (max-width:600px){.pi{height:220px}}
 .pb{padding:22px 22px 18px;flex:1;display:flex;flex-direction:column}
@@ -165,6 +166,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="bl">Carmel</div>
 <div class="bs">DE-VRIES</div>
 <a class="cn" href="tel:+972524809393"><span class="ic">☎</span><span dir="ltr">052-4809393</span></a>
+<div style="margin-top:14px"><a href="policy.html" style="color:var(--gl);font-size:14px;text-decoration:underline">תקנון ומדיניות</a></div>
 <div class="cr">© Carmel De-vries · Homemade Baked Goods · <a href="admin/" style="color:#5a5040;text-decoration:none;opacity:.55;font-size:13px;margin-inline-start:4px;cursor:pointer" title="ניהול">🔐</a></div>
 </footer>
 <script>
@@ -182,6 +184,10 @@ const PRODUCTS_FALLBACK=[
 ];
 let products = PRODUCTS_FALLBACK.slice();
 const SHEET_ID='1NOdPG_jdhVfD_Du24E6i3fWTOjPSqfoarJ1tkq6OIRk';
+// Apps Script Web App URL for live stock decrement on order.
+// Leave empty → site works WhatsApp-only (no auto-decrement).
+// After deploying apps-script/Code.gs, paste the /exec URL here.
+const WEBAPP_URL='';
 // Get available qty for a specific flavor (or whole product when flavor is '')
 function flavorAvail(p, flavorName){
   if(!flavorName){
@@ -243,7 +249,9 @@ function render(){
       const sold=avail<=0;
       qtyHtml='<div class="qty"'+(sold?' style="opacity:.45"':'')+'><span class="ql">כמות'+(sold?' · אזל':'')+'</span>'+(sold?'':buildQtyRow(p.id,''))+'</div>';
     }
-    const kbadge = p.kosher === 'חלבי' ? '<span class="kbadge dairy">חלבי</span>' : (p.kosher === 'פרווה' ? '<span class="kbadge parve">פרווה</span>' : '');
+    const kbadge = p.kosher === 'חלבי' ? '<span class="kbadge dairy">חלבי</span>'
+      : (p.kosher === 'פרווה' ? '<span class="kbadge parve">פרווה</span>'
+      : (p.kosher === 'חלבי ופרווה' ? '<span class="kbadge mixed">חלבי ופרווה</span>' : ''));
     const stockBadge = (typeof p.qty === 'number' && p.qty > 0 && p.qty <= 3) ? '<span class="soldout">נותרו '+p.qty+'</span>' : '';
     return '<article class="product" data-id="'+p.id+'"><div class="pi has"><img src="'+p.img+'" alt="'+p.name+'" oncontextmenu="return false" draggable="false"><span class="copyr">© Carmel De-vries · כל הזכויות שמורות</span></div><div class="pb"><div class="pn">'+p.name+kbadge+stockBadge+'</div><div class="pd">'+p.desc+'</div><div class="pr"><div class="pp"><span class="cu">₪</span>'+p.price+'</div><div class="pu">'+p.unit+'</div></div>'+qtyHtml+(p.minNote?'<div class="mn">'+p.minNote+'</div>':'')+'</div></article>';
   }).join('');
@@ -320,6 +328,28 @@ function buildMsg(){
   return m;
 }
 
+// Build a structured order object for the Web App (exact ids/flavors, no parsing).
+function buildOrderObj(){
+  const items=[];
+  products.forEach(p=>{
+    if(!cart[p.id])return;
+    Object.entries(cart[p.id]).forEach(([flav,q])=>{
+      if(q>0)items.push({id:p.id,name:p.name,flavor:flav||'',qty:q,price:p.price});
+    });
+  });
+  return {
+    customer:{
+      name:$('#cust-name').value.trim(),
+      phone:$('#cust-phone').value.trim(),
+      address:$('#cust-address').value.trim(),
+      notes:$('#cust-notes').value.trim()
+    },
+    fulfillment:ful(),
+    date:$('#cust-date').value,
+    items:items
+  };
+}
+
 function send(){
   let subtotal=0;
   products.forEach(p=>{if(cart[p.id])Object.values(cart[p.id]).forEach(q=>subtotal+=q*p.price);});
@@ -330,7 +360,51 @@ function send(){
     const t=totalQty(p.id);
     if(t>0&&t<p.minOrder){alert('כמות מינימום ל'+p.name+': '+p.minOrder+' יח׳');return;}
   }
-  window.open('https://wa.me/972524809393?text='+encodeURIComponent(buildMsg()),'_blank');
+  const waUrl='https://wa.me/972524809393?text='+encodeURIComponent(buildMsg());
+  if(!WEBAPP_URL){
+    // No backend configured yet — plain WhatsApp flow
+    window.open(waUrl,'_blank');
+    return;
+  }
+  // Open the WhatsApp tab now (inside the click gesture) to avoid popup blocking,
+  // then submit the order to the backend and either navigate or close it.
+  const waWin=window.open('about:blank','_blank');
+  submitOrder(waWin,waUrl);
+}
+
+async function submitOrder(waWin,waUrl){
+  const btns=[$('#sb'),$('#bsb')].filter(Boolean);
+  btns.forEach(b=>b.disabled=true);
+  try{
+    const resp=await fetch(WEBAPP_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(buildOrderObj())
+    });
+    const data=await resp.json();
+    if(data.ok){
+      if(waWin)waWin.location.href=waUrl; else window.open(waUrl,'_blank');
+      loadProductsFromSheet();
+    }else if(data.error==='stock'){
+      if(waWin)waWin.close();
+      const lines=(data.problems||[]).map(p=>'• '+p.name+(p.available!=null?' — נותרו רק '+p.available:' — אזל')).join('\n');
+      alert('חלק מהפריטים אזלו בזמן שהזמנת:\n'+lines+'\n\nעדכנו את הכמויות בסל ונסו שוב 🙏');
+      loadProductsFromSheet();
+    }else if(data.error==='busy'){
+      if(waWin)waWin.close();
+      alert('המערכת עמוסה כרגע, נסו שוב בעוד רגע 🙏');
+    }else{
+      // Unknown server error — don't block the customer, still let them WhatsApp
+      console.error('[Carmel] order error',data);
+      if(waWin)waWin.location.href=waUrl; else window.open(waUrl,'_blank');
+    }
+  }catch(err){
+    // Network failure — fall back so the order still reaches Keren via WhatsApp
+    console.error('[Carmel] order POST failed',err);
+    if(waWin)waWin.location.href=waUrl; else window.open(waUrl,'_blank');
+  }finally{
+    btns.forEach(b=>b.disabled=false);
+  }
 }
 $('#sb').onclick=send;$('#bsb').onclick=send;
 $('#cust-fulfill').onchange=()=>{updAddr();upd();};
