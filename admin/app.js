@@ -738,7 +738,7 @@ function renderProducts() {
         const outOfStock = p.published && totalQty<=0;
         const qtyStyle = outOfStock ? 'color:var(--err);font-weight:700' : (lowStock ? 'color:var(--warn);font-weight:700' : '');
         const imgCell = p.img
-          ? `<img src="${esc(p.img)}" alt="" style="width:46px;height:46px;border-radius:6px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`
+          ? `<img src="${esc(adminImgSrc(p.img))}" alt="" style="width:46px;height:46px;border-radius:6px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`
           : '<span style="color:var(--mute);font-size:11px">—</span>';
         const kosherTag = p.kosher
           ? `<span class="tag ${p.kosher==='חלבי'?'baking':'ready'}">${esc(p.kosher)}</span>`
@@ -851,15 +851,24 @@ function readFlavorsFromForm() {
 
 // === IMAGE UPLOAD ===
 // Resize image client-side and store as base64 data URL in pImg.
-// Target size keeps us under Google Sheets' ~50,000 chars-per-cell limit.
+// Hard ceiling is Google Sheets' 50,000 char-per-cell limit; we target
+// 45,000 for safety margin.
 const IMG_MAX_DIM = 600;
-const IMG_TARGET_BYTES = 38000; // base64 ratio ~1.37 → keeps cell under ~52KB
+const IMG_MAX_DATAURL_CHARS = 45000;
+
+// Admin page lives at /admin/, so relative paths like "images/maroc.jpg" need
+// "../" to resolve against the site root. Data URLs and absolute URLs are kept as-is.
+function adminImgSrc(src) {
+  if (!src) return '';
+  if (/^(https?:|data:|\/\/|\/)/.test(src)) return src;
+  return '../' + src;
+}
 
 function updateImagePreview(src) {
   const el = document.getElementById('pImgPreview');
   const removeBtn = document.getElementById('pImgRemoveBtn');
   if (src && src.length > 0) {
-    el.innerHTML = `<img src="${esc(src)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentElement.textContent='טעינה נכשלה'">`;
+    el.innerHTML = `<img src="${esc(adminImgSrc(src))}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentElement.textContent='טעינה נכשלה'">`;
     if (removeBtn) removeBtn.style.display = 'inline-flex';
   } else {
     el.innerHTML = 'בלי תמונה';
@@ -884,7 +893,7 @@ async function handleImageUpload(file) {
       status.style.color = 'var(--err)';
       return;
     }
-    const dataUrl = await resizeImageToFit(file, IMG_MAX_DIM, IMG_TARGET_BYTES);
+    const dataUrl = await resizeImageToFit(file, IMG_MAX_DIM);
     document.getElementById('pImg').value = dataUrl;
     updateImagePreview(dataUrl);
     const kb = Math.round(dataUrl.length * 0.75 / 1024);
@@ -897,9 +906,11 @@ async function handleImageUpload(file) {
   }
 }
 
-// Resize an image to fit within maxDim and target byte budget for the data URL.
-// Tries decreasing JPEG quality until it fits or floor is reached.
-async function resizeImageToFit(file, maxDim, targetBytes) {
+// Resize an image to fit within maxDim and the Sheets cell char ceiling.
+// Tries a ladder of (dimension × quality) combos until the data URL string
+// length fits IMG_MAX_DATAURL_CHARS. Throws if nothing fits so the user gets
+// a clear error rather than a silent save failure later.
+async function resizeImageToFit(file, maxDim) {
   const img = new Image();
   const url = URL.createObjectURL(file);
   try {
@@ -909,23 +920,28 @@ async function resizeImageToFit(file, maxDim, targetBytes) {
       const r = Math.min(maxDim / w, maxDim / h);
       w = Math.round(w * r); h = Math.round(h * r);
     }
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(img, 0, 0, w, h);
-    // Try qualities from 0.85 down to 0.4 until size fits
-    for (const q of [0.85, 0.75, 0.65, 0.55, 0.45]) {
-      const dataUrl = canvas.toDataURL('image/jpeg', q);
-      // Approximate bytes from base64 string length
-      const bytes = Math.round((dataUrl.length - dataUrl.indexOf(',') - 1) * 0.75);
-      if (bytes <= targetBytes) return dataUrl;
+    const attempts = [
+      {scale:1.0,  q:0.85},
+      {scale:1.0,  q:0.75},
+      {scale:1.0,  q:0.65},
+      {scale:1.0,  q:0.55},
+      {scale:0.8,  q:0.70},
+      {scale:0.65, q:0.65},
+      {scale:0.5,  q:0.60},
+      {scale:0.4,  q:0.55}
+    ];
+    for (const a of attempts) {
+      const sw = Math.max(64, Math.round(w * a.scale));
+      const sh = Math.max(64, Math.round(h * a.scale));
+      const c = document.createElement('canvas');
+      c.width = sw; c.height = sh;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, sw, sh);
+      ctx.drawImage(img, 0, 0, sw, sh);
+      const dataUrl = c.toDataURL('image/jpeg', a.q);
+      if (dataUrl.length <= IMG_MAX_DATAURL_CHARS) return dataUrl;
     }
-    // Last resort: shrink dimensions further
-    const smallCanvas = document.createElement('canvas');
-    smallCanvas.width = Math.round(w * 0.7); smallCanvas.height = Math.round(h * 0.7);
-    smallCanvas.getContext('2d').drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
-    return smallCanvas.toDataURL('image/jpeg', 0.55);
+    throw new Error('התמונה גדולה מדי גם אחרי דחיסה. נסי תמונה קטנה יותר או בפורמט אחר.');
   } finally {
     URL.revokeObjectURL(url);
   }
