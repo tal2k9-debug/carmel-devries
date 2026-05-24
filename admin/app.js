@@ -324,8 +324,9 @@ function bindUI() {
     document.getElementById('addrField').style.display = e.target.value === 'delivery' ? 'block' : 'none';
   };
   document.getElementById('custSearch').oninput = renderCustomers;
-  // Init pricing rows
+  // Init pricing rows + show initial overhead total
   for (let i=0; i<5; i++) addIngrRow();
+  updateOverTotal();
   // Init P&L month select
   initMonthSelect();
   // Init recipes dropdown
@@ -699,6 +700,51 @@ function fmtCost(c) {
   return '₪' + c.toFixed(2);
 }
 
+// === OVERHEAD BREAKDOWN ===
+// Total overhead % is the sum of 4 named categories so the user can see
+// what each part is and tune them independently.
+function computeOverTotal() {
+  return ['ovGas','ovPack','ovMarket','ovOther'].reduce((s, id) => {
+    return s + (parseFloat((document.getElementById(id) || {}).value) || 0);
+  }, 0);
+}
+function updateOverTotal() {
+  const total = computeOverTotal();
+  const el = document.getElementById('ovTotal');
+  if (el) el.textContent = total + '%';
+  updatePricingRowsTotal();
+}
+// Serialise breakdown so we can round-trip it through the existing `over`
+// column in the Recipes sheet without a schema change.
+function serializeOverbreakdown() {
+  return 'gas:'  + (document.getElementById('ovGas')   .value || 0) +
+         '|pack:'+ (document.getElementById('ovPack')  .value || 0) +
+         '|market:'+(document.getElementById('ovMarket').value || 0) +
+         '|other:'+(document.getElementById('ovOther') .value || 0);
+}
+function parseOverbreakdown(s) {
+  s = String(s || '');
+  const def = {gas:3, pack:5, market:0, other:7};
+  if (!s) return def;
+  if (s.indexOf(':') >= 0) {
+    const obj = {gas:0, pack:0, market:0, other:0};
+    s.split('|').forEach(p => {
+      const [k, v] = p.split(':');
+      if (k in obj) obj[k] = parseFloat(v) || 0;
+    });
+    return obj;
+  }
+  // Legacy: a single number — keep it as "other" so the total preserves.
+  return {gas:0, pack:0, market:0, other: parseFloat(s) || 0};
+}
+function applyOverbreakdown(breakdown) {
+  document.getElementById('ovGas').value    = breakdown.gas;
+  document.getElementById('ovPack').value   = breakdown.pack;
+  document.getElementById('ovMarket').value = breakdown.market;
+  document.getElementById('ovOther').value  = breakdown.other;
+  updateOverTotal();
+}
+
 // Cost = (used / bought) × bought_price, with both qty's converted to the
 // same base unit (kg / liter / unit). Works whether you bought a 1kg bag and
 // use 200g, or bought 200g and use all of it.
@@ -780,7 +826,13 @@ function updatePricingRowsTotal() {
   if (document.getElementById('prSummary').innerHTML.trim()) calcPricing();
 }
 
-function clearPricing(){ document.getElementById('ingrList').innerHTML=''; for(let i=0;i<5;i++)addIngrRow(); document.getElementById('prSummary').innerHTML=''; ['prName','prYield','prHours'].forEach(i=>document.getElementById(i).value=i==='prYield'?'30':i==='prHours'?'2':''); }
+function clearPricing(){
+  document.getElementById('ingrList').innerHTML='';
+  for(let i=0;i<5;i++)addIngrRow();
+  document.getElementById('prSummary').innerHTML='';
+  ['prName','prYield','prHours'].forEach(i=>document.getElementById(i).value=i==='prYield'?'30':i==='prHours'?'2':'');
+  applyOverbreakdown({gas:3, pack:5, market:0, other:7});
+}
 function calcPricing() {
   const rows=document.querySelectorAll('#ingrList .pricing-row');
   let ingredCost=0; const items=[];
@@ -795,7 +847,7 @@ function calcPricing() {
   const hours=parseFloat(document.getElementById('prHours').value)||0;
   const rate=parseFloat(document.getElementById('prRate').value)||0;
   const labor=hours*rate;
-  const overPct=parseFloat(document.getElementById('prOver').value)||0;
+  const overPct=computeOverTotal();
   const overhead=(ingredCost+labor)*(overPct/100);
   const totalCost=ingredCost+labor+overhead;
   const mult=parseFloat(document.getElementById('prMult').value)||1;
@@ -1439,7 +1491,7 @@ async function saveRecipe(){
     yield: document.getElementById('prYield').value,
     hours: document.getElementById('prHours').value,
     rate: document.getElementById('prRate').value,
-    over: document.getElementById('prOver').value,
+    over: serializeOverbreakdown(),
     mult: document.getElementById('prMult').value,
     ingredients
   };
@@ -1471,7 +1523,7 @@ function loadRecipe(name){
   document.getElementById('prYield').value = r.yield;
   document.getElementById('prHours').value = r.hours;
   document.getElementById('prRate').value = r.rate;
-  document.getElementById('prOver').value = r.over;
+  applyOverbreakdown(parseOverbreakdown(r.over));
   document.getElementById('prMult').value = r.mult;
   document.getElementById('ingrList').innerHTML='';
   // normalizeIngr inside addIngrRow handles both old {n,q,u,p} and new shapes.

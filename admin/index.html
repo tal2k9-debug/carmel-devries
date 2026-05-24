@@ -318,8 +318,22 @@ th,td{padding:8px}
       <div class="field"><label>תפוקה (יח׳)</label><input id="prYield" type="number" value="30"></div>
       <div class="field"><label>שעות עבודה</label><input id="prHours" type="number" step="0.25" value="2"></div>
       <div class="field"><label>שכר שעה (₪)</label><input id="prRate" type="number" value="50"></div>
-      <div class="field"><label>תקורה % (גז+חשמל+אריזה)</label><input id="prOver" type="number" value="15"></div>
       <div class="field"><label>מכפיל רווח (×)</label><input id="prMult" type="number" step="0.1" value="2.5"></div>
+    </div>
+    <div class="card" style="margin-top:16px;background:#FAF1E8;border:1px solid var(--bd)">
+      <h4 style="margin-bottom:10px;color:var(--p)">פירוט תקורה (% מעלויות הייצור)</h4>
+      <div style="display:grid;grid-template-columns:1fr 90px;gap:8px 14px;align-items:center;font-size:14px;max-width:480px">
+        <span>גז + חשמל</span>          <input type="number" id="ovGas"    step="0.5" min="0" value="3" oninput="updateOverTotal()">
+        <span>אריזה</span>                <input type="number" id="ovPack"   step="0.5" min="0" value="5" oninput="updateOverTotal()">
+        <span>שיווק וקידום</span>       <input type="number" id="ovMarket" step="0.5" min="0" value="0" oninput="updateOverTotal()">
+        <span>שונות (ציוד, ניקיון, רכב)</span> <input type="number" id="ovOther"  step="0.5" min="0" value="7" oninput="updateOverTotal()">
+        <span style="font-weight:700;border-top:1px dashed var(--bd);padding-top:8px;color:var(--ink)">סה״כ תקורה</span>
+        <span id="ovTotal" style="font-weight:700;color:var(--p);border-top:1px dashed var(--bd);padding-top:8px;text-align:center;font-size:16px">15%</span>
+      </div>
+      <div style="font-size:11px;color:var(--mute);margin-top:10px;line-height:1.6">
+        <strong>איך לכוונן:</strong> עסק ביתי = 10-20% · מטבח מסחרי קטן = 25-40% · מסעדה = 50%+<br>
+        מי שמשלם שכירות נפרדת או רואה חשבון — להעלות. עובדת מהמטבח של הבית בלי הוצאות גלובליות — להשאיר ~15%.
+      </div>
     </div>
     <h4 style="margin:20px 0 6px">מצרכים</h4>
     <div style="font-size:13px;color:var(--ink2);background:#FAF1E8;padding:10px 14px;border-radius:8px;margin-bottom:12px;line-height:1.7">
@@ -452,6 +466,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=38"></script>
+<script src="app.js?v=39"></script>
 </body>
 </html>
