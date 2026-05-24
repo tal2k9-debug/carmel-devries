@@ -155,6 +155,9 @@ td .row-actions{display:flex;gap:6px}
 .pricing-head{display:grid;grid-template-columns:minmax(120px,1.6fr) 70px 70px 80px 70px 70px 90px auto;gap:6px;font-weight:600;color:var(--mute);font-size:11px;margin-bottom:6px}
 .pricing-head .grp-bought{grid-column:2/5;text-align:center;background:#fff8e7;padding:4px;border-radius:6px;color:var(--ink2);font-size:12px}
 .pricing-head .grp-used{grid-column:5/7;text-align:center;background:#FAF1E8;padding:4px;border-radius:6px;color:var(--ink2);font-size:12px}
+.pricing-subhead{display:grid;grid-template-columns:minmax(120px,1.6fr) 70px 70px 80px 70px 70px 90px auto;gap:6px;font-size:11px;color:var(--mute);text-align:center;margin-bottom:8px}
+.pricing-subhead > div{padding:2px 4px;border-radius:4px}
+@media(max-width:768px){.pricing-subhead{display:none}}
 @media(max-width:768px){
 .pricing-row{grid-template-columns:1fr;border:1px solid var(--bd);border-radius:10px;padding:10px;background:#fff;gap:8px}
 .pricing-row > *{width:100%}
@@ -331,6 +334,16 @@ th,td{padding:8px}
       <div style="text-align:center">עלות</div>
       <div></div>
     </div>
+    <div class="pricing-subhead">
+      <div></div>
+      <div>כמות</div>
+      <div>יחידה</div>
+      <div style="background:#fff8e7;color:var(--p);font-weight:700">₪ סה״כ</div>
+      <div>כמות</div>
+      <div>יחידה</div>
+      <div></div>
+      <div></div>
+    </div>
     <div id="ingrList"></div>
     <button class="btn btn-s" onclick="addIngrRow()" style="margin-top:8px">➕ הוסף מצרך</button>
     <div class="pricing-summary" id="prSummary"></div>
@@ -439,6 +452,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=37"></script>
+<script src="app.js?v=38"></script>
 </body>
 </html>
