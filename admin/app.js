@@ -666,7 +666,10 @@ function addIngrRow(prefill) {
   const div = document.createElement('div');
   div.className = 'pricing-row';
   const unit = normalizeUnit(prefill && prefill.u);
-  const opts = UNIT_OPTIONS.map(u => `<option value="${u}" ${u===unit?'selected':''}>${u}</option>`).join('');
+  // esc() converts the embedded " in "ק"ג" / "מ"ל" to &quot; — without it the
+  // HTML attribute would close at the first quote and the option value would
+  // be truncated, defeating the unit conversion.
+  const opts = UNIT_OPTIONS.map(u => `<option value="${esc(u)}" ${u===unit?'selected':''}>${u}</option>`).join('');
   div.innerHTML = `
     <input placeholder="מצרך" class="ingr-name" value="${esc(prefill&&prefill.n||'')}">
     <input type="number" placeholder="כמות" step="0.01" min="0" class="ingr-qty" value="${prefill&&prefill.q!=null?prefill.q:''}">
