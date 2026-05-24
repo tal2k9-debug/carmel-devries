@@ -833,6 +833,14 @@ function clearPricing(){
   ['prName','prYield','prHours'].forEach(i=>document.getElementById(i).value=i==='prYield'?'30':i==='prHours'?'2':'');
   applyOverbreakdown({gas:3, pack:5, market:0, other:7});
 }
+function newRecipe(){
+  const name = document.getElementById('prName').value.trim();
+  if (name && !confirm('להתחיל מתכון חדש? כל מה שלא נשמר ב"'+name+'" יאבד.')) return;
+  clearPricing();
+  const sel = document.getElementById('recipeLoad');
+  if (sel) sel.value = '';
+  document.getElementById('prName').focus();
+}
 function calcPricing() {
   const rows=document.querySelectorAll('#ingrList .pricing-row');
   let ingredCost=0; const items=[];

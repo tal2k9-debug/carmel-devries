@@ -310,7 +310,7 @@ th,td{padding:8px}
 
 <!-- PRICING CALCULATOR -->
 <section class="page" id="page-pricing">
-  <div class="page-h"><h2>מחשבון תמחור</h2><div class="actions"><select id="recipeLoad" onchange="loadRecipe(this.value)" style="padding:8px 12px;border:1px solid var(--bd);border-radius:8px;background:#fff"><option value="">-- טען מתכון שמור --</option></select><button class="btn btn-s" onclick="addIngrRow()">➕ מצרך</button></div></div>
+  <div class="page-h"><h2>מחשבון תמחור</h2><div class="actions"><button class="btn btn-p" onclick="newRecipe()">📄 מתכון חדש</button><select id="recipeLoad" onchange="loadRecipe(this.value)" style="padding:8px 12px;border:1px solid var(--bd);border-radius:8px;background:#fff"><option value="">📂 פתח מתכון שמור</option></select><button class="btn btn-s" onclick="addIngrRow()">➕ מצרך</button></div></div>
   <div class="card">
     <h3 style="margin-bottom:14px">פרטי המתכון</h3>
     <div class="form-grid">
@@ -470,6 +470,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=39"></script>
+<script src="app.js?v=40"></script>
 </body>
 </html>
