@@ -1413,7 +1413,7 @@ async function saveRecipe(){
     if (accessToken){
       setSync('syncing','שומר...');
       try{ await updateRow('Recipes', idx+2, recipeToRow(recipe)); setSync('ok','מסונכרן'); toast('המתכון "'+name+'" עודכן ✓','ok'); }
-      catch(e){ setSync('err','שגיאה'); toast('שגיאת שמירה','err'); console.error(e); }
+      catch(e){ setSync('err','שגיאה'); toast('שגיאת שמירה: '+((e&&e.result&&e.result.error&&e.result.error.message)||e.message||'unknown'),'err'); console.error('saveRecipe failed:',e); }
     } else { toast('נשמר במטמון','ok'); }
   } else {
     db.recipes.push(recipe);
@@ -1421,7 +1421,7 @@ async function saveRecipe(){
     if (accessToken){
       setSync('syncing','שומר...');
       try{ await appendRow('Recipes', recipeToRow(recipe)); setSync('ok','מסונכרן'); toast('המתכון "'+name+'" נשמר ✓','ok'); }
-      catch(e){ setSync('err','שגיאה'); toast('שגיאת שמירה','err'); console.error(e); }
+      catch(e){ setSync('err','שגיאה'); toast('שגיאת שמירה: '+((e&&e.result&&e.result.error&&e.result.error.message)||e.message||'unknown'),'err'); console.error('saveRecipe failed:',e); }
     } else { toast('נשמר במטמון','ok'); }
   }
 }
