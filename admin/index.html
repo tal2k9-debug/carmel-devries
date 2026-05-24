@@ -148,8 +148,9 @@ td .row-actions{display:flex;gap:6px}
 @keyframes tin{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 
 /* PRICING */
-.pricing-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px;align-items:center;margin-bottom:8px}
-.pricing-row input{padding:8px 10px;border:1px solid var(--bd);border-radius:6px;font-size:13px}
+.pricing-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr auto;gap:8px;align-items:center;margin-bottom:8px}
+.pricing-row input,.pricing-row select{padding:8px 10px;border:1px solid var(--bd);border-radius:6px;font-size:13px;background:#fff}
+.pricing-row .ingr-cost{padding:8px 10px;background:#FAF1E8;border-radius:6px;font-size:13px;font-weight:600;color:var(--p);text-align:center}
 .pricing-summary{background:#FAF1E8;border:1px solid var(--bd);border-radius:10px;padding:16px;margin-top:20px}
 .pricing-summary .line{display:flex;justify-content:space-between;padding:6px 0;font-size:14px}
 .pricing-summary .line.total{border-top:2px solid var(--p);margin-top:8px;padding-top:12px;font-weight:700;font-size:18px;color:var(--p)}
@@ -309,7 +310,7 @@ th,td{padding:8px}
       <div class="field"><label>מכפיל רווח (×)</label><input id="prMult" type="number" step="0.1" value="2.5"></div>
     </div>
     <h4 style="margin:20px 0 10px">מצרכים</h4>
-    <div class="pricing-row" style="font-weight:600;color:var(--mute);font-size:12px"><div>שם המצרך</div><div>כמות</div><div>יחידה</div><div>מחיר/יח׳</div><div></div></div>
+    <div class="pricing-row" style="font-weight:600;color:var(--mute);font-size:12px"><div>שם המצרך</div><div>כמות</div><div>יחידה</div><div>מחיר ליחידת בסיס</div><div>עלות</div><div></div></div>
     <div id="ingrList"></div>
     <button class="btn btn-s" onclick="addIngrRow()" style="margin-top:8px">➕ הוסף מצרך</button>
     <div class="pricing-summary" id="prSummary"></div>
@@ -418,6 +419,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 </body>
 </html>

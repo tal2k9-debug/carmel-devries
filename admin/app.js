@@ -628,12 +628,76 @@ function parseWA() {
 }
 
 /* ============ PRICING ============ */
-function addIngrRow() {
-  const div=document.createElement('div');
-  div.className='pricing-row';
-  div.innerHTML=`<input placeholder="מצרך" class="ingr-name"><input type="number" placeholder="כמות" step="0.01" class="ingr-qty"><input placeholder="ק״ג/יח׳" class="ingr-unit" value="ק״ג"><input type="number" placeholder="₪/יח׳" step="0.01" class="ingr-price"><button class="btn btn-d" style="padding:6px 10px" onclick="this.parentElement.remove()">✕</button>`;
-  document.getElementById('ingrList').appendChild(div);
+// Units are presented to the user as their natural label (גרם, ק"ג ...);
+// pricing math always converts to a "base unit" — kg for mass, liter for volume,
+// unit for count — so the price field always means "price per base unit".
+const UNIT_OPTIONS = ['גרם','ק"ג','מ"ל','ליטר','יח׳'];
+function normalizeUnit(s) {
+  if (!s) return 'ק"ג';
+  s = String(s).trim();
+  if (/^(ק"ג|ק״ג|קג|kg)$/i.test(s)) return 'ק"ג';
+  if (/^(גרם|גר|gram|g)$/i.test(s)) return 'גרם';
+  if (/^(ליטר|ל'?|liter|litre|l)$/i.test(s)) return 'ליטר';
+  if (/^(מ"ל|מ״ל|מל|ml)$/i.test(s)) return 'מ"ל';
+  if (/^(יח'?|יח׳|יחידה|unit|pc|pcs)$/i.test(s)) return 'יח׳';
+  return 'ק"ג';
 }
+function unitToBase(u) {
+  // Multiply qty by this to convert into the base unit price refers to.
+  switch (u) {
+    case 'גרם': return 0.001;
+    case 'ק"ג': return 1;
+    case 'מ"ל': return 0.001;
+    case 'ליטר': return 1;
+    case 'יח׳': return 1;
+  }
+  return 1;
+}
+function unitBaseLabel(u) {
+  if (u === 'גרם' || u === 'ק"ג') return 'ק"ג';
+  if (u === 'מ"ל' || u === 'ליטר') return 'ליטר';
+  return 'יח׳';
+}
+function rowCost(qty, unit, price) {
+  return (parseFloat(qty)||0) * unitToBase(unit) * (parseFloat(price)||0);
+}
+
+function addIngrRow(prefill) {
+  const div = document.createElement('div');
+  div.className = 'pricing-row';
+  const unit = normalizeUnit(prefill && prefill.u);
+  const opts = UNIT_OPTIONS.map(u => `<option value="${u}" ${u===unit?'selected':''}>${u}</option>`).join('');
+  div.innerHTML = `
+    <input placeholder="מצרך" class="ingr-name" value="${esc(prefill&&prefill.n||'')}">
+    <input type="number" placeholder="כמות" step="0.01" min="0" class="ingr-qty" value="${prefill&&prefill.q!=null?prefill.q:''}">
+    <select class="ingr-unit">${opts}</select>
+    <input type="number" placeholder="₪ ל${unitBaseLabel(unit)}" step="0.01" min="0" class="ingr-price" value="${prefill&&prefill.p!=null?prefill.p:''}">
+    <div class="ingr-cost">—</div>
+    <button class="btn btn-d" style="padding:6px 10px" onclick="this.parentElement.remove();updatePricingRowsTotal()" title="הסר">✕</button>`;
+  document.getElementById('ingrList').appendChild(div);
+  // Wire live updates
+  div.querySelectorAll('input,select').forEach(el => {
+    el.addEventListener('input', () => updatePricingRow(div));
+    el.addEventListener('change', () => updatePricingRow(div));
+  });
+  updatePricingRow(div);
+}
+
+function updatePricingRow(div) {
+  const u = div.querySelector('.ingr-unit').value;
+  const q = parseFloat(div.querySelector('.ingr-qty').value) || 0;
+  const p = parseFloat(div.querySelector('.ingr-price').value) || 0;
+  div.querySelector('.ingr-price').placeholder = '₪ ל' + unitBaseLabel(u);
+  const c = q * unitToBase(u) * p;
+  div.querySelector('.ingr-cost').textContent = (q && p) ? '₪' + c.toFixed(2) : '—';
+  updatePricingRowsTotal();
+}
+
+function updatePricingRowsTotal() {
+  // Recompute the summary block live if it's already showing
+  if (document.getElementById('prSummary').innerHTML.trim()) calcPricing();
+}
+
 function clearPricing(){ document.getElementById('ingrList').innerHTML=''; for(let i=0;i<5;i++)addIngrRow(); document.getElementById('prSummary').innerHTML=''; ['prName','prYield','prHours'].forEach(i=>document.getElementById(i).value=i==='prYield'?'30':i==='prHours'?'2':''); }
 function calcPricing() {
   const rows=document.querySelectorAll('#ingrList .pricing-row');
@@ -643,7 +707,7 @@ function calcPricing() {
     const q=parseFloat(r.querySelector('.ingr-qty').value)||0;
     const u=r.querySelector('.ingr-unit').value;
     const p=parseFloat(r.querySelector('.ingr-price').value)||0;
-    if(n&&q&&p){ const c=q*p; ingredCost+=c; items.push({n,q,u,p,c}); }
+    if(n&&q&&p){ const c=rowCost(q,u,p); ingredCost+=c; items.push({n,q,u,p,c}); }
   });
   const hours=parseFloat(document.getElementById('prHours').value)||0;
   const rate=parseFloat(document.getElementById('prRate').value)||0;
@@ -1330,14 +1394,12 @@ function loadRecipe(name){
   document.getElementById('prOver').value = r.over;
   document.getElementById('prMult').value = r.mult;
   document.getElementById('ingrList').innerHTML='';
-  (r.ingredients||[]).forEach(ing=>{
-    addIngrRow();
-    const last = document.querySelector('#ingrList .pricing-row:last-child');
-    last.querySelector('.ingr-name').value = ing.n;
-    last.querySelector('.ingr-qty').value = ing.q;
-    last.querySelector('.ingr-unit').value = ing.u;
-    last.querySelector('.ingr-price').value = ing.p;
-  });
+  (r.ingredients||[]).forEach(ing => addIngrRow({
+    n: ing.n,
+    q: ing.q,
+    u: normalizeUnit(ing.u),
+    p: ing.p
+  }));
   if (!r.ingredients || r.ingredients.length===0) for (let i=0;i<3;i++) addIngrRow();
   calcPricing();
   toast('נטען: '+name,'ok');
