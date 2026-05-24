@@ -260,8 +260,14 @@ function render(){
   $$('.qb').forEach(b=>{
     b.onclick=()=>{
       const id=b.dataset.id,flav=b.dataset.flav||'',act=b.dataset.act;
+      const p=products.find(x=>x.id===id);
+      // For non-flavored products with a minOrder, step in chunks of minOrder
+      // so the customer doesn't have to tap +30 times. Flavored products keep
+      // step=1 because their minOrder applies to the total across flavors.
+      const step=(p&&p.minOrder&&!(p.flavors&&p.flavors.length))?p.minOrder:1;
       const cur=getQty(id,flav);
-      setQty(id,flav,act==='inc'?cur+1:cur-1);
+      const next=act==='inc'?cur+step:Math.max(0,cur-step);
+      setQty(id,flav,next);
       const inp=document.querySelector('.qi[data-id="'+id+'"][data-flav="'+flav+'"]');
       if(inp)inp.value=getQty(id,flav);
       upd();
