@@ -29,8 +29,8 @@ var SHEET_ID = '1NOdPG_jdhVfD_Du24E6i3fWTOjPSqfoarJ1tkq6OIRk';
 
 // Drive folder where uploaded product images are stored (auto-created on first use).
 var DRIVE_FOLDER_NAME = 'Carmel — תמונות אתר';
-// Max bytes per uploaded image (decoded). 2 MB is plenty for product photos.
-var MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+// Max bytes per uploaded image (decoded). 10 MB ceiling.
+var MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 function doPost(e) {
   var payload;
