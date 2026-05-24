@@ -206,6 +206,15 @@ const $$=s=>Array.from(document.querySelectorAll(s));
 const fmt=n=>Math.round(n).toLocaleString('he-IL');
 const FEE=10,FREE=150;
 
+// Auto-format unit text so admin can enter just a number ("12") and it shows
+// as "מארז של 12 יח׳". Empty + minOrder → "ליחידה". Otherwise show whatever
+// the admin typed verbatim.
+function formatUnit(p){
+  const u=String(p.unit||'').trim();
+  if(u){ if(/^\d+(\.\d+)?$/.test(u))return 'מארז של '+u+' יח׳'; return u; }
+  if(p.minOrder)return 'ליחידה';
+  return 'מארז';
+}
 function getQty(id,flav=''){return (cart[id]&&cart[id][flav])||0;}
 function setQty(id,flav,qty){
   qty=Math.max(0,Math.floor(Number(qty)||0));
@@ -254,7 +263,7 @@ function render(){
       : (p.kosher === 'פרווה' ? '<span class="kbadge parve">פרווה</span>'
       : (p.kosher === 'חלבי ופרווה' ? '<span class="kbadge mixed">חלבי ופרווה</span>' : ''));
     const stockBadge = (typeof p.qty === 'number' && p.qty > 0 && p.qty <= 3) ? '<span class="soldout">נותרו <bdi>'+p.qty+'</bdi> במלאי</span>' : '';
-    return '<article class="product" data-id="'+p.id+'"><div class="pi has"><img src="'+p.img+'" alt="'+p.name+'" oncontextmenu="return false" draggable="false"><span class="copyr">© Carmel De-vries · כל הזכויות שמורות</span></div><div class="pb"><div class="pn">'+p.name+kbadge+stockBadge+'</div><div class="pd">'+p.desc+'</div><div class="pr"><div class="pp"><span class="cu">₪</span>'+p.price+'</div><div class="pu">'+p.unit+'</div></div>'+qtyHtml+(p.minNote?'<div class="mn">'+p.minNote+'</div>':'')+'</div></article>';
+    return '<article class="product" data-id="'+p.id+'"><div class="pi has"><img src="'+p.img+'" alt="'+p.name+'" oncontextmenu="return false" draggable="false"><span class="copyr">© Carmel De-vries · כל הזכויות שמורות</span></div><div class="pb"><div class="pn">'+p.name+kbadge+stockBadge+'</div><div class="pd">'+p.desc+'</div><div class="pr"><div class="pp"><span class="cu">₪</span>'+p.price+'</div><div class="pu">'+formatUnit(p)+'</div></div>'+qtyHtml+(p.minNote?'<div class="mn">'+p.minNote+'</div>':'')+'</div></article>';
   }).join('');
 
   $$('.qb').forEach(b=>{
