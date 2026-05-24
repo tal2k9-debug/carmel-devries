@@ -695,6 +695,12 @@ function unitBaseLabel(u) {
 function rowCost(qty, unit, price) {
   return (parseFloat(qty)||0) * unitToBase(unit) * (parseFloat(price)||0);
 }
+function fmtCost(c) {
+  if (!c) return '₪0';
+  if (c < 0.01) return '₪' + c.toFixed(4);
+  if (c < 1)    return '₪' + c.toFixed(3);
+  return '₪' + c.toFixed(2);
+}
 
 function addIngrRow(prefill) {
   const div = document.createElement('div');
@@ -726,7 +732,7 @@ function updatePricingRow(div) {
   const p = parseFloat(div.querySelector('.ingr-price').value) || 0;
   div.querySelector('.ingr-price').placeholder = '₪ ל' + unitBaseLabel(u);
   const c = q * unitToBase(u) * p;
-  div.querySelector('.ingr-cost').textContent = (q && p) ? '₪' + c.toFixed(2) : '—';
+  div.querySelector('.ingr-cost').textContent = (q && p) ? fmtCost(c) : '—';
   updatePricingRowsTotal();
 }
 
