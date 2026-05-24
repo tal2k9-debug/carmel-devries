@@ -27,7 +27,21 @@
 // it is container-bound or a standalone project.
 var SHEET_ID = '1NOdPG_jdhVfD_Du24E6i3fWTOjPSqfoarJ1tkq6OIRk';
 
+// Drive folder where uploaded product images are stored (auto-created on first use).
+var DRIVE_FOLDER_NAME = 'Carmel — תמונות אתר';
+// Max bytes per uploaded image (decoded). 2 MB is plenty for product photos.
+var MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
 function doPost(e) {
+  var payload;
+  try { payload = JSON.parse(e.postData.contents); }
+  catch (err) { return json({ ok:false, error:'bad_json' }); }
+
+  // Route by action; default action (no action field) is "order".
+  if (payload && payload.action === 'image_upload') {
+    return handleImageUpload(payload);
+  }
+
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(25000);
@@ -35,7 +49,7 @@ function doPost(e) {
     return json({ ok: false, error: 'busy', message: 'המערכת עמוסה כרגע, נסו שוב בעוד רגע' });
   }
   try {
-    var order = JSON.parse(e.postData.contents);
+    var order = payload;
     var ss = SpreadsheetApp.openById(SHEET_ID);
     var prod = ss.getSheetByName('Products');
     if (!prod) return json({ ok: false, error: 'no_products_sheet' });
@@ -107,6 +121,40 @@ function doPost(e) {
 // GET is only used to confirm the deployment is reachable.
 function doGet() {
   return json({ ok: true, service: 'carmel-order-intake' });
+}
+
+// Upload an image to a dedicated Drive folder and return a public CDN URL.
+// Expects payload.data to be a "data:image/...;base64,..." string.
+function handleImageUpload(payload) {
+  try {
+    var match = String(payload.data || '').match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return json({ ok:false, error:'bad_data_url' });
+    var mime = match[1];
+    var b64  = match[2];
+    var binary = Utilities.base64Decode(b64);
+    if (binary.length > MAX_IMAGE_BYTES) {
+      return json({ ok:false, error:'too_large', max_mb: MAX_IMAGE_BYTES / (1024*1024) });
+    }
+    var ext = (mime.split('/')[1] || 'jpg').replace(/^jpeg$/, 'jpg');
+    var fname = (payload.filename || ('carmel-' + Date.now())) + '.' + ext;
+    var blob = Utilities.newBlob(binary, mime, fname);
+
+    var folder = getOrCreateFolder(DRIVE_FOLDER_NAME);
+    var file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    // Drive's thumbnail endpoint serves any size up to ~2000px and is browser-cacheable.
+    var url = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1200';
+    return json({ ok:true, url: url, fileId: file.getId() });
+  } catch (err) {
+    return json({ ok:false, error:'exception', message: String(err) });
+  }
+}
+
+function getOrCreateFolder(name) {
+  var iter = DriveApp.getFoldersByName(name);
+  if (iter.hasNext()) return iter.next();
+  return DriveApp.createFolder(name);
 }
 
 function appendOrder(ss, order, now) {

@@ -850,10 +850,13 @@ function readFlavorsFromForm() {
 }
 
 // === IMAGE UPLOAD ===
-// Resize image client-side and store as base64 data URL in pImg.
-// Hard ceiling is Google Sheets' 50,000 char-per-cell limit; we target
-// 45,000 for safety margin.
-const IMG_MAX_DIM = 600;
+// Preferred path: upload via the Apps Script Web App to a shared Drive folder
+// (no per-cell size limit, faster page loads, ~2 MB ceiling).
+// Fallback: encode as base64 data URL — capped at Sheets' 50,000 char cell limit.
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbw2KPB_GWD7T4ylM9DiCKpimqWEx7oDyd4WoYwyzDCGw53t9_C-MivKQf4dYF036psjDg/exec';
+const IMG_MAX_DIM_DRIVE = 1200;        // when we upload to Drive — keep more detail
+const IMG_QUALITY_DRIVE = 0.85;
+const IMG_MAX_DIM_BASE64 = 600;        // small fallback so it can fit in a cell
 const IMG_MAX_DATAURL_CHARS = 45000;
 
 // Admin page lives at /admin/, so relative paths like "images/maroc.jpg" need
@@ -893,16 +896,65 @@ async function handleImageUpload(file) {
       status.style.color = 'var(--err)';
       return;
     }
-    const dataUrl = await resizeImageToFit(file, IMG_MAX_DIM);
+    // 1) Try the Drive path — keeps the image high-quality and the cell tiny.
+    if (WEBAPP_URL) {
+      try {
+        const big = await resizeToDataUrl(file, IMG_MAX_DIM_DRIVE, IMG_QUALITY_DRIVE);
+        status.textContent = 'מעלה ל-Drive...';
+        const resp = await fetch(WEBAPP_URL, {
+          method: 'POST',
+          headers: {'Content-Type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({ action:'image_upload', data: big, filename: file.name ? file.name.replace(/\.[^.]+$/, '') : ('carmel-' + Date.now()) })
+        });
+        const data = await resp.json();
+        if (data && data.ok && data.url) {
+          document.getElementById('pImg').value = data.url;
+          updateImagePreview(data.url);
+          const kb = Math.round(big.length * 0.75 / 1024);
+          status.textContent = `הועלה ל-Drive ✓ (${kb} KB)`;
+          status.style.color = 'var(--ok)';
+          return;
+        }
+        // 'bad_data_url' / 'too_large' / etc. — fall through to base64
+        console.warn('Drive upload returned', data);
+      } catch (driveErr) {
+        // Most common cause: Apps Script hasn't been re-deployed with image_upload yet
+        console.warn('Drive upload failed, falling back to base64:', driveErr);
+      }
+    }
+    // 2) Fallback: small base64 in the cell
+    const dataUrl = await resizeImageToFit(file, IMG_MAX_DIM_BASE64);
     document.getElementById('pImg').value = dataUrl;
     updateImagePreview(dataUrl);
     const kb = Math.round(dataUrl.length * 0.75 / 1024);
-    status.textContent = `נשמר ✓ (${kb} KB)`;
-    status.style.color = 'var(--ok)';
+    status.textContent = `נשמר בתא ✓ (${kb} KB) — Drive לא זמין כרגע`;
+    status.style.color = 'var(--warn)';
   } catch (e) {
     console.error('image upload failed:', e);
     status.textContent = 'שגיאה בעיבוד התמונה: ' + (e.message||'');
     status.style.color = 'var(--err)';
+  }
+}
+
+// Resize without the cell-size constraint — used before upload to Drive.
+async function resizeToDataUrl(file, maxDim, quality) {
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  try {
+    await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('פורמט לא נתמך')); img.src = url; });
+    let {width: w, height: h} = img;
+    if (w > maxDim || h > maxDim) {
+      const r = Math.min(maxDim / w, maxDim / h);
+      w = Math.round(w * r); h = Math.round(h * r);
+    }
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    return c.toDataURL('image/jpeg', quality);
+  } finally {
+    URL.revokeObjectURL(url);
   }
 }
 
