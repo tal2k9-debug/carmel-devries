@@ -692,9 +692,6 @@ function unitBaseLabel(u) {
   if (u === 'מ"ל' || u === 'ליטר') return 'ליטר';
   return 'יח׳';
 }
-function rowCost(qty, unit, price) {
-  return (parseFloat(qty)||0) * unitToBase(unit) * (parseFloat(price)||0);
-}
 function fmtCost(c) {
   if (!c) return '₪0';
   if (c < 0.01) return '₪' + c.toFixed(4);
@@ -702,37 +699,79 @@ function fmtCost(c) {
   return '₪' + c.toFixed(2);
 }
 
+// Cost = (used / bought) × bought_price, with both qty's converted to the
+// same base unit (kg / liter / unit). Works whether you bought a 1kg bag and
+// use 200g, or bought 200g and use all of it.
+function rowCostBoughtUsed(ing) {
+  const usedBase   = (parseFloat(ing.q)  || 0) * unitToBase(ing.u);
+  const boughtBase = (parseFloat(ing.bq) || 0) * unitToBase(ing.bu);
+  if (!boughtBase) return 0;
+  return (usedBase / boughtBase) * (parseFloat(ing.bp) || 0);
+}
+
+// Bring any stored ingredient — old shape {n,q,u,p} or new shape — into the
+// new {n, bq, bu, bp, q, u} form. Legacy `p` is treated as "price per base
+// unit" (the previous meaning), which the conversion reproduces faithfully.
+function normalizeIngr(ing) {
+  ing = ing || {};
+  if (ing.bp !== undefined || ing.bq !== undefined || ing.bu !== undefined) {
+    return {
+      n:  ing.n || '',
+      bq: parseFloat(ing.bq) || 1,
+      bu: normalizeUnit(ing.bu),
+      bp: parseFloat(ing.bp) || 0,
+      q:  parseFloat(ing.q) || 0,
+      u:  normalizeUnit(ing.u)
+    };
+  }
+  const u = normalizeUnit(ing.u);
+  return {
+    n:  ing.n || '',
+    bq: 1,
+    bu: unitBaseLabel(u), // ק"ג / ליטר / יח׳
+    bp: parseFloat(ing.p) || 0,
+    q:  parseFloat(ing.q) || 0,
+    u:  u
+  };
+}
+
 function addIngrRow(prefill) {
+  const ing = normalizeIngr(prefill);
   const div = document.createElement('div');
   div.className = 'pricing-row';
-  const unit = normalizeUnit(prefill && prefill.u);
-  // esc() converts the embedded " in "ק"ג" / "מ"ל" to &quot; — without it the
-  // HTML attribute would close at the first quote and the option value would
-  // be truncated, defeating the unit conversion.
-  const opts = UNIT_OPTIONS.map(u => `<option value="${esc(u)}" ${u===unit?'selected':''}>${u}</option>`).join('');
+  const opts = (sel) => UNIT_OPTIONS.map(u => `<option value="${esc(u)}" ${u===sel?'selected':''}>${u}</option>`).join('');
   div.innerHTML = `
-    <input placeholder="מצרך" class="ingr-name" value="${esc(prefill&&prefill.n||'')}">
-    <input type="number" placeholder="כמות" step="0.01" min="0" class="ingr-qty" value="${prefill&&prefill.q!=null?prefill.q:''}">
-    <select class="ingr-unit">${opts}</select>
-    <input type="number" placeholder="₪ ל${unitBaseLabel(unit)}" step="0.01" min="0" class="ingr-price" value="${prefill&&prefill.p!=null?prefill.p:''}">
+    <input placeholder="מצרך" class="ingr-name" value="${esc(ing.n)}">
+    <input type="number" placeholder="כמות" step="0.01" min="0" class="ingr-bq" value="${ing.bq||''}" title="כמה קניתי באריזה">
+    <select class="ingr-bu" title="יחידת המידה של האריזה">${opts(ing.bu)}</select>
+    <input type="number" placeholder="₪" step="0.01" min="0" class="ingr-bp" value="${ing.bp||''}" title="כמה שילמתי על האריזה הזאת">
+    <input type="number" placeholder="כמות" step="0.01" min="0" class="ingr-q" value="${ing.q||''}" title="כמה משתמשים במתכון הזה">
+    <select class="ingr-u" title="יחידת מידה במתכון">${opts(ing.u)}</select>
     <div class="ingr-cost">—</div>
     <button class="btn btn-d" style="padding:6px 10px" onclick="this.parentElement.remove();updatePricingRowsTotal()" title="הסר">✕</button>`;
   document.getElementById('ingrList').appendChild(div);
-  // Wire live updates
   div.querySelectorAll('input,select').forEach(el => {
-    el.addEventListener('input', () => updatePricingRow(div));
+    el.addEventListener('input',  () => updatePricingRow(div));
     el.addEventListener('change', () => updatePricingRow(div));
   });
   updatePricingRow(div);
 }
 
+function readIngrRow(div) {
+  return {
+    n:  div.querySelector('.ingr-name').value.trim(),
+    bq: parseFloat(div.querySelector('.ingr-bq').value) || 0,
+    bu: div.querySelector('.ingr-bu').value,
+    bp: parseFloat(div.querySelector('.ingr-bp').value) || 0,
+    q:  parseFloat(div.querySelector('.ingr-q').value) || 0,
+    u:  div.querySelector('.ingr-u').value
+  };
+}
+
 function updatePricingRow(div) {
-  const u = div.querySelector('.ingr-unit').value;
-  const q = parseFloat(div.querySelector('.ingr-qty').value) || 0;
-  const p = parseFloat(div.querySelector('.ingr-price').value) || 0;
-  div.querySelector('.ingr-price').placeholder = '₪ ל' + unitBaseLabel(u);
-  const c = q * unitToBase(u) * p;
-  div.querySelector('.ingr-cost').textContent = (q && p) ? fmtCost(c) : '—';
+  const ing = readIngrRow(div);
+  const c = rowCostBoughtUsed(ing);
+  div.querySelector('.ingr-cost').textContent = (ing.bq && ing.bp && ing.q) ? fmtCost(c) : '—';
   updatePricingRowsTotal();
 }
 
@@ -746,11 +785,12 @@ function calcPricing() {
   const rows=document.querySelectorAll('#ingrList .pricing-row');
   let ingredCost=0; const items=[];
   rows.forEach(r=>{
-    const n=r.querySelector('.ingr-name').value.trim();
-    const q=parseFloat(r.querySelector('.ingr-qty').value)||0;
-    const u=r.querySelector('.ingr-unit').value;
-    const p=parseFloat(r.querySelector('.ingr-price').value)||0;
-    if(n&&q&&p){ const c=rowCost(q,u,p); ingredCost+=c; items.push({n,q,u,p,c}); }
+    const ing = readIngrRow(r);
+    if (ing.n && ing.bq && ing.bp && ing.q) {
+      const c = rowCostBoughtUsed(ing);
+      ingredCost += c;
+      items.push(Object.assign({c}, ing));
+    }
   });
   const hours=parseFloat(document.getElementById('prHours').value)||0;
   const rate=parseFloat(document.getElementById('prRate').value)||0;
@@ -1389,11 +1429,8 @@ async function saveRecipe(){
   const rows=document.querySelectorAll('#ingrList .pricing-row');
   const ingredients=[];
   rows.forEach(r=>{
-    const n=r.querySelector('.ingr-name').value.trim();
-    const q=r.querySelector('.ingr-qty').value;
-    const u=r.querySelector('.ingr-unit').value;
-    const p=r.querySelector('.ingr-price').value;
-    if (n) ingredients.push({n,q,u,p});
+    const ing = readIngrRow(r);
+    if (ing.n) ingredients.push(ing);
   });
   const existing = db.recipes.find(r => r.name === name);
   const recipe = {
@@ -1437,12 +1474,8 @@ function loadRecipe(name){
   document.getElementById('prOver').value = r.over;
   document.getElementById('prMult').value = r.mult;
   document.getElementById('ingrList').innerHTML='';
-  (r.ingredients||[]).forEach(ing => addIngrRow({
-    n: ing.n,
-    q: ing.q,
-    u: normalizeUnit(ing.u),
-    p: ing.p
-  }));
+  // normalizeIngr inside addIngrRow handles both old {n,q,u,p} and new shapes.
+  (r.ingredients||[]).forEach(ing => addIngrRow(ing));
   if (!r.ingredients || r.ingredients.length===0) for (let i=0;i<3;i++) addIngrRow();
   calcPricing();
   toast('נטען: '+name,'ok');

@@ -148,9 +148,18 @@ td .row-actions{display:flex;gap:6px}
 @keyframes tin{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 
 /* PRICING */
-.pricing-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr auto;gap:8px;align-items:center;margin-bottom:8px}
-.pricing-row input,.pricing-row select{padding:8px 10px;border:1px solid var(--bd);border-radius:6px;font-size:13px;background:#fff}
-.pricing-row .ingr-cost{padding:8px 10px;background:#FAF1E8;border-radius:6px;font-size:13px;font-weight:600;color:var(--p);text-align:center}
+.pricing-row{display:grid;grid-template-columns:minmax(120px,1.6fr) 70px 70px 80px 70px 70px 90px auto;gap:6px;align-items:center;margin-bottom:8px}
+.pricing-row input,.pricing-row select{padding:8px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;background:#fff;min-width:0}
+.pricing-row .ingr-cost{padding:8px 6px;background:#FAF1E8;border-radius:6px;font-size:13px;font-weight:700;color:var(--p);text-align:center}
+.pricing-row .ingr-bp{background:#fff8e7}
+.pricing-head{display:grid;grid-template-columns:minmax(120px,1.6fr) 70px 70px 80px 70px 70px 90px auto;gap:6px;font-weight:600;color:var(--mute);font-size:11px;margin-bottom:6px}
+.pricing-head .grp-bought{grid-column:2/5;text-align:center;background:#fff8e7;padding:4px;border-radius:6px;color:var(--ink2);font-size:12px}
+.pricing-head .grp-used{grid-column:5/7;text-align:center;background:#FAF1E8;padding:4px;border-radius:6px;color:var(--ink2);font-size:12px}
+@media(max-width:768px){
+.pricing-row{grid-template-columns:1fr;border:1px solid var(--bd);border-radius:10px;padding:10px;background:#fff;gap:8px}
+.pricing-row > *{width:100%}
+.pricing-head{display:none}
+}
 .pricing-summary{background:#FAF1E8;border:1px solid var(--bd);border-radius:10px;padding:16px;margin-top:20px}
 .pricing-summary .line{display:flex;justify-content:space-between;padding:6px 0;font-size:14px}
 .pricing-summary .line.total{border-top:2px solid var(--p);margin-top:8px;padding-top:12px;font-weight:700;font-size:18px;color:var(--p)}
@@ -309,8 +318,19 @@ th,td{padding:8px}
       <div class="field"><label>תקורה % (גז+חשמל+אריזה)</label><input id="prOver" type="number" value="15"></div>
       <div class="field"><label>מכפיל רווח (×)</label><input id="prMult" type="number" step="0.1" value="2.5"></div>
     </div>
-    <h4 style="margin:20px 0 10px">מצרכים</h4>
-    <div class="pricing-row" style="font-weight:600;color:var(--mute);font-size:12px"><div>שם המצרך</div><div>כמות</div><div>יחידה</div><div>מחיר ליחידת בסיס</div><div>עלות</div><div></div></div>
+    <h4 style="margin:20px 0 6px">מצרכים</h4>
+    <div style="font-size:13px;color:var(--ink2);background:#FAF1E8;padding:10px 14px;border-radius:8px;margin-bottom:12px;line-height:1.7">
+      💡 <strong>איך זה עובד:</strong> בעמודות <strong>"קנייה"</strong> מזינים מה קניתי בפועל (אריזה + כמה שילמתי).<br>
+      בעמודות <strong>"במתכון"</strong> מזינים כמה משתמשים מתוך זה. העלות מחושבת אוטומטית.<br>
+      <span style="color:var(--mute)">דוגמה: קניתי 200 גרם מרגרינה ב-6.30 ₪, השתמשתי ב-200 גרם → עלות 6.30 ₪.</span>
+    </div>
+    <div class="pricing-head">
+      <div>שם המצרך</div>
+      <div class="grp-bought">מה קניתי</div>
+      <div class="grp-used">במתכון</div>
+      <div style="text-align:center">עלות</div>
+      <div></div>
+    </div>
     <div id="ingrList"></div>
     <button class="btn btn-s" onclick="addIngrRow()" style="margin-top:8px">➕ הוסף מצרך</button>
     <div class="pricing-summary" id="prSummary"></div>
@@ -419,6 +439,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 </body>
 </html>
