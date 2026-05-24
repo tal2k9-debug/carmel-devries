@@ -23,6 +23,10 @@
  * Version: New version → Deploy. The /exec URL stays the same.
  */
 
+// The Products / Orders spreadsheet — opened by ID so the script works whether
+// it is container-bound or a standalone project.
+var SHEET_ID = '1NOdPG_jdhVfD_Du24E6i3fWTOjPSqfoarJ1tkq6OIRk';
+
 function doPost(e) {
   var lock = LockService.getScriptLock();
   try {
@@ -32,7 +36,7 @@ function doPost(e) {
   }
   try {
     var order = JSON.parse(e.postData.contents);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.openById(SHEET_ID);
     var prod = ss.getSheetByName('Products');
     if (!prod) return json({ ok: false, error: 'no_products_sheet' });
 
