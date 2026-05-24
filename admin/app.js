@@ -217,7 +217,7 @@ async function syncAll() {
   try {
     const [cust, ord, exp, rec, prod] = await Promise.all([
       readRange('Customers!A2:H'),
-      readRange('Orders!A2:L'),
+      readRange('Orders!A2:N'),
       readRange('Expenses!A2:F').catch(()=>[]),
       readRange('Recipes!A2:H').catch(()=>[]),
       readRange('Products!A2:N').catch(()=>[])
@@ -259,8 +259,9 @@ function saveCache(){ localStorage.setItem(CACHE_KEY, JSON.stringify(db)); }
 
 function rowToCust(r){ return {id:r[0]||'', name:r[1]||'', phone:r[2]||'', address:r[3]||'', allergies:r[4]||'', notes:r[5]||'', createdAt:r[6]||'', lastOrder:r[7]||''}; }
 function custToRow(c){ return [c.id, c.name, c.phone, c.address, c.allergies, c.notes, c.createdAt, c.lastOrder]; }
-function rowToOrder(r){ return {id:r[0]||'', customerId:r[1]||'', name:r[2]||'', phone:r[3]||'', address:r[4]||'', fulfillment:r[5]||'pickup', date:r[6]||'', items:r[7]||'', notes:r[8]||'', status:r[9]||'new', createdAt:r[10]||'', updatedAt:r[11]||''}; }
-function orderToRow(o){ return [o.id, o.customerId, o.name, o.phone, o.address, o.fulfillment, o.date, o.items, o.notes, o.status, o.createdAt, o.updatedAt]; }
+function rowToOrder(r){ return {id:r[0]||'', customerId:r[1]||'', name:r[2]||'', phone:r[3]||'', address:r[4]||'', fulfillment:r[5]||'pickup', date:r[6]||'', items:r[7]||'', notes:r[8]||'', status:r[9]||'new', createdAt:r[10]||'', updatedAt:r[11]||'', paid:(r[12]==='1'||r[12]===1||r[12]===true||String(r[12]).toLowerCase()==='true'), paymentMethod:r[13]||''}; }
+function orderToRow(o){ return [o.id, o.customerId, o.name, o.phone, o.address, o.fulfillment, o.date, o.items, o.notes, o.status, o.createdAt, o.updatedAt, o.paid?'1':'0', o.paymentMethod||'']; }
+const PAYMENT_METHODS = ['מזומן','ביט','העברה בנקאית','אשראי','צ׳ק','אחר'];
 function rowToExp(r){ return {id:r[0]||'', date:r[1]||'', category:r[2]||'', description:r[3]||'', amount:parseFloat(r[4])||0, vendor:r[5]||''}; }
 function expToRow(e){ return [e.id, e.date, e.category, e.description, String(e.amount), e.vendor]; }
 function rowToRecipe(r){ let ing=[]; try{ ing=JSON.parse(r[7]||'[]'); }catch(e){} return {id:r[0]||'', name:r[1]||'', yield:r[2]||'30', hours:r[3]||'2', rate:r[4]||'50', over:r[5]||'15', mult:r[6]||'2.5', ingredients:ing}; }
@@ -428,11 +429,15 @@ function kanbanCard(o) {
   let cls = '';
   if (o.date === today) cls = 'today';
   else if (o.date < today && o.status !== 'delivered') cls = 'urgent';
+  const payBadge = o.paid
+    ? `<span style="background:#e8f5e9;color:var(--ok);font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px">₪ שולם${o.paymentMethod?' · '+esc(o.paymentMethod):''}</span>`
+    : `<span style="background:#ffebee;color:var(--err);font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px">₪ חוב פתוח</span>`;
   return `<div class="kcard ${cls}" draggable="true" ondragstart="event.dataTransfer.setData('id','${o.id}');this.classList.add('dragging')" ondragend="this.classList.remove('dragging')" onclick="showOrder('${o.id}')">
     <div class="n">${esc(o.name)}</div>
     <div class="d">📅 ${esc(o.date)} · ${o.fulfillment==='delivery'?'🚚 משלוח':'🏠 איסוף'}</div>
     <div class="it">${esc(o.items.slice(0,80))}${o.items.length>80?'...':''}</div>
     <div class="ph">📞 ${esc(o.phone)}</div>
+    <div style="margin-top:6px">${payBadge}</div>
   </div>`;
 }
 
@@ -464,6 +469,8 @@ async function updateOrderRow(o) {
 function showOrder(id) {
   const o = db.orders.find(x => x.id === id); if (!o) return;
   document.getElementById('omTitle').textContent = 'הזמנה: ' + o.name;
+  const methodOpts = ['<option value="">— לא צוין —</option>']
+    .concat(PAYMENT_METHODS.map(m => `<option value="${esc(m)}" ${o.paymentMethod===m?'selected':''}>${m}</option>`)).join('');
   document.getElementById('omBody').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
       <div><strong>שם:</strong> ${esc(o.name)}</div>
@@ -474,14 +481,41 @@ function showOrder(id) {
     </div>
     <div style="margin-bottom:14px"><strong>פריטים:</strong><br>${esc(o.items).replace(/\n/g,'<br>')}</div>
     ${o.notes?`<div style="margin-bottom:14px;background:#fff3e0;padding:10px;border-radius:8px"><strong>הערות:</strong> ${esc(o.notes)}</div>`:''}
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <div style="margin-bottom:6px;font-weight:600;color:var(--ink2);font-size:13px">סטטוס הכנה</div>
+    <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
       ${STATUSES.map(s=>`<button class="btn ${o.status===s.id?'btn-p':'btn-s'}" onclick="setOrderStatus('${o.id}','${s.id}')">${s.label}</button>`).join('')}
+    </div>
+    <div style="background:#FAF1E8;padding:14px;border-radius:10px;margin-bottom:14px">
+      <div style="font-weight:600;color:var(--ink2);font-size:13px;margin-bottom:8px">תשלום</div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px;font-size:14px">
+        <input type="checkbox" id="omPaid" ${o.paid?'checked':''} onchange="setOrderPaid('${o.id}', this.checked)" style="width:20px;height:20px;cursor:pointer">
+        <strong style="${o.paid?'color:var(--ok)':'color:var(--err)'}">${o.paid?'שולם ✓':'לא שולם — חוב פתוח'}</strong>
+      </label>
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+        <span style="color:var(--mute)">אופן תשלום:</span>
+        <select onchange="setOrderPaymentMethod('${o.id}', this.value)" style="padding:6px 10px;border:1px solid var(--bd);border-radius:6px;background:#fff;font-size:13px">${methodOpts}</select>
+      </div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <a class="btn btn-s" href="https://wa.me/${o.phone.replace(/\D/g,'')}" target="_blank">📱 WhatsApp</a>
       <button class="btn btn-d" onclick="deleteOrder('${o.id}')">🗑 מחק</button>
     </div>`;
   document.getElementById('orderModal').classList.add('show');
+}
+
+async function setOrderPaid(id, val) {
+  const o = db.orders.find(x => x.id === id); if (!o) return;
+  o.paid = !!val;
+  o.updatedAt = new Date().toISOString();
+  saveCache(); renderAll(); showOrder(id);
+  await updateOrderRow(o);
+}
+async function setOrderPaymentMethod(id, method) {
+  const o = db.orders.find(x => x.id === id); if (!o) return;
+  o.paymentMethod = method;
+  o.updatedAt = new Date().toISOString();
+  saveCache();
+  await updateOrderRow(o);
 }
 
 async function setOrderStatus(id, status) {

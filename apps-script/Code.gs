@@ -165,11 +165,12 @@ function appendOrder(ss, order, now) {
     return it.name + (it.flavor ? ' (' + it.flavor + ')' : '') + ' × ' + it.qty;
   }).join(', ');
   var id = 'o-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
-  // Columns: id,customerId,name,phone,address,fulfillment,date,items,notes,status,createdAt,updatedAt
+  // Columns: id,customerId,name,phone,address,fulfillment,date,items,notes,status,createdAt,updatedAt,paid,paymentMethod
   sheet.appendRow([
     id, '', c.name || '', c.phone || '', c.address || '',
     order.fulfillment || 'pickup', order.date || '', itemsText,
-    (c.notes || '') + ' [הזמנת אתר]', 'new', now, now
+    (c.notes || '') + ' [הזמנת אתר]', 'new', now, now,
+    '0', '' // paid=false, paymentMethod=blank — set later by Keren in dashboard
   ]);
 }
 
