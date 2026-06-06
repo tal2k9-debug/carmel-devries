@@ -1419,8 +1419,18 @@ function generateShoppingList(){
       const qty = parseFloat(m[1]);
       // Match recipe by name substring
       const lt = line;
-      const recipe = db.recipes.find(r => r.name && lt.includes(r.name.slice(0,5)));
-      if (!recipe){ unmatched.push({order:o.name, line}); return; }
+      // Match by best word overlap. All recipes share "עוגיות", so comparing a
+      // 5-char prefix can't tell them apart — compare the full name's words and
+      // pick the recipe whose words best match this order line.
+      let recipe = null, _bestHits = 0;
+      db.recipes.forEach(r => {
+        if (!r.name) return;
+        const words = r.name.split(/\s+/).map(w => w.trim()).filter(w => w.length >= 2);
+        if (!words.length) return;
+        const hits = words.filter(w => lt.includes(w)).length;
+        if (hits > _bestHits) { _bestHits = hits; recipe = r; }
+      });
+      if (!recipe || _bestHits === 0){ unmatched.push({order:o.name, line}); return; }
       // Determine batches: if "מארז" in line, qty == batches; else qty / yield
       let batches;
       const isBatch = /מארז|מארזי/.test(line);
