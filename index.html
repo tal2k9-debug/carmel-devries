@@ -32,6 +32,7 @@ img{max-width:100%;display:block} a{color:inherit;text-decoration:none}
 .paym{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .pm{flex:1;min-width:96px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:12px 8px;border:1px solid rgba(176,141,87,.3);border-radius:10px;background:var(--cream);color:var(--is);font-family:'Heebo',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:border-color .2s,background .2s,color .2s,box-shadow .2s}
 .pmlogo{width:22px;height:22px;border-radius:6px;flex-shrink:0}
+.ff input.inv,.ff textarea.inv,.ff select.inv{border-color:#d9534f!important;background:#fdf3f2}
 .pm.sel{border-color:var(--gold);background:#fff;color:var(--gd);box-shadow:0 3px 10px rgba(176,141,87,.18)}
 .pay-amt{font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:700;color:var(--gd);font-variant-numeric:lining-nums;font-feature-settings:"lnum" 1,"tnum" 1;line-height:1.1}
 .pay-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;max-width:280px;margin:16px auto 0;padding:15px;border-radius:14px;background:var(--gold);color:#fff;font-family:'Heebo',sans-serif;font-size:17px;font-weight:700;text-decoration:none;transition:background .2s}
@@ -402,6 +403,29 @@ function send(){
     const t=totalQty(p.id);
     if(t>0&&t<p.minOrder){alert('כמות מינימום ל'+p.name+': '+p.minOrder+' יח׳');return;}
   }
+  // כל הפרטים חובה — רק "הערות" אופציונלי
+  const _name=$('#cust-name').value.trim();
+  const _phone=$('#cust-phone').value.trim();
+  const _date=$('#cust-date').value.trim();
+  const _addr=$('#cust-address').value.trim();
+  const _del=ful()==='delivery';
+  const need=[];
+  if(!_name)need.push(['#cust-name','שם מלא']);
+  if(!_phone)need.push(['#cust-phone','טלפון']);
+  if(!_date)need.push(['#cust-date','תאריך מבוקש']);
+  if(_del&&!_addr)need.push(['#cust-address','כתובת למשלוח']);
+  $$('.inv').forEach(e=>e.classList.remove('inv'));
+  if(need.length){
+    need.forEach(([s])=>{const el=$(s);if(el)el.classList.add('inv');});
+    const el=$(need[0][0]);if(el){el.focus();el.scrollIntoView({block:'center',behavior:'smooth'});}
+    alert('נא למלא את כל הפרטים לפני שליחת ההזמנה:\n• '+need.map(n=>n[1]).join('\n• '));
+    return;
+  }
+  if(_phone.replace(/\D/g,'').length<9){
+    const el=$('#cust-phone');el.classList.add('inv');el.focus();
+    alert('נא להזין מספר טלפון תקין (לפחות 9 ספרות)');
+    return;
+  }
   if(!WEBAPP_URL){
     // No backend configured yet — WhatsApp is the only delivery channel
     window.open('https://wa.me/972549668819?text='+encodeURIComponent(buildMsg()),'_blank');
@@ -480,6 +504,7 @@ function showOrderSuccess(pm,total){
 }
 $('#sb').onclick=send;$('#bsb').onclick=send;
 $$('#paym .pm').forEach(b=>b.onclick=()=>{payMethod=b.dataset.m;$$('#paym .pm').forEach(x=>x.classList.toggle('sel',x===b));});
+$$('#cust-name,#cust-phone,#cust-date,#cust-address').forEach(el=>el.addEventListener('input',()=>el.classList.remove('inv')));
 function computeTotal(){let sub=0;products.forEach(p=>{if(cart[p.id])Object.values(cart[p.id]).forEach(q=>sub+=q*p.price);});return sub+calcD(sub);}
 $('#cust-fulfill').onchange=()=>{updAddr();upd();};
 setupDate();updAddr();render();upd();
