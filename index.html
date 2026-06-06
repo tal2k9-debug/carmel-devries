@@ -30,7 +30,8 @@ img{max-width:100%;display:block} a{color:inherit;text-decoration:none}
 .hph{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;letter-spacing:.16em;color:var(--ink);text-decoration:none;transition:color .25s;font-variant-numeric:lining-nums;font-feature-settings:"lnum" 1,"tnum" 1}
 .hph:hover{color:var(--gd)}
 .paym{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.pm{flex:1;min-width:96px;padding:12px 8px;border:1px solid rgba(176,141,87,.3);border-radius:10px;background:var(--cream);color:var(--is);font-family:'Heebo',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:border-color .2s,background .2s,color .2s,box-shadow .2s}
+.pm{flex:1;min-width:96px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:12px 8px;border:1px solid rgba(176,141,87,.3);border-radius:10px;background:var(--cream);color:var(--is);font-family:'Heebo',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:border-color .2s,background .2s,color .2s,box-shadow .2s}
+.pmlogo{width:22px;height:22px;border-radius:6px;flex-shrink:0}
 .pm.sel{border-color:var(--gold);background:#fff;color:var(--gd);box-shadow:0 3px 10px rgba(176,141,87,.18)}
 .pay-amt{font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:700;color:var(--gd);font-variant-numeric:lining-nums;font-feature-settings:"lnum" 1,"tnum" 1;line-height:1.1}
 .pay-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;max-width:280px;margin:16px auto 0;padding:15px;border-radius:14px;background:var(--gold);color:#fff;font-family:'Heebo',sans-serif;font-size:17px;font-weight:700;text-decoration:none;transition:background .2s}
@@ -160,9 +161,9 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="fr fl"><div class="ff"><label for="cust-notes">הערות (אופציונלי)</label><textarea id="cust-notes" placeholder="טעמים מועדפים, אריזה מיוחדת וכו'"></textarea></div></div>
 <div class="fr fl"><div class="ff"><label>אמצעי תשלום</label>
 <div class="paym" id="paym">
-<button type="button" class="pm sel" data-m="cash">💵 מזומן</button>
-<button type="button" class="pm" data-m="paybox">פייבוקס</button>
-<button type="button" class="pm" data-m="bit">ביט</button>
+<button type="button" class="pm sel" data-m="cash">מזומן</button>
+<button type="button" class="pm" data-m="paybox"><svg class="pmlogo" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="13" fill="#2EA7EB"/><text x="24" y="32" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="700" fill="#fff" text-anchor="middle">pay</text></svg>פייבוקס</button>
+<button type="button" class="pm" data-m="bit"><svg class="pmlogo" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="13" fill="#0b3b42"/><text x="24" y="33" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#23d3cf" text-anchor="middle">bit</text></svg>ביט</button>
 </div></div></div>
 <div class="ol">
 <div class="olt">סיכום ההזמנה</div>
