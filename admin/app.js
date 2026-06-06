@@ -1307,10 +1307,15 @@ async function setFlavorQty(id, flavorIdx, v) {
 }
 async function persistProductRow(p) {
   const idx = db.products.findIndex(x => x.id === p.id);
-  if (idx < 0 || !accessToken) return;
+  if (idx < 0) return;
+  if (!accessToken) {
+    setSync('err','לא מחובר');
+    toast('⚠️ לא מחוברים לגוגל — השינוי נשמר רק במכשיר ולא יופיע באתר. רענני את הדף והתחברי מחדש, ואז עדכני שוב.','err');
+    return;
+  }
   setSync('syncing','שומר...');
   try { await updateRow('Products', idx+2, prodToRow(p)); setSync('ok','מסונכרן'); }
-  catch(e){ console.error(e); setSync('err','שגיאת שמירה'); }
+  catch(e){ console.error(e); setSync('err','שגיאת שמירה'); toast('⚠️ השמירה לגיליון נכשלה — רענני והתחברי מחדש, ואז עדכני שוב.','err'); }
 }
 
 // Decrement product quantities based on parsed order items.
