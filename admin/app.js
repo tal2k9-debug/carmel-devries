@@ -1431,14 +1431,18 @@ function generateShoppingList(){
         if (hits > _bestHits) { _bestHits = hits; recipe = r; }
       });
       if (!recipe || _bestHits === 0){ unmatched.push({order:o.name, line}); return; }
-      // Determine batches: if "מארז" in line, qty == batches; else qty / yield
-      let batches;
-      const isBatch = /מארז|מארזי/.test(line);
-      if (isBatch) batches = qty;
-      else {
-        const y = parseFloat(recipe.yield) || 30;
-        batches = qty / y;
+      // Convert the ordered quantity into actual units. A product sold by the
+      // package (unit text like "מארז של כ-30 יח׳") means each ordered qty is a
+      // package of N units — so multiply. "ליחידה" means qty already = units.
+      const prod = (db.products||[]).find(p => p.name && lt.includes(p.name));
+      let unitsOrdered = qty;
+      if (prod){
+        const u = String(prod.unit||'');
+        const um = u.match(/(\d+)/);
+        if (um && /מארז|מארזי/.test(u)) unitsOrdered = qty * parseInt(um[1], 10);
       }
+      const y = parseFloat(recipe.yield) || 30;
+      const batches = unitsOrdered / y;
       batchesPerRecipe[recipe.id] = (batchesPerRecipe[recipe.id]||0) + batches;
     });
   });
