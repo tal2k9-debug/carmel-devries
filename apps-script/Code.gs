@@ -32,11 +32,11 @@ var DRIVE_FOLDER_NAME = 'Carmel — תמונות אתר';
 // Max bytes per uploaded image (decoded). 10 MB ceiling.
 var MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
-// --- התראת וואטסאפ לבעלת העסק על כל הזמנה חדשה (דרך CallMeBot, חינם) ---
-// מספר הוואטסאפ שמקבל את ההתראות — בפורמט בינלאומי בלי + ובלי 0 מוביל.
-var OWNER_WA_PHONE = '972549668819';
-// ה-apikey שמתקבל פעם אחת מ-CallMeBot בהקמה. עד שממלאים אותו — אין התראה (ההזמנה עדיין נשמרת).
-var CALLMEBOT_APIKEY = 'PASTE_APIKEY_HERE';
+// --- התראת וואטסאפ לבעלת העסק על כל הזמנה חדשה (דרך super-bot שלנו, חינם) ---
+// הרובד carmel-hook ב-super-bot מקבל POST ושולח וואטסאפ לאחות. הכתובת מוצפנת (nginx).
+var CARMEL_HOOK_URL = 'https://chelek.online/carmel-order';
+// הסוד נשמר ב-Script Properties (Project Settings → Script Properties → CARMEL_HOOK_SECRET).
+// כך הוא לא נמצא בקוד הגלוי. עד שמגדירים אותו — אין התראה (ההזמנה עדיין נשמרת).
 
 function doPost(e) {
   var payload;
@@ -170,24 +170,34 @@ function getOrCreateFolder(name) {
 // Wrapped so any failure (no apikey, network) never breaks order intake.
 function notifyOwner(order) {
   try {
-    if (!CALLMEBOT_APIKEY || CALLMEBOT_APIKEY === 'PASTE_APIKEY_HERE') return;
+    var secret = PropertiesService.getScriptProperties().getProperty('CARMEL_HOOK_SECRET');
+    if (!secret) return; // לא מוגדר עדיין — ההזמנה נשמרת בכל מקרה
     var c = order.customer || {};
     var items = (order.items || []).map(function (it) {
       return '• ' + it.name + (it.flavor ? ' (' + it.flavor + ')' : '') + ' × ' + it.qty;
     }).join('\n');
-    var ful = order.fulfillment === 'pickup' ? 'איסוף עצמי' : 'משלוח באופקים';
+    var sub = 0;
+    (order.items || []).forEach(function (it) {
+      sub += (parseFloat(it.price) || 0) * (parseInt(it.qty, 10) || 0);
+    });
+    var ful = order.fulfillment === 'pickup' ? 'איסוף עצמי — אורים 20, אופקים' : 'משלוח באופקים';
     var pay = order.paymentLabel || order.payment || '';
-    var msg = '🍪 הזמנה חדשה — Carmel\n\n' + items +
-      '\n\nשם: ' + (c.name || '') +
-      '\nטלפון: ' + (c.phone || '') +
-      '\nקבלה: ' + ful +
-      (order.date ? '\nתאריך מבוקש: ' + order.date : '') +
-      (c.address ? '\nכתובת: ' + c.address : '') +
-      (pay ? '\nאמצעי תשלום: ' + pay : '') +
-      (c.notes ? '\nהערות: ' + c.notes : '');
-    var url = 'https://api.callmebot.com/whatsapp.php?phone=' + OWNER_WA_PHONE +
-      '&text=' + encodeURIComponent(msg) + '&apikey=' + CALLMEBOT_APIKEY;
-    UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    var msg = '🍪 *הזמנה חדשה — Carmel*\n\n' + items + '\n';
+    msg += '\nסכום פריטים: ' + Math.round(sub) + ' ₪\n';
+    msg += '\n👤 *פרטי הלקוח:*\n';
+    msg += 'שם: ' + (c.name || '—') + '\n';
+    msg += 'טלפון: ' + (c.phone || '—') + '\n';
+    msg += 'קבלה: ' + ful + '\n';
+    if (order.date) msg += 'תאריך מבוקש: ' + order.date + '\n';
+    if (c.address) msg += 'כתובת: ' + c.address + ', אופקים\n';
+    if (pay) msg += 'אמצעי תשלום: ' + pay + '\n';
+    if (c.notes) msg += 'הערות: ' + c.notes + '\n';
+    UrlFetchApp.fetch(CARMEL_HOOK_URL, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ secret: secret, message: msg }),
+      muteHttpExceptions: true
+    });
   } catch (err) { /* swallow — never block the order */ }
 }
 
