@@ -29,6 +29,13 @@ img{max-width:100%;display:block} a{color:inherit;text-decoration:none}
 .hph-row{margin-top:6px}
 .hph{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;letter-spacing:.16em;color:var(--ink);text-decoration:none;transition:color .25s;font-variant-numeric:lining-nums;font-feature-settings:"lnum" 1,"tnum" 1}
 .hph:hover{color:var(--gd)}
+.paym{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.pm{flex:1;min-width:96px;padding:12px 8px;border:1px solid rgba(176,141,87,.3);border-radius:10px;background:var(--cream);color:var(--is);font-family:'Heebo',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:border-color .2s,background .2s,color .2s,box-shadow .2s}
+.pm.sel{border-color:var(--gold);background:#fff;color:var(--gd);box-shadow:0 3px 10px rgba(176,141,87,.18)}
+.pay-amt{font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:700;color:var(--gd);font-variant-numeric:lining-nums;font-feature-settings:"lnum" 1,"tnum" 1;line-height:1.1}
+.pay-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;max-width:280px;margin:16px auto 0;padding:15px;border-radius:14px;background:var(--gold);color:#fff;font-family:'Heebo',sans-serif;font-size:17px;font-weight:700;text-decoration:none;transition:background .2s}
+.pay-cta:hover{background:var(--gd);color:#fff}
+.pay-hint{margin-top:12px;font-size:14px;color:var(--is);line-height:1.7}
 section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .st{text-align:center;margin-bottom:36px}
 .st h2{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:34px;color:var(--ink)}
@@ -151,6 +158,12 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 </div>
 <div class="fr fl" id="addr-row"><div class="ff"><label for="cust-address">כתובת למשלוח (באופקים)</label><input id="cust-address" type="text" placeholder="רחוב, מספר" autocomplete="street-address"></div></div>
 <div class="fr fl"><div class="ff"><label for="cust-notes">הערות (אופציונלי)</label><textarea id="cust-notes" placeholder="טעמים מועדפים, אריזה מיוחדת וכו'"></textarea></div></div>
+<div class="fr fl"><div class="ff"><label>אמצעי תשלום</label>
+<div class="paym" id="paym">
+<button type="button" class="pm sel" data-m="cash">💵 מזומן</button>
+<button type="button" class="pm" data-m="paybox">פייבוקס</button>
+<button type="button" class="pm" data-m="bit">ביט</button>
+</div></div></div>
 <div class="ol">
 <div class="olt">סיכום ההזמנה</div>
 <div id="ol-lines"><div class="oli em">עדיין לא נבחרו פריטים</div></div>
@@ -193,6 +206,11 @@ const SHEET_ID='1NOdPG_jdhVfD_Du24E6i3fWTOjPSqfoarJ1tkq6OIRk';
 // Leave empty → site works WhatsApp-only (no auto-decrement).
 // After deploying apps-script/Code.gs, paste the /exec URL here.
 const WEBAPP_URL='https://script.google.com/macros/s/AKfycbw2KPB_GWD7T4ylM9DiCKpimqWEx7oDyd4WoYwyzDCGw53t9_C-MivKQf4dYF036psjDg/exec';
+// Payment links — sum is open (customer types the amount shown). Owner gets an app notification.
+const PAYBOX_LINK='https://links.payboxapp.com/WERg82nyK3b';
+const BIT_LINK=''; // יתווסף כשנקבל קישור ביט טקסטואלי
+const PAY_LABELS={cash:'מזומן',paybox:'פייבוקס',bit:'ביט'};
+let payMethod='cash';
 // Get available qty for a specific flavor (or whole product when flavor is '')
 function flavorAvail(p, flavorName){
   if(!flavorName){
@@ -345,6 +363,7 @@ function buildMsg(){
   if(d)m+='תאריך מבוקש: '+d+'\n';
   if(f==='delivery'&&a)m+='כתובת: '+a+', אופקים\n';
   if(no)m+='הערות: '+no+'\n';
+  m+='אמצעי תשלום: '+PAY_LABELS[payMethod]+'\n';
   return m;
 }
 
@@ -365,6 +384,8 @@ function buildOrderObj(){
       notes:$('#cust-notes').value.trim()
     },
     fulfillment:ful(),
+    payment:payMethod,
+    paymentLabel:PAY_LABELS[payMethod],
     date:$('#cust-date').value,
     items:items
   };
@@ -402,9 +423,10 @@ async function submitOrder(){
     });
     const data=await resp.json();
     if(data.ok){
+      const paidTotal=computeTotal();const pm=payMethod;
       Object.keys(cart).forEach(k=>delete cart[k]);
       loadProductsFromSheet();
-      showOrderSuccess();
+      showOrderSuccess(pm,paidTotal);
     }else if(data.error==='stock'){
       const lines=(data.problems||[]).map(p=>'• '+p.name+(p.available!=null?' — נותרו רק '+p.available:' — אזל')).join('\n');
       alert('חלק מהפריטים אזלו בזמן שהזמנת:\n'+lines+'\n\nעדכנו את הכמויות בסל ונסו שוב 🙏');
@@ -424,13 +446,31 @@ async function submitOrder(){
   }
 }
 
-function showOrderSuccess(){
+function showOrderSuccess(pm,total){
+  pm=pm||'cash';total=total||0;
+  let payBlock='';
+  if(pm==='paybox'&&PAYBOX_LINK){
+    payBlock='<div class="pay-hint">לתשלום בפייבוקס:</div>'
+      +'<div class="pay-amt">₪'+fmt(total)+'</div>'
+      +'<a href="'+PAYBOX_LINK+'" target="_blank" rel="noopener" class="pay-cta">המשך לתשלום בפייבוקס ←</a>'
+      +'<div class="pay-hint">הצטרפו לקבוצת התשלום והקלידו את הסכום ₪'+fmt(total)+'.<br>קרן תקבל התראה כשהתשלום מתקבל 💛</div>';
+  }else if(pm==='bit'&&BIT_LINK){
+    payBlock='<div class="pay-hint">לתשלום בביט:</div>'
+      +'<div class="pay-amt">₪'+fmt(total)+'</div>'
+      +'<a href="'+BIT_LINK+'" target="_blank" rel="noopener" class="pay-cta">המשך לתשלום בביט ←</a>'
+      +'<div class="pay-hint">הקלידו את הסכום ₪'+fmt(total)+' בביט.<br>קרן תקבל התראה כשהתשלום מתקבל 💛</div>';
+  }else if(pm==='bit'){
+    payBlock='<div class="pay-hint">💳 לתשלום בביט בסך <b>₪'+fmt(total)+'</b> — קרן תשלח לך בקשת תשלום בביט בעת אישור ההזמנה.</div>';
+  }else{
+    payBlock='<div class="pay-hint">💵 התשלום במזומן במסירה או באיסוף.</div>';
+  }
   const oc=document.querySelector('.oc');
   if(oc){
     oc.innerHTML='<div style="text-align:center;padding:34px 12px">'
       +'<div style="font-size:56px">🍪</div>'
       +'<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:27px;color:var(--gd);margin:14px 0 10px">ההזמנה נקלטה!</h3>'
       +'<p style="color:var(--is);font-size:15px;line-height:1.8">תודה רבה 💛<br>קרן תיצור איתך קשר בקרוב לאישור ההזמנה ותיאום הפרטים.</p>'
+      +payBlock
       +'<button class="subm" style="max-width:240px;margin:24px auto 0" type="button" onclick="location.reload()">הזמנה נוספת</button>'
       +'</div>';
   }
@@ -438,6 +478,8 @@ function showOrderSuccess(){
   if(oc)window.scrollTo({top:Math.max(0,oc.getBoundingClientRect().top+window.scrollY-40),behavior:'smooth'});
 }
 $('#sb').onclick=send;$('#bsb').onclick=send;
+$$('#paym .pm').forEach(b=>b.onclick=()=>{payMethod=b.dataset.m;$$('#paym .pm').forEach(x=>x.classList.toggle('sel',x===b));});
+function computeTotal(){let sub=0;products.forEach(p=>{if(cart[p.id])Object.values(cart[p.id]).forEach(q=>sub+=q*p.price);});return sub+calcD(sub);}
 $('#cust-fulfill').onchange=()=>{updAddr();upd();};
 setupDate();updAddr();render();upd();
 
