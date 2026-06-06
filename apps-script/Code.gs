@@ -32,6 +32,12 @@ var DRIVE_FOLDER_NAME = 'Carmel — תמונות אתר';
 // Max bytes per uploaded image (decoded). 10 MB ceiling.
 var MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
+// --- התראת וואטסאפ לבעלת העסק על כל הזמנה חדשה (דרך CallMeBot, חינם) ---
+// מספר הוואטסאפ שמקבל את ההתראות — בפורמט בינלאומי בלי + ובלי 0 מוביל.
+var OWNER_WA_PHONE = '972549668819';
+// ה-apikey שמתקבל פעם אחת מ-CallMeBot בהקמה. עד שממלאים אותו — אין התראה (ההזמנה עדיין נשמרת).
+var CALLMEBOT_APIKEY = 'PASTE_APIKEY_HERE';
+
 function doPost(e) {
   var payload;
   try { payload = JSON.parse(e.postData.contents); }
@@ -110,6 +116,9 @@ function doPost(e) {
     // Record the order so it shows up in Keren's dashboard.
     appendOrder(ss, order, now);
 
+    // Notify Keren on WhatsApp — must never block the order if it fails.
+    notifyOwner(order);
+
     return json({ ok: true });
   } catch (err) {
     return json({ ok: false, error: 'exception', message: String(err) });
@@ -155,6 +164,31 @@ function getOrCreateFolder(name) {
   var iter = DriveApp.getFoldersByName(name);
   if (iter.hasNext()) return iter.next();
   return DriveApp.createFolder(name);
+}
+
+// Sends a WhatsApp message to the business owner via CallMeBot.
+// Wrapped so any failure (no apikey, network) never breaks order intake.
+function notifyOwner(order) {
+  try {
+    if (!CALLMEBOT_APIKEY || CALLMEBOT_APIKEY === 'PASTE_APIKEY_HERE') return;
+    var c = order.customer || {};
+    var items = (order.items || []).map(function (it) {
+      return '• ' + it.name + (it.flavor ? ' (' + it.flavor + ')' : '') + ' × ' + it.qty;
+    }).join('\n');
+    var ful = order.fulfillment === 'pickup' ? 'איסוף עצמי' : 'משלוח באופקים';
+    var pay = order.paymentLabel || order.payment || '';
+    var msg = '🍪 הזמנה חדשה — Carmel\n\n' + items +
+      '\n\nשם: ' + (c.name || '') +
+      '\nטלפון: ' + (c.phone || '') +
+      '\nקבלה: ' + ful +
+      (order.date ? '\nתאריך מבוקש: ' + order.date : '') +
+      (c.address ? '\nכתובת: ' + c.address : '') +
+      (pay ? '\nאמצעי תשלום: ' + pay : '') +
+      (c.notes ? '\nהערות: ' + c.notes : '');
+    var url = 'https://api.callmebot.com/whatsapp.php?phone=' + OWNER_WA_PHONE +
+      '&text=' + encodeURIComponent(msg) + '&apikey=' + CALLMEBOT_APIKEY;
+    UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  } catch (err) { /* swallow — never block the order */ }
 }
 
 function appendOrder(ss, order, now) {
