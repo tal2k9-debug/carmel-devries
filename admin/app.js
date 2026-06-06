@@ -1457,12 +1457,14 @@ function generateShoppingList(){
     });
   });
 
-  let html = '<div class="shop-grp"><h3>📦 לאפות (מנות לפי מתכון)</h3><ul>';
+  let html = '<div class="shop-grp"><h3>📦 לאפות</h3>';
+  html += '<div style="font-size:13px;color:var(--ink2);padding:2px 0 10px;line-height:1.65">כמה לאפות מכל סוג, מחושב אוטומטית מההזמנות הפתוחות.<br>המספר המודגש = כמות היחידות לאפייה. בסוגריים = איזה חלק ממתכון מלא להכין.</div><ul>';
   if (recipeBatches.length === 0){
     html += '<li style="color:var(--mute)">לא נמצאו התאמות בין ההזמנות למתכונים השמורים</li>';
   } else {
     recipeBatches.forEach(rb=>{
-      html += `<li><span><strong>${esc(rb.name)}</strong></span><span>${rb.batches.toFixed(2)} מנות (≈${Math.round(rb.batches*(parseFloat(rb.yield)||30))} יח׳)</span></li>`;
+      const units = Math.round(rb.batches*(parseFloat(rb.yield)||30));
+      html += `<li><span><strong>${esc(rb.name)}</strong></span><span><strong>${units} יח׳</strong> <span style="color:var(--mute);font-size:13px">(${rb.batches.toFixed(2)} ממתכון)</span></span></li>`;
     });
   }
   html += '</ul></div>';
