@@ -23,7 +23,7 @@ const PRODUCTS_SEED = [
   {id:'yoyo',   name:'עוגיות יויו',             desc:'עוגיות טבולות בסירופ מתוק עטופות בקוקוס.',               price:4,  unit:'ליחידה',           qty:60, kosher:'פרווה', img:'images/yoyo.jpg',      published:1, sortOrder:60,  minOrder:30, minNote:'* מינימום להזמנה כ-30 יח׳', flavors:''}
 ];
 
-let tokenClient, accessToken=null, user=null;
+let tokenClient, accessToken=null, user=null, _tokenRefreshResolve=null;
 let db = {customers:[], orders:[], expenses:[], recipes:[], products:[]};
 let calCursor = new Date();
 let editingCustId=null, editingExpId=null, editingProdId=null;
@@ -43,7 +43,7 @@ async function initApp() {
     client_id: CLIENT_ID,
     scope: SCOPES,
     callback: handleToken,
-    error_callback: (err) => { console.error('[Carmel] oauth error', err); showLoginError('שגיאת הרשאות: ' + (err.type || err.message || JSON.stringify(err))); }
+    error_callback: (err) => { console.error('[Carmel] oauth error', err); if (_tokenRefreshResolve) { const r=_tokenRefreshResolve; _tokenRefreshResolve=null; r(false); return; } showLoginError('שגיאת הרשאות: ' + (err.type || err.message || JSON.stringify(err))); }
   });
 
   // Render a simple "Sign in with Google" button that triggers OAuth popup directly
@@ -79,6 +79,7 @@ async function initApp() {
 async function handleToken(resp) {
   console.log('[Carmel] token resp', resp);
   if (resp.error) {
+    if (_tokenRefreshResolve) { const r=_tokenRefreshResolve; _tokenRefreshResolve=null; r(false); return; }
     showLoginError('שגיאה: ' + resp.error + ' - ' + (resp.error_description||''));
     return;
   }
@@ -94,11 +95,28 @@ async function handleToken(resp) {
     }
     user = {email: ui.email, name: ui.name, picture: ui.picture, token: accessToken, expiry: Date.now() + (resp.expires_in*1000) - 60000};
     localStorage.setItem('carmel_user', JSON.stringify(user));
+    if (typeof gapi !== 'undefined' && gapi.client) { try { gapi.client.setToken({access_token: accessToken}); } catch(e){} }
+    // Silent refresh path: token renewed mid-session — resolve and skip re-rendering the app.
+    if (_tokenRefreshResolve) { const r=_tokenRefreshResolve; _tokenRefreshResolve=null; r(true); return; }
     showApp();
   } catch(e) {
     console.error('[Carmel] userinfo failed', e);
+    if (_tokenRefreshResolve) { const r=_tokenRefreshResolve; _tokenRefreshResolve=null; r(false); return; }
     showLoginError('שגיאה בטעינת פרופיל: ' + e.message);
   }
+}
+
+// Ensure a valid access token before a write. If expired, silently refresh
+// (no popup while the Google session is alive). Resolves false if it can't —
+// callers then alert the user to re-login, so a click is never lost silently.
+function ensureToken() {
+  return new Promise((resolve) => {
+    if (accessToken && user && user.expiry && user.expiry > Date.now() + 10000) { resolve(true); return; }
+    _tokenRefreshResolve = resolve;
+    try { tokenClient.requestAccessToken({ prompt: '' }); }
+    catch (e) { _tokenRefreshResolve = null; resolve(false); return; }
+    setTimeout(() => { if (_tokenRefreshResolve) { _tokenRefreshResolve = null; resolve(false); } }, 8000);
+  });
 }
 
 function signOut() {
@@ -458,12 +476,18 @@ async function dropOrder(ev, status) {
 async function updateOrderRow(o) {
   const idx = db.orders.findIndex(x => x.id === o.id);
   if (idx < 0) return;
-  if (!accessToken) { toast('נשמר במטמון בלבד','err'); return; }
+  const ok = await ensureToken();
+  if (!ok || !accessToken) {
+    setSync('err','צריך להתחבר מחדש');
+    alert('ההתחברות לגוגל פגה ולכן השינוי לא נשמר.\nרענני את הדף (F5), היכנסי מחדש לגוגל, וסמני שוב.');
+    return;
+  }
   setSync('syncing', 'שומר...');
   try {
+    if (typeof gapi !== 'undefined' && gapi.client) gapi.client.setToken({access_token: accessToken});
     await updateRow('Orders', idx + 2, orderToRow(o));
     setSync('ok', 'מסונכרן');
-  } catch(e) { console.error(e); setSync('err','שגיאת שמירה'); }
+  } catch(e) { console.error(e); setSync('err','שגיאת שמירה'); alert('השמירה נכשלה (תקלת רשת?). נסי שוב.'); }
 }
 
 /* ============ ORDER DETAIL ============ */
