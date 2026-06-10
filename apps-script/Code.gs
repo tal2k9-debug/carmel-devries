@@ -47,6 +47,10 @@ function doPost(e) {
   if (payload && payload.action === 'image_upload') {
     return handleImageUpload(payload);
   }
+  // The receipt bot calls this to attach the Rivhit receipt PDF link to the order.
+  if (payload && payload.action === 'save_receipt') {
+    return saveReceipt(payload);
+  }
 
   var lock = LockService.getScriptLock();
   try {
@@ -216,21 +220,77 @@ function appendOrder(ss, order, now) {
   });
   var itemsJSON = JSON.stringify(order.items || []);
 
-  // Make sure the two new columns have headers (one-time, auto).
+  // Link this order to a customer card (create or update by phone). Enables the
+  // customer history view in the dashboard.
+  var customerId = upsertCustomer(ss, order, now);
+
+  // Ensure column headers (one-time, auto). Includes paid/paymentMethod whose
+  // headers were historically blank — naming them lets tools read by name.
   var lastCol = sheet.getLastColumn();
   var hdr = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+  if (hdr.indexOf('paid') === -1) sheet.getRange(1, 13).setValue('paid');
+  if (hdr.indexOf('paymentMethod') === -1) sheet.getRange(1, 14).setValue('paymentMethod');
   if (hdr.indexOf('total') === -1) sheet.getRange(1, 15).setValue('total');
   if (hdr.indexOf('itemsJSON') === -1) sheet.getRange(1, 16).setValue('itemsJSON');
+  if (hdr.indexOf('receiptUrl') === -1) sheet.getRange(1, 17).setValue('receiptUrl');
 
   var id = 'o-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
-  // Columns: id,customerId,name,phone,address,fulfillment,date,items,notes,status,createdAt,updatedAt,paid,paymentMethod,total,itemsJSON
+  // Columns: id,customerId,name,phone,address,fulfillment,date,items,notes,status,createdAt,updatedAt,paid,paymentMethod,total,itemsJSON,receiptUrl
   sheet.appendRow([
-    id, '', c.name || '', c.phone || '', c.address || '',
+    id, customerId, c.name || '', c.phone || '', c.address || '',
     order.fulfillment || 'pickup', order.date || '', itemsText,
     (c.notes || '') + ' [הזמנת אתר]', 'new', now, now,
     '0', '', // paid=false, paymentMethod=blank — set later by Keren in dashboard
-    total, itemsJSON
+    total, itemsJSON, '' // receiptUrl — filled by the bot once the receipt is issued
   ]);
+}
+
+// Create or update a customer card by phone. Returns the customer id (or '').
+function upsertCustomer(ss, order, now) {
+  try {
+    var sheet = ss.getSheetByName('Customers');
+    if (!sheet) return '';
+    var c = order.customer || {};
+    var phone = String(c.phone || '').replace(/\D/g, '');
+    if (!phone) return '';
+    var norm = phone.slice(-9); // compare by last 9 digits (handles leading 0 / 972)
+    var data = sheet.getDataRange().getValues();
+    var hdr = data[0].map(function (h) { return String(h).trim(); });
+    var idCol = hdr.indexOf('id'); if (idCol === -1) idCol = 0;
+    var phCol = hdr.indexOf('phone'); if (phCol === -1) phCol = 2;
+    var loCol = hdr.indexOf('lastOrder'); if (loCol === -1) loCol = 7;
+    for (var r = 1; r < data.length; r++) {
+      if (String(data[r][phCol] || '').replace(/\D/g, '').slice(-9) === norm) {
+        sheet.getRange(r + 1, loCol + 1).setValue(now); // touch lastOrder
+        return String(data[r][idCol] || '');
+      }
+    }
+    var cid = 'c-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+    // Customers cols: id,name,phone,address,allergies,notes,createdAt,lastOrder
+    sheet.appendRow([cid, c.name || '', c.phone || '', c.address || '', '', c.notes || '', now, now]);
+    return cid;
+  } catch (err) { return ''; }
+}
+
+// Attach a receipt PDF link to an order (called by the bot after issuing a receipt).
+function saveReceipt(payload) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName('Orders');
+    if (!sheet) return json({ ok: false, error: 'no_orders_sheet' });
+    var data = sheet.getDataRange().getValues();
+    var hdr = data[0].map(function (h) { return String(h).trim(); });
+    var idCol = hdr.indexOf('id'); if (idCol === -1) idCol = 0;
+    var rCol = hdr.indexOf('receiptUrl');
+    if (rCol === -1) { sheet.getRange(1, 17).setValue('receiptUrl'); rCol = 16; }
+    for (var r = 1; r < data.length; r++) {
+      if (String(data[r][idCol]) === String(payload.orderId)) {
+        sheet.getRange(r + 1, rCol + 1).setValue(payload.receiptUrl || '');
+        return json({ ok: true });
+      }
+    }
+    return json({ ok: false, error: 'order_not_found' });
+  } catch (err) { return json({ ok: false, error: 'exception', message: String(err) }); }
 }
 
 // "name:qty|name:qty"  (legacy "name|name" → each flavor inherits productQty)

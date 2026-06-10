@@ -277,8 +277,10 @@ function saveCache(){ localStorage.setItem(CACHE_KEY, JSON.stringify(db)); }
 
 function rowToCust(r){ return {id:r[0]||'', name:r[1]||'', phone:r[2]||'', address:r[3]||'', allergies:r[4]||'', notes:r[5]||'', createdAt:r[6]||'', lastOrder:r[7]||''}; }
 function custToRow(c){ return [c.id, c.name, c.phone, c.address, c.allergies, c.notes, c.createdAt, c.lastOrder]; }
-function rowToOrder(r){ return {id:r[0]||'', customerId:r[1]||'', name:r[2]||'', phone:r[3]||'', address:r[4]||'', fulfillment:r[5]||'pickup', date:r[6]||'', items:r[7]||'', notes:r[8]||'', status:r[9]||'new', createdAt:r[10]||'', updatedAt:r[11]||'', paid:(r[12]==='1'||r[12]===1||r[12]===true||String(r[12]).toLowerCase()==='true'), paymentMethod:r[13]||''}; }
+function rowToOrder(r){ return {id:r[0]||'', customerId:r[1]||'', name:r[2]||'', phone:r[3]||'', address:r[4]||'', fulfillment:r[5]||'pickup', date:r[6]||'', items:r[7]||'', notes:r[8]||'', status:r[9]||'new', createdAt:r[10]||'', updatedAt:r[11]||'', paid:(r[12]==='1'||r[12]===1||r[12]===true||String(r[12]).toLowerCase()==='true'), paymentMethod:r[13]||'', total:r[14]||'', receiptUrl:r[16]||''}; }
 function orderToRow(o){ return [o.id, o.customerId, o.name, o.phone, o.address, o.fulfillment, o.date, o.items, o.notes, o.status, o.createdAt, o.updatedAt, o.paid?'1':'0', o.paymentMethod||'']; }
+// Israeli phone -> wa.me format (972XXXXXXXXX): handles leading 0 and 9-digit (no-0) forms.
+function waPhone(p){ let d=String(p||'').replace(/\D/g,''); if(d.startsWith('972'))return d; if(d.startsWith('0'))return '972'+d.slice(1); if(d.length===9)return '972'+d; return d; }
 const PAYMENT_METHODS = ['מזומן','ביט','העברה בנקאית','אשראי','צ׳ק','אחר'];
 function rowToExp(r){ return {id:r[0]||'', date:r[1]||'', category:r[2]||'', description:r[3]||'', amount:parseFloat(r[4])||0, vendor:r[5]||''}; }
 function expToRow(e){ return [e.id, e.date, e.category, e.description, String(e.amount), e.vendor]; }
@@ -521,8 +523,10 @@ function showOrder(id) {
         <select onchange="setOrderPaymentMethod('${o.id}', this.value)" style="padding:6px 10px;border:1px solid var(--bd);border-radius:6px;background:#fff;font-size:13px">${methodOpts}</select>
       </div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <a class="btn btn-s" href="https://wa.me/${o.phone.replace(/\D/g,'')}" target="_blank">📱 WhatsApp</a>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      ${o.receiptUrl ? `<a class="btn btn-p" href="${o.receiptUrl}" target="_blank">📄 קבלה</a>
+      <a class="btn btn-s" href="https://wa.me/${waPhone(o.phone)}?text=${encodeURIComponent('שלום! מצורפת הקבלה על ההזמנה שלך מ-Carmel De-vries 🍪\n'+o.receiptUrl)}" target="_blank">📤 שלח קבלה ללקוח</a>` : ''}
+      <a class="btn btn-s" href="https://wa.me/${waPhone(o.phone)}" target="_blank">📱 WhatsApp</a>
       <button class="btn btn-d" onclick="deleteOrder('${o.id}')">🗑 מחק</button>
     </div>`;
   document.getElementById('orderModal').classList.add('show');
