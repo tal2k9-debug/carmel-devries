@@ -208,13 +208,28 @@ function appendOrder(ss, order, now) {
   var itemsText = (order.items || []).map(function (it) {
     return it.name + (it.flavor ? ' (' + it.flavor + ')' : '') + ' × ' + it.qty;
   }).join(', ');
+  // Exact total + full item detail, captured now while we still have accurate prices.
+  // The receipt bot reads these instead of guessing from the text (names there can be ambiguous).
+  var total = 0;
+  (order.items || []).forEach(function (it) {
+    total += (parseFloat(it.price) || 0) * (parseInt(it.qty, 10) || 0);
+  });
+  var itemsJSON = JSON.stringify(order.items || []);
+
+  // Make sure the two new columns have headers (one-time, auto).
+  var lastCol = sheet.getLastColumn();
+  var hdr = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+  if (hdr.indexOf('total') === -1) sheet.getRange(1, 15).setValue('total');
+  if (hdr.indexOf('itemsJSON') === -1) sheet.getRange(1, 16).setValue('itemsJSON');
+
   var id = 'o-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
-  // Columns: id,customerId,name,phone,address,fulfillment,date,items,notes,status,createdAt,updatedAt,paid,paymentMethod
+  // Columns: id,customerId,name,phone,address,fulfillment,date,items,notes,status,createdAt,updatedAt,paid,paymentMethod,total,itemsJSON
   sheet.appendRow([
     id, '', c.name || '', c.phone || '', c.address || '',
     order.fulfillment || 'pickup', order.date || '', itemsText,
     (c.notes || '') + ' [הזמנת אתר]', 'new', now, now,
-    '0', '' // paid=false, paymentMethod=blank — set later by Keren in dashboard
+    '0', '', // paid=false, paymentMethod=blank — set later by Keren in dashboard
+    total, itemsJSON
   ]);
 }
 
