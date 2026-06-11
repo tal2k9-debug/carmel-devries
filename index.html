@@ -156,7 +156,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 </div>
 <div class="fr">
 <div class="ff"><label for="cust-fulfill">סוג קבלה</label><select id="cust-fulfill"><option value="delivery">🚚 משלוח באופקים</option><option value="pickup">🏠 איסוף עצמי - אורים 20</option></select></div>
-<div class="ff"><label for="cust-date">תאריך מבוקש</label><input id="cust-date" type="date"></div>
+<div class="ff"><label for="cust-date">תאריך מבוקש</label><input id="cust-date" type="date"><span id="date-msg" style="display:none;color:#c0392b;font-size:13px;margin-top:6px"></span></div>
 </div>
 <div class="fr fl" id="addr-row"><div class="ff"><label for="cust-address">כתובת למשלוח (באופקים)</label><input id="cust-address" type="text" placeholder="רחוב, מספר" autocomplete="street-address"></div></div>
 <div class="fr fl"><div class="ff"><label for="cust-notes">הערות (אופציונלי)</label><textarea id="cust-notes" placeholder="טעמים מועדפים, אריזה מיוחדת וכו'"></textarea></div></div>
@@ -257,7 +257,8 @@ function totalQty(id){if(!cart[id])return 0;return Object.values(cart[id]).reduc
 function ful(){return $('#cust-fulfill').value;}
 function calcD(s){if(ful()==='pickup')return 0;if(s<=0||s>=FREE)return 0;return FEE;}
 function setupDate(){const d=$('#cust-date');const t=new Date();t.setDate(t.getDate()+2);d.min=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');d.addEventListener('change',validateDate);}
-function validateDate(){const d=$('#cust-date');if(!d.value)return;const p=String(d.value).split('-');if(p.length!==3)return;const sel=new Date(+p[0],+p[1]-1,+p[2]);const now=new Date();now.setHours(0,0,0,0);const diff=Math.round((sel-now)/86400000);const day=sel.getDay();let need=2;if(day===5)need=3;if(diff<need){alert('שימי לב: '+(day===5?'ליום שישי':'לתאריך זה')+' יש להזמין '+need+' ימים מראש לפחות.');d.value='';}}
+function dateLeadOK(v){if(!v)return true;const p=String(v).split('-');if(p.length!==3)return true;const sel=new Date(+p[0],+p[1]-1,+p[2]);const now=new Date();now.setHours(0,0,0,0);const diff=Math.round((sel-now)/86400000);let need=2;if(sel.getDay()===5)need=3;return diff>=need;}
+function validateDate(){const d=$('#cust-date'),msg=document.getElementById('date-msg');if(msg)msg.style.display='none';d.classList.remove('inv');if(!d.value)return;const p=String(d.value).split('-');if(p.length!==3)return;const sel=new Date(+p[0],+p[1]-1,+p[2]);const day=sel.getDay();let need=2;if(day===5)need=3;if(!dateLeadOK(d.value)){if(msg){msg.textContent=(day===5?'ליום שישי':'לתאריך זה')+' צריך להזמין '+need+' ימים מראש — אפשר לבחור תאריך מאוחר יותר.';msg.style.display='block';}d.classList.add('inv');}}
 function updAddr(){$('#addr-row').style.display=ful()==='delivery'?'':'none';}
 
 function buildQtyRow(id,flav,placeholder){
@@ -424,6 +425,12 @@ function send(){
   if(_phone.replace(/\D/g,'').length<9){
     const el=$('#cust-phone');el.classList.add('inv');el.focus();
     alert('נא להזין מספר טלפון תקין (לפחות 9 ספרות)');
+    return;
+  }
+  if(!dateLeadOK(_date)){
+    const el=$('#cust-date');el.classList.add('inv');el.focus();el.scrollIntoView({block:'center',behavior:'smooth'});
+    const sd=_date.split('-');const dow=new Date(+sd[0],+sd[1]-1,+sd[2]).getDay();
+    alert('התאריך שנבחר מוקדם מדי — צריך להזמין '+(dow===5?3:2)+' ימים מראש לפחות. בחרי תאריך מאוחר יותר.');
     return;
   }
   if(!WEBAPP_URL){
