@@ -32,11 +32,12 @@ var DRIVE_FOLDER_NAME = 'Carmel — תמונות אתר';
 // Max bytes per uploaded image (decoded). 10 MB ceiling.
 var MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
-// --- התראת וואטסאפ לבעלת העסק על כל הזמנה חדשה (דרך super-bot שלנו, חינם) ---
-// הרובד carmel-hook ב-super-bot מקבל POST ושולח וואטסאפ לאחות. הכתובת מוצפנת (nginx).
-var CARMEL_HOOK_URL = 'https://chelek.online/carmel-order';
-// הסוד נשמר ב-Script Properties (Project Settings → Script Properties → CARMEL_HOOK_SECRET).
-// כך הוא לא נמצא בקוד הגלוי. עד שמגדירים אותו — אין התראה (ההזמנה עדיין נשמרת).
+// --- אבטחה ---
+// הגיליון פרטי (לא משותף לציבור). כל קריאה ציבורית עוברת דרך הסקריפט הזה,
+// שרץ בהרשאות הבעלים: מוצרים מפורסמים בלבד פתוחים לאתר; הזמנות/קבלות דורשות
+// סוד משותף (Script Properties → CARMEL_HOOK_SECRET) שמחזיק רק הבוט בשרת.
+// העלאת תמונות דורשת טוקן גוגל של אחת המנהלות (נבדק מול tokeninfo).
+var ALLOWED_UPLOADERS = ['tal2k9@gmail.com', 'kerencarmel8@gmail.com'];
 
 function doPost(e) {
   var payload;
@@ -51,6 +52,26 @@ function doPost(e) {
   if (payload && payload.action === 'save_receipt') {
     return saveReceipt(payload);
   }
+
+  // --- הגנות בסיסיות על קליטת הזמנה (ספאם/זבל) ---
+  // Honeypot: שדה נסתר שאדם אמיתי לא רואה ולא ממלא. בוט שמילא אותו מקבל
+  // "הצלחה" מזויפת — בלי לכתוב כלום לגיליון ובלי לרמוז שנחסם.
+  if (payload && payload.hp) return json({ ok: true });
+  var c0 = (payload && payload.customer) || {};
+  var its0 = (payload && payload.items) || [];
+  if (!String(c0.name || '').trim() || String(c0.phone || '').replace(/\D/g, '').length < 9) {
+    return json({ ok: false, error: 'bad_order' });
+  }
+  if (!its0.length || its0.length > 40) return json({ ok: false, error: 'bad_order' });
+  for (var v0 = 0; v0 < its0.length; v0++) {
+    var q0 = parseInt(its0[v0].qty, 10) || 0;
+    if (q0 < 0 || q0 > 100) return json({ ok: false, error: 'bad_order' });
+  }
+  // קיצוץ טקסטים חופשיים כדי שאי אפשר להציף את הגיליון בתוכן ענק.
+  ['name', 'phone', 'address', 'notes'].forEach(function (f) {
+    if (c0[f]) c0[f] = String(c0[f]).slice(0, 300);
+  });
+  if (payload.date) payload.date = String(payload.date).slice(0, 20);
 
   var lock = LockService.getScriptLock();
   try {
@@ -123,8 +144,8 @@ function doPost(e) {
       if (ci.updatedAt !== undefined) prod.getRange(r + 1, ci.updatedAt + 1).setValue(now);
     });
 
-    // Notify Keren on WhatsApp — must never block the order if it fails.
-    notifyOwner(order);
+    // (וואטסאפ לקרן נשלח ע"י carmel-bot שסורק את הגיליון כל 2 דקות —
+    //  ה-hook הישן הוסר כדי לא להתריע פעמיים ולא לעכב את התשובה ללקוח.)
 
     return json({ ok: true });
   } catch (err) {
@@ -134,15 +155,91 @@ function doPost(e) {
   }
 }
 
-// GET is only used to confirm the deployment is reachable.
-function doGet() {
+// GET serves read-only data. The spreadsheet itself is PRIVATE — this script
+// (running as the owner) is the only public window into it, and it exposes:
+//   ?action=products             → published products only (for the public site)
+//   ?action=products&secret=...  → all products incl. unpublished (for the bot)
+//   ?action=orders&secret=...    → recent orders (bot only; replaces public gviz)
+//   ?action=set_secret&value=... → one-time bootstrap of the shared secret
+function doGet(e) {
+  var p = (e && e.parameter) || {};
+  if (p.action === 'products') return getProducts_(p);
+  if (p.action === 'orders') return getOrders_(p);
+  if (p.action === 'set_secret') return setSecret_(p);
   return json({ ok: true, service: 'carmel-order-intake' });
+}
+
+function botSecretOk_(s) {
+  var sec = PropertiesService.getScriptProperties().getProperty('CARMEL_HOOK_SECRET');
+  return !!(sec && s && s === sec);
+}
+
+// One-time bootstrap: stores the shared secret so it never has to be typed into
+// the Apps Script UI by hand. Once set, the value can only be confirmed, never
+// changed or read back through this endpoint.
+function setSecret_(p) {
+  var props = PropertiesService.getScriptProperties();
+  var cur = props.getProperty('CARMEL_HOOK_SECRET');
+  var v = String(p.value || '');
+  if (!v || v.length < 10) return json({ ok: false, error: 'bad_value' });
+  if (cur) return json({ ok: cur === v, already: true });
+  props.setProperty('CARMEL_HOOK_SECRET', v);
+  return json({ ok: true, set: true });
+}
+
+// getDisplayValues keeps cells exactly as shown in the sheet (dates stay
+// "2026-06-15", not JS Date objects) — matching what gviz CSV used to return.
+function sheetObjects_(sheet, fixHeaders) {
+  var data = sheet.getDataRange().getDisplayValues();
+  if (data.length < 1) return [];
+  var hdr = data[0].map(function (h) { return String(h).trim(); });
+  if (fixHeaders) {
+    // Historical Orders sheets have blank headers on M/N — name them by position.
+    if (!hdr[12]) hdr[12] = 'paid';
+    if (!hdr[13]) hdr[13] = 'paymentMethod';
+  }
+  var out = [];
+  for (var r = 1; r < data.length; r++) {
+    var o = {};
+    for (var i = 0; i < hdr.length; i++) { if (hdr[i]) o[hdr[i]] = data[r][i]; }
+    out.push(o);
+  }
+  return out;
+}
+
+function getProducts_(p) {
+  var all = botSecretOk_(p.secret);
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Products');
+  if (!sh) return json({ ok: false, error: 'no_products_sheet' });
+  var rows = sheetObjects_(sh, false);
+  if (!all) {
+    rows = rows.filter(function (o) {
+      var v = o.published;
+      return v === 1 || v === '1' || v === true || String(v).toLowerCase() === 'true';
+    });
+  }
+  return json({ ok: true, products: rows });
+}
+
+function getOrders_(p) {
+  if (!botSecretOk_(p.secret)) return json({ ok: false, error: 'unauthorized' });
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Orders');
+  if (!sh) return json({ ok: false, error: 'no_orders_sheet' });
+  var rows = sheetObjects_(sh, true);
+  rows.sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+  var limit = Math.max(1, Math.min(500, parseInt(p.limit, 10) || 200));
+  return json({ ok: true, orders: rows.slice(0, limit) });
 }
 
 // Upload an image to a dedicated Drive folder and return a public CDN URL.
 // Expects payload.data to be a "data:image/...;base64,..." string.
 function handleImageUpload(payload) {
   try {
+    // Only the dashboard (signed-in admin) may upload — otherwise anyone could
+    // fill the owner's Drive with junk through this public endpoint.
+    if (!uploaderOk_(payload.token) && !botSecretOk_(payload.secret)) {
+      return json({ ok:false, error:'unauthorized' });
+    }
     var match = String(payload.data || '').match(/^data:([^;]+);base64,(.+)$/);
     if (!match) return json({ ok:false, error:'bad_data_url' });
     var mime = match[1];
@@ -173,39 +270,18 @@ function getOrCreateFolder(name) {
   return DriveApp.createFolder(name);
 }
 
-// Sends a WhatsApp message to the business owner via CallMeBot.
-// Wrapped so any failure (no apikey, network) never breaks order intake.
-function notifyOwner(order) {
+// Validates a Google OAuth access token and checks the email is an allowed admin.
+function uploaderOk_(token) {
+  if (!token) return false;
   try {
-    var secret = PropertiesService.getScriptProperties().getProperty('CARMEL_HOOK_SECRET');
-    if (!secret) return; // לא מוגדר עדיין — ההזמנה נשמרת בכל מקרה
-    var c = order.customer || {};
-    var items = (order.items || []).map(function (it) {
-      return '• ' + it.name + (it.flavor ? ' (' + it.flavor + ')' : '') + ' × ' + it.qty;
-    }).join('\n');
-    var sub = 0;
-    (order.items || []).forEach(function (it) {
-      sub += (parseFloat(it.price) || 0) * (parseInt(it.qty, 10) || 0);
-    });
-    var ful = order.fulfillment === 'pickup' ? 'איסוף עצמי — אורים 20, אופקים' : 'משלוח באופקים';
-    var pay = order.paymentLabel || order.payment || '';
-    var msg = '🍪 *הזמנה חדשה — Carmel*\n\n' + items + '\n';
-    msg += '\nסכום פריטים: ' + Math.round(sub) + ' ₪\n';
-    msg += '\n👤 *פרטי הלקוח:*\n';
-    msg += 'שם: ' + (c.name || '—') + '\n';
-    msg += 'טלפון: ' + (c.phone || '—') + '\n';
-    msg += 'קבלה: ' + ful + '\n';
-    if (order.date) msg += 'תאריך מבוקש: ' + order.date + '\n';
-    if (c.address) msg += 'כתובת: ' + c.address + ', אופקים\n';
-    if (pay) msg += 'אמצעי תשלום: ' + pay + '\n';
-    if (c.notes) msg += 'הערות: ' + c.notes + '\n';
-    UrlFetchApp.fetch(CARMEL_HOOK_URL, {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify({ secret: secret, message: msg }),
-      muteHttpExceptions: true
-    });
-  } catch (err) { /* swallow — never block the order */ }
+    var r = UrlFetchApp.fetch(
+      'https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=' + encodeURIComponent(token),
+      { muteHttpExceptions: true }
+    );
+    if (r.getResponseCode() !== 200) return false;
+    var info = JSON.parse(r.getContentText());
+    return ALLOWED_UPLOADERS.indexOf(String(info.email || '').toLowerCase()) !== -1;
+  } catch (err) { return false; }
 }
 
 function appendOrder(ss, order, now) {
@@ -279,8 +355,7 @@ function upsertCustomer(ss, order, now) {
 function saveReceipt(payload) {
   try {
     // Only the bot (which holds the shared secret) may attach receipts.
-    var secret = PropertiesService.getScriptProperties().getProperty('CARMEL_HOOK_SECRET');
-    if (secret && payload.secret !== secret) return json({ ok: false, error: 'unauthorized' });
+    if (!botSecretOk_(payload.secret)) return json({ ok: false, error: 'unauthorized' });
     var ss = SpreadsheetApp.openById(SHEET_ID);
     var sheet = ss.getSheetByName('Orders');
     if (!sheet) return json({ ok: false, error: 'no_orders_sheet' });

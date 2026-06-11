@@ -1150,7 +1150,8 @@ async function handleImageUpload(file) {
         const resp = await fetch(WEBAPP_URL, {
           method: 'POST',
           headers: {'Content-Type': 'text/plain;charset=utf-8'},
-          body: JSON.stringify({ action:'image_upload', data: big, filename: file.name ? file.name.replace(/\.[^.]+$/, '') : ('carmel-' + Date.now()) })
+          // token: the upload endpoint verifies the caller is a signed-in admin
+          body: JSON.stringify({ action:'image_upload', token: accessToken, data: big, filename: file.name ? file.name.replace(/\.[^.]+$/, '') : ('carmel-' + Date.now()) })
         });
         const data = await resp.json();
         if (data && data.ok && data.url) {

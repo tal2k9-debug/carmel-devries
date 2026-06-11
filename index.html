@@ -152,6 +152,8 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="oc">
 <div class="fr">
 <div class="ff"><label for="cust-name">שם מלא</label><input id="cust-name" type="text" placeholder="הכניסו שם" autocomplete="name"></div>
+<!-- honeypot: בני אדם לא רואים את השדה; בוט שממלא אותו נחסם בשרת בשקט -->
+<input id="cust-website" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none">
 <div class="ff"><label for="cust-phone">טלפון</label><input id="cust-phone" type="tel" placeholder="050-0000000" autocomplete="tel"></div>
 </div>
 <div class="fr">
@@ -390,7 +392,8 @@ function buildOrderObj(){
     payment:payMethod,
     paymentLabel:PAY_LABELS[payMethod],
     date:$('#cust-date').value,
-    items:items
+    items:items,
+    hp:($('#cust-website')||{value:''}).value
   };
 }
 
@@ -521,50 +524,59 @@ function computeTotal(){let sub=0;products.forEach(p=>{if(cart[p.id])Object.valu
 $('#cust-fulfill').onchange=()=>{updAddr();upd();};
 setupDate();updAddr();render();upd();
 
-// Try to load live product data from the admin Google Sheet (Products tab).
-// Sheet must be shared "Anyone with the link can view" for this to work.
-// On any failure (sheet private, network, parse) we silently keep PRODUCTS_FALLBACK.
-function loadProductsFromSheet(){
-  // Cache-buster: unique URL each load so Google's CDN never serves stale data.
-  // headers=1 makes gviz recognise row 1 as column labels; without it, our get('published') etc lookups all return empty.
+// Load live product data through the Apps Script web app — the spreadsheet
+// itself is PRIVATE; the script (running as the owner) serves published
+// products only. Falls back to the legacy public-gviz read (works only while
+// the sheet is still shared), then to PRODUCTS_FALLBACK.
+function shapeProduct(get){
+  return {
+    id:String(get('id')||''),
+    name:String(get('name')||''),
+    desc:String(get('desc')||''),
+    price:Number(get('price'))||0,
+    unit:String(get('unit')||''),
+    qty:Number(get('qty'))||0,
+    kosher:String(get('kosher')||''),
+    img:String(get('img')||''),
+    published:(()=>{const v=get('published');return v===1||v==='1'||v===true||String(v).toLowerCase()==='true';})(),
+    sortOrder:Number(get('sortOrder'))||100,
+    minOrder:Number(get('minOrder'))||0,
+    minNote:String(get('minNote')||''),
+    flavors:(()=>{
+      const f=String(get('flavors')||'').trim();
+      if(!f)return undefined;
+      const productQty=Number(get('qty'))||0;
+      return f.split('|').map(x=>x.trim()).filter(Boolean).map(piece=>{
+        const ci=piece.lastIndexOf(':');
+        if(ci>0&&/^\d+$/.test(piece.slice(ci+1).trim())){
+          return {name:piece.slice(0,ci).trim(),qty:parseInt(piece.slice(ci+1).trim())||0};
+        }
+        return {name:piece,qty:productQty};
+      });
+    })()
+  };
+}
+async function fetchProductsWebapp(){
+  const r=await fetch(WEBAPP_URL+'?action=products&t='+Date.now(),{cache:'no-store'});
+  const data=await r.json();
+  if(!data.ok||!Array.isArray(data.products))throw new Error('webapp products unavailable');
+  return data.products.map(p=>shapeProduct(name=>p[name]!==undefined?p[name]:''));
+}
+async function fetchProductsGviz(){
   const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json&sheet=Products&headers=1&t='+Date.now();
-  fetch(url,{cache:'no-store'}).then(r=>r.text()).then(text=>{
-    const m=text.match(/google\.visualization\.Query\.setResponse\((.*)\);?\s*$/s);
-    if(!m)throw new Error('gviz parse failed');
-    const data=JSON.parse(m[1]);
-    if(!data.table||!data.table.rows)throw new Error('no rows');
-    const cols=data.table.cols.map(c=>(c.label||c.id||'').toLowerCase());
-    const idx=name=>cols.indexOf(name);
-    const allRows=data.table.rows.map(r=>{
-      const c=r.c||[];
-      const get=name=>{const i=idx(name);return i<0||!c[i]?'':(c[i].v!==undefined?c[i].v:'');};
-      return {
-        id:String(get('id')||''),
-        name:String(get('name')||''),
-        desc:String(get('desc')||''),
-        price:Number(get('price'))||0,
-        unit:String(get('unit')||''),
-        qty:Number(get('qty'))||0,
-        kosher:String(get('kosher')||''),
-        img:String(get('img')||''),
-        published:(()=>{const v=get('published');return v===1||v==='1'||v===true||String(v).toLowerCase()==='true';})(),
-        sortOrder:Number(get('sortorder'))||100,
-        minOrder:Number(get('minorder'))||0,
-        minNote:String(get('minnote')||''),
-        flavors:(()=>{
-          const f=String(get('flavors')||'').trim();
-          if(!f)return undefined;
-          const productQty=Number(get('qty'))||0;
-          return f.split('|').map(x=>x.trim()).filter(Boolean).map(piece=>{
-            const ci=piece.lastIndexOf(':');
-            if(ci>0&&/^\d+$/.test(piece.slice(ci+1).trim())){
-              return {name:piece.slice(0,ci).trim(),qty:parseInt(piece.slice(ci+1).trim())||0};
-            }
-            return {name:piece,qty:productQty};
-          });
-        })()
-      };
-    });
+  const text=await fetch(url,{cache:'no-store'}).then(r=>r.text());
+  const m=text.match(/google\.visualization\.Query\.setResponse\((.*)\);?\s*$/s);
+  if(!m)throw new Error('gviz parse failed');
+  const data=JSON.parse(m[1]);
+  if(!data.table||!data.table.rows)throw new Error('no rows');
+  const cols=data.table.cols.map(c=>(c.label||c.id||'').toLowerCase());
+  return data.table.rows.map(r=>{
+    const c=r.c||[];
+    return shapeProduct(name=>{const i=cols.indexOf(name.toLowerCase());return i<0||!c[i]?'':(c[i].v!==undefined?c[i].v:'');});
+  });
+}
+function loadProductsFromSheet(){
+  fetchProductsWebapp().catch(()=>fetchProductsGviz()).then(allRows=>{
     // If we got rows back at all, sheet data is authoritative — even an empty
     // visible set means "everything is unpublished" and we should show nothing.
     if(allRows.length){
