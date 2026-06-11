@@ -141,7 +141,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <section class="notice-section"><div class="cont">
 <div class="notice">
 <div class="nh">שימו ❤️</div>
-<div class="ng"><span class="ic">🍪</span><span><b>זמני הזמנה:</b> לימים א-ה יש להזמין לפחות יומיים מראש.<br>לימי שישי יש להזמין לפחות 3 ימים מראש.<br>הזמנות גדולות לפחות 4 ימים מראש.</span></div>
+<div class="ng"><span class="ic">🍪</span><span><b>זמני הזמנה:</b> לימים א-ה יש להזמין לפחות יומיים מראש.<br>לימי שישי יש להזמין לפחות 3 ימים מראש.</span></div>
 <div class="ng"><span class="ic">🍪</span><span><b>איסוף ומשלוח:</b> איסוף עצמי מאופקים רחוב אורים 20, בתיאום מראש.<br>אופציה למשלוח באופקים בעלות סמלית של 10₪ או משלוח חינם בהזמנה מעל 150₪.</span></div>
 <div class="ng"><span class="ic">🍪</span><span><b>אלרגנים וכשרות:</b> המאפים מכילים אלרגנים שונים ועלולים שלא להתאים לבעלי רגישויות.<br>המאפים אינם נושאים תעודת כשרות.</span></div>
 <div class="nf">לכל שאלה ניתן לפנות / לסמס <a href="https://wa.me/972524809393" target="_blank" rel="noopener">052-4809393</a></div>
@@ -257,7 +257,7 @@ function totalQty(id){if(!cart[id])return 0;return Object.values(cart[id]).reduc
 function ful(){return $('#cust-fulfill').value;}
 function calcD(s){if(ful()==='pickup')return 0;if(s<=0||s>=FREE)return 0;return FEE;}
 function setupDate(){const d=$('#cust-date');const t=new Date();t.setDate(t.getDate()+2);d.min=t.toISOString().split('T')[0];d.addEventListener('change',validateDate);}
-function validateDate(){const d=$('#cust-date');if(!d.value)return;const sel=new Date(d.value);const now=new Date();now.setHours(0,0,0,0);const diff=Math.ceil((sel-now)/(86400000));const day=sel.getDay();let need=2;if(day===5)need=3;if(diff<need){alert('שימי לב: '+(day===5?'ליום שישי':'לתאריך זה')+' יש להזמין '+need+' ימים מראש לפחות. להזמנה גדולה — 4 ימים מראש.');d.value='';}}
+function validateDate(){const d=$('#cust-date');if(!d.value)return;const p=String(d.value).split('-');if(p.length!==3)return;const sel=new Date(+p[0],+p[1]-1,+p[2]);const now=new Date();now.setHours(0,0,0,0);const diff=Math.round((sel-now)/86400000);const day=sel.getDay();let need=2;if(day===5)need=3;if(diff<need){alert('שימי לב: '+(day===5?'ליום שישי':'לתאריך זה')+' יש להזמין '+need+' ימים מראש לפחות.');d.value='';}}
 function updAddr(){$('#addr-row').style.display=ful()==='delivery'?'':'none';}
 
 function buildQtyRow(id,flav,placeholder){
