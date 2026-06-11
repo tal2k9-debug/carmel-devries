@@ -152,8 +152,10 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="oc">
 <div class="fr">
 <div class="ff"><label for="cust-name">שם מלא</label><input id="cust-name" type="text" placeholder="הכניסו שם" autocomplete="name"></div>
-<!-- honeypot: בני אדם לא רואים את השדה; בוט שממלא אותו נחסם בשרת בשקט -->
-<input id="cust-website" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none">
+<!-- honeypot: בני אדם לא רואים את השדה; בוט שממלא אותו נחסם בשרת בשקט.
+     מוסתר בשיטת clip (לא בהיסט שמאלה!) — היסט left שלילי בדף RTL מרחיב את
+     אזור הגלילה שמאלה ויוצר פס גלילה אופקי על כל העמוד. -->
+<input id="cust-website" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;opacity:0;pointer-events:none">
 <div class="ff"><label for="cust-phone">טלפון</label><input id="cust-phone" type="tel" placeholder="050-0000000" autocomplete="tel"></div>
 </div>
 <div class="fr">
