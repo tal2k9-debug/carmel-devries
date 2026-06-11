@@ -256,7 +256,7 @@ function totalQty(id){if(!cart[id])return 0;return Object.values(cart[id]).reduc
 
 function ful(){return $('#cust-fulfill').value;}
 function calcD(s){if(ful()==='pickup')return 0;if(s<=0||s>=FREE)return 0;return FEE;}
-function setupDate(){const d=$('#cust-date');const t=new Date();t.setDate(t.getDate()+2);d.min=t.toISOString().split('T')[0];d.addEventListener('change',validateDate);}
+function setupDate(){const d=$('#cust-date');const t=new Date();t.setDate(t.getDate()+2);d.min=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');d.addEventListener('change',validateDate);}
 function validateDate(){const d=$('#cust-date');if(!d.value)return;const p=String(d.value).split('-');if(p.length!==3)return;const sel=new Date(+p[0],+p[1]-1,+p[2]);const now=new Date();now.setHours(0,0,0,0);const diff=Math.round((sel-now)/86400000);const day=sel.getDay();let need=2;if(day===5)need=3;if(diff<need){alert('שימי לב: '+(day===5?'ליום שישי':'לתאריך זה')+' יש להזמין '+need+' ימים מראש לפחות.');d.value='';}}
 function updAddr(){$('#addr-row').style.display=ful()==='delivery'?'':'none';}
 
