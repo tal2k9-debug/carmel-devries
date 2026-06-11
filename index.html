@@ -207,6 +207,12 @@ const PRODUCTS_FALLBACK=[
 {id:'yoyo',name:'עוגיות יויו',desc:'עוגיות טבולות בסירופ מתוק עטופות בקוקוס.',price:4,unit:'ליחידה',minOrder:30,minNote:'* מינימום להזמנה כ-30 יח׳',img:'images/yoyo.jpg',kosher:'פרווה'}
 ];
 let products = PRODUCTS_FALLBACK.slice();
+// הקטלוג החי מהביקור הקודם נשמר בדפדפן — מוצג מיד (סדר ומלאי נכונים) במקום
+// רשימת החירום, כדי שהעמוד לא "יקפוץ" כשהנתונים הטריים מגיעים שנייה אחר כך.
+try{
+  const cached=JSON.parse(localStorage.getItem('carmel-products-v1')||'null');
+  if(Array.isArray(cached)&&cached.length)products=cached;
+}catch(e){}
 const SHEET_ID='1NOdPG_jdhVfD_Du24E6i3fWTOjPSqfoarJ1tkq6OIRk';
 // Apps Script Web App URL for live stock decrement on order.
 // Leave empty → site works WhatsApp-only (no auto-decrement).
@@ -586,6 +592,7 @@ function loadProductsFromSheet(){
                        .sort((a,b)=>a.sortOrder-b.sortOrder);
       products.length=0;
       live.forEach(p=>products.push(p));
+      try{localStorage.setItem('carmel-products-v1',JSON.stringify(live));}catch(e){}
       Object.keys(cart).forEach(id=>{if(!products.find(p=>p.id===id))delete cart[id];});
       render();upd();
       console.log('[Carmel] Sheet has',allRows.length,'rows, showing',live.length,'published in-stock');
