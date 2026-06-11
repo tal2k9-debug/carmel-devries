@@ -603,11 +603,15 @@ async function saveCust() {
   if (editingCustId) {
     const idx=db.customers.findIndex(x=>x.id===editingCustId);
     saveCache(); closeModal('custModal'); renderCustomers();
-    if (accessToken) { setSync('syncing','שומר...'); try{ await updateRow('Customers', idx+2, custToRow(c)); setSync('ok','מסונכרן'); toast('עודכן','ok'); }catch(e){setSync('err','שגיאה');} }
+    const ok = await ensureToken();
+    if (ok && accessToken) { setSync('syncing','שומר...'); try{ await updateRow('Customers', idx+2, custToRow(c)); setSync('ok','מסונכרן'); toast('עודכן','ok'); }catch(e){setSync('err','שגיאה');} }
+    else { setSync('err','צריך להתחבר מחדש'); alert('ההתחברות לגוגל פגה — השינוי לא נשמר לגיליון. רענני (F5) והתחברי מחדש.'); }
   } else {
     db.customers.push(c);
     saveCache(); closeModal('custModal'); renderCustomers();
-    if (accessToken) { setSync('syncing','שומר...'); try{ await appendRow('Customers', custToRow(c)); setSync('ok','מסונכרן'); toast('נשמר','ok'); }catch(e){setSync('err','שגיאה');} }
+    const ok = await ensureToken();
+    if (ok && accessToken) { setSync('syncing','שומר...'); try{ await appendRow('Customers', custToRow(c)); setSync('ok','מסונכרן'); toast('נשמר','ok'); }catch(e){setSync('err','שגיאה');} }
+    else { setSync('err','צריך להתחבר מחדש'); alert('ההתחברות לגוגל פגה — הלקוח לא נשמר לגיליון. רענני (F5) והתחברי מחדש.'); }
   }
 }
 
@@ -644,7 +648,9 @@ async function saveNewOrder() {
   const o = {id:uid('o'),customerId:c.id,name,phone,address:document.getElementById('oAddress').value.trim(),fulfillment:ful,date,items,notes:document.getElementById('oNotes').value.trim(),status:'new',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
   db.orders.push(o);
   saveCache(); clearOrderForm(); renderAll(); switchTab('orders');
-  if (accessToken) {
+  let saved = false;
+  const ok = await ensureToken();
+  if (ok && accessToken) {
     setSync('syncing','שומר...');
     try {
       if (isNewCust) await appendRow('Customers', custToRow(c));
@@ -653,17 +659,22 @@ async function saveNewOrder() {
         await updateRow('Customers', ci+2, custToRow(c));
       }
       await appendRow('Orders', orderToRow(o));
-      setSync('ok','מסונכרן'); toast('הזמנה נשמרה ✓','ok');
-    } catch(e){ console.error(e); setSync('err','שגיאת שמירה'); }
+      setSync('ok','מסונכרן'); toast('הזמנה נשמרה ✓','ok'); saved=true;
+    } catch(e){ console.error(e); setSync('err','שגיאת שמירה'); alert('ההזמנה לא נשמרה לגיליון (אולי תקלת רשת). היא שמורה מקומית — בדקי חיבור ונסי שוב.'); }
+  } else {
+    setSync('err','צריך להתחבר מחדש'); alert('ההתחברות לגוגל פגה — ההזמנה לא נשמרה לגיליון. רענני (F5), התחברי מחדש לגוגל, ונסי שוב.');
   }
-  // Decrement matching products from inventory (best-effort, runs after order save)
-  try {
-    const dec = await decrementProductsForOrder(o);
-    if (dec.length) {
-      const summary = dec.map(d => `${d.name} −${d.qty} (נשאר ${d.remaining})`).join(' · ');
-      toast('עודכן מלאי: ' + summary, 'ok');
-    }
-  } catch(e) { console.error('decrement failed', e); }
+  // Decrement inventory ONLY if the order actually saved to the sheet — otherwise
+  // stock would drop for an order that doesn't exist.
+  if (saved) {
+    try {
+      const dec = await decrementProductsForOrder(o);
+      if (dec.length) {
+        const summary = dec.map(d => `${d.name} −${d.qty} (נשאר ${d.remaining})`).join(' · ');
+        toast('עודכן מלאי: ' + summary, 'ok');
+      }
+    } catch(e) { console.error('decrement failed', e); }
+  }
 }
 
 function clearOrderForm() {

@@ -108,17 +108,20 @@ function doPost(e) {
 
     if (problems.length) return json({ ok: false, error: 'stock', problems: problems });
 
-    // Commit stock changes.
     var now = new Date().toISOString();
+
+    // Record the order FIRST, before touching stock. If recording throws, we
+    // return an error and stock stays untouched — an order can never go missing.
+    // (Worst case becomes: order recorded but stock not reduced — visible & fixable.)
+    appendOrder(ss, order, now);
+
+    // Then commit stock changes.
     Object.keys(changed).forEach(function (rs) {
       var r = parseInt(rs, 10);
       prod.getRange(r + 1, ci.qty + 1).setValue(data[r][ci.qty]);
       prod.getRange(r + 1, ci.flavors + 1).setValue(data[r][ci.flavors]);
       if (ci.updatedAt !== undefined) prod.getRange(r + 1, ci.updatedAt + 1).setValue(now);
     });
-
-    // Record the order so it shows up in Keren's dashboard.
-    appendOrder(ss, order, now);
 
     // Notify Keren on WhatsApp — must never block the order if it fails.
     notifyOwner(order);
@@ -275,6 +278,9 @@ function upsertCustomer(ss, order, now) {
 // Attach a receipt PDF link to an order (called by the bot after issuing a receipt).
 function saveReceipt(payload) {
   try {
+    // Only the bot (which holds the shared secret) may attach receipts.
+    var secret = PropertiesService.getScriptProperties().getProperty('CARMEL_HOOK_SECRET');
+    if (secret && payload.secret !== secret) return json({ ok: false, error: 'unauthorized' });
     var ss = SpreadsheetApp.openById(SHEET_ID);
     var sheet = ss.getSheetByName('Orders');
     if (!sheet) return json({ ok: false, error: 'no_orders_sheet' });
