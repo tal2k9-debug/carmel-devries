@@ -141,7 +141,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <section class="notice-section"><div class="cont">
 <div class="notice">
 <div class="nh">שימו ❤️</div>
-<div class="ng"><span class="ic">🍪</span><span><b>זמני הזמנה:</b> לימים א-ה יש להזמין לפחות יומיים מראש.<br>לימי שישי יש להזמין לפחות 3 ימים מראש.</span></div>
+<div class="ng"><span class="ic">🍪</span><span id="order-times-note"><b>זמני הזמנה:</b> יש להזמין לפחות יומיים מראש.</span></div>
 <div class="ng"><span class="ic">🍪</span><span><b>איסוף ומשלוח:</b> איסוף עצמי מאופקים רחוב אורים 20, בתיאום מראש.<br>אופציה למשלוח באופקים בעלות סמלית של 10₪ או משלוח חינם בהזמנה מעל 150₪.</span></div>
 <div class="ng"><span class="ic">🍪</span><span><b>אלרגנים וכשרות:</b> המאפים מכילים אלרגנים שונים ועלולים שלא להתאים לבעלי רגישויות.<br>המאפים אינם נושאים תעודת כשרות.</span></div>
 <div class="nf">לכל שאלה ניתן לפנות / לסמס <a href="https://wa.me/972524809393" target="_blank" rel="noopener">052-4809393</a></div>
@@ -278,31 +278,35 @@ function leadDaysVal(){return Math.max(0,parseInt(orderSettings.leadDays,10)||0)
 function refreshDateMin(){const d=$('#cust-date');if(!d)return;const t=new Date();t.setDate(t.getDate()+leadDaysVal());d.min=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
 function setupDate(){refreshDateMin();$('#cust-date').addEventListener('change',validateDate);}
 function dateLeadOK(v){if(!v)return true;const p=String(v).split('-');if(p.length!==3)return true;const sel=new Date(+p[0],+p[1]-1,+p[2]);const now=new Date();now.setHours(0,0,0,0);const diff=Math.round((sel-now)/86400000);return diff>=leadDaysVal();}
+// Is the chosen pickup date on a weekday Keren keeps open? hours=null -> all open.
+function dateDayOpen(v){const h=orderSettings.hours;if(!Array.isArray(h)||h.length<7)return true;const p=String(v).split('-');if(p.length!==3)return true;const dow=new Date(+p[0],+p[1]-1,+p[2]).getDay();const day=h[dow];return !!(day&&day.open);}
+function openDaysText(){const h=orderSettings.hours;if(!Array.isArray(h)||h.length<7)return '';const out=[];for(let i=0;i<7;i++){if(h[i]&&h[i].open)out.push(DAY_NAMES[i]);}return out.join(', ');}
+// Day names with hours when they aren't a full day, e.g. "ראשון 09:00–18:00".
+function openDaysDetailed(){const h=orderSettings.hours;if(!Array.isArray(h)||h.length<7)return '';const out=[];for(let i=0;i<7;i++){const d=h[i];if(d&&d.open){const allDay=(d.from==='00:00'&&(d.to==='23:59'||d.to==='24:00'))||!d.from||!d.to;out.push(DAY_NAMES[i]+(allDay?'':' '+d.from+'–'+d.to));}}return out.join(', ');}
+function allDaysOpen(){const h=orderSettings.hours;return !Array.isArray(h)||h.length<7||h.every(d=>d&&d.open);}
+function dayWord(n){return n===1?'יום':(n===2?'יומיים':n+' ימים');}
+// Smart "order times" note that always matches Keren's current settings, instead
+// of a hardcoded "Sun-Thu 2 days, Fri 3 days" line.
+function orderTimesNote(){
+  if(orderSettings.acceptingOrders===false){return '<b>זמני הזמנה:</b> '+(orderSettings.closedMessage||'כרגע איננו מקבלים הזמנות.');}
+  const n=leadDaysVal();
+  let s='<b>זמני הזמנה:</b> '+(n<=0?'אפשר להזמין גם לאותו יום':'יש להזמין לפחות '+dayWord(n)+' מראש')+'.';
+  const days=openDaysDetailed();
+  if(days&&!allDaysOpen()){s+='<br>מקבלים הזמנות לימים: '+days+'.';}
+  return s;
+}
 // "HH:MM" → minutes since midnight (null if blank/invalid).
 function hmToMin(s){const m=String(s||'').match(/^(\d{1,2}):(\d{2})$/);if(!m)return null;return (+m[1])*60+(+m[2]);}
 // Is the shop accepting orders right now? Uses the visitor's local clock (Keren's
 // customers are in Israel). Returns {open} or {open:false,msg} with a friendly
 // "opens again ..." hint when we can compute the next open window.
+// Full-site availability = the master switch only. "Which days/times you can order
+// FOR" is enforced on the pickup-date field (dateDayOpen + lead time), so a customer
+// can always place an order ahead for an open day; the master switch is the hard
+// "we're closed" (vacation) that blocks the whole site with Keren's message.
 function orderAvailability(){
   if(orderSettings.acceptingOrders===false)return {open:false,msg:orderSettings.closedMessage};
-  const h=orderSettings.hours;
-  if(!Array.isArray(h)||h.length<7)return {open:true};
-  const now=new Date(),cur=now.getHours()*60+now.getMinutes(),today=h[now.getDay()];
-  let openNow=false;
-  if(today&&today.open){const f=hmToMin(today.from),t=hmToMin(today.to);openNow=(f==null||t==null)?true:(cur>=f&&cur<=t);}
-  if(openNow)return {open:true};
-  // Scan the next 7 days for the next open window to build a helpful hint.
-  let hint='';
-  for(let i=0;i<=7;i++){
-    const dd=new Date(now);dd.setDate(now.getDate()+i);const day=h[dd.getDay()];
-    if(!day||!day.open)continue;
-    const f=hmToMin(day.from);
-    if(i===0){ if(f!=null&&cur<f){hint='היום'+(day.from?' בשעה '+day.from:'');break;} continue; }
-    hint=(i===1?'מחר':'ביום '+DAY_NAMES[dd.getDay()])+(day.from?' בשעה '+day.from:'');break;
-  }
-  let msg=orderSettings.closedMessage||'כרגע איננו מקבלים הזמנות.';
-  if(hint)msg+='\nנפתח שוב '+hint+'.';
-  return {open:false,msg:msg};
+  return {open:true};
 }
 // Reflect availability in the UI: show/hide the closed banner and enable/disable
 // both order buttons so a closed shop cannot receive an order.
@@ -317,6 +321,7 @@ function applyOrderAvailability(){
     if(sb){sb.disabled=true;sb.style.opacity='.5';sb.style.cursor='not-allowed';sb.textContent='ההזמנות סגורות כרגע';}
     if(bsb){bsb.disabled=true;bsb.style.opacity='.5';bsb.style.cursor='not-allowed';}
   }
+  const note=$('#order-times-note'); if(note)note.innerHTML=orderTimesNote();
   return av;
 }
 // Merge a raw settings object (string values from the sheet) into orderSettings.
@@ -336,7 +341,15 @@ function loadSettings(){
     .catch(()=>{})
     .then(()=>{refreshDateMin();applyOrderAvailability();});
 }
-function validateDate(){const d=$('#cust-date'),msg=document.getElementById('date-msg');if(msg)msg.style.display='none';d.classList.remove('inv');if(!d.value)return;if(!dateLeadOK(d.value)){const n=leadDaysVal();if(msg){msg.textContent='לתאריך זה צריך להזמין '+n+' '+(n===1?'יום':'ימים')+' מראש לפחות — אפשר לבחור תאריך מאוחר יותר.';msg.style.display='block';}d.classList.add('inv');}}
+function validateDate(){
+  const d=$('#cust-date'),msg=document.getElementById('date-msg');
+  if(msg)msg.style.display='none';d.classList.remove('inv');
+  if(!d.value)return;
+  let err='';
+  if(!dateLeadOK(d.value)){err='לתאריך זה צריך להזמין '+dayWord(leadDaysVal())+' מראש לפחות — אפשר לבחור תאריך מאוחר יותר.';}
+  else if(!dateDayOpen(d.value)){const t=openDaysText();err='ביום זה לא מקבלים הזמנות'+(t?' — מקבלים בימים: '+t:'')+'. בחרי תאריך אחר.';}
+  if(err){if(msg){msg.textContent=err;msg.style.display='block';}d.classList.add('inv');}
+}
 function updAddr(){$('#addr-row').style.display=ful()==='delivery'?'':'none';}
 
 function buildQtyRow(id,flav,placeholder){
@@ -512,8 +525,13 @@ function send(){
   }
   if(!dateLeadOK(_date)){
     const el=$('#cust-date');el.classList.add('inv');el.focus();el.scrollIntoView({block:'center',behavior:'smooth'});
-    const n=leadDaysVal();
-    alert('התאריך שנבחר מוקדם מדי — צריך להזמין '+n+' '+(n===1?'יום':'ימים')+' מראש לפחות. בחרי תאריך מאוחר יותר.');
+    alert('התאריך שנבחר מוקדם מדי — צריך להזמין '+dayWord(leadDaysVal())+' מראש לפחות. בחרי תאריך מאוחר יותר.');
+    return;
+  }
+  if(!dateDayOpen(_date)){
+    const el=$('#cust-date');el.classList.add('inv');el.focus();el.scrollIntoView({block:'center',behavior:'smooth'});
+    const t=openDaysText();
+    alert('ביום שבחרת לא מקבלים הזמנות'+(t?'.\nמקבלים בימים: '+t:'')+'.\nבחרי תאריך אחר.');
     return;
   }
   if(!WEBAPP_URL){
