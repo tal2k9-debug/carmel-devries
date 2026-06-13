@@ -5,6 +5,8 @@ const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googlea
 const ALLOWLIST = ['tal2k9@gmail.com', 'kerencarmel8@gmail.com'];
 const CACHE_KEY = 'carmel_cache_v2';
 const PRICING_KEY = 'carmel_pricing_v1';
+// כתובת המוח החכם (פרויקט Vercel נפרד). מתעדכן אחרי פריסה.
+const AGENT_URL = 'https://carmel-agent.vercel.app';
 const STATUSES = [
   {id:'new', label:'חדש', color:'new'},
   {id:'confirmed', label:'מאושר', color:'confirmed'},
@@ -526,6 +528,7 @@ function switchTab(page) {
   if (page==='shopping') generateShoppingList();
   if (page==='products') renderProducts();
   if (page==='settings') renderSettings();
+  if (page==='assistant') initAssistant();
 }
 
 function renderAll() {
@@ -1798,6 +1801,271 @@ function closeModal(id){document.getElementById(id).classList.remove('show');}
 function toast(msg,kind){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show '+(kind||'');setTimeout(()=>t.classList.remove('show'),2500);}
 function esc(s){return String(s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));}
 function uid(p){return p+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);}
+
+/* ============ AI ASSISTANT (chat) ============ */
+let _asstHistory = [];   // [{role:'user'|'assistant'|'sys', content}]
+let _asstInited = false;
+let _asstBusy = false;
+
+function initAssistant(){
+  if (_asstInited) return;
+  _asstInited = true;
+  asstRender();
+  asstAddBot('היי קרן 🍪 איך אפשר לעזור? אפשר לשאול אותי על האתר, על המלאי או על ההגדרות — או לבקש לשנות משהו.');
+}
+
+function asstRender(){
+  const box = document.getElementById('asstMsgs');
+  if (!box) return;
+  box.innerHTML = _asstHistory.map(m=>{
+    const cls = m.role==='user' ? 'me' : (m.role==='sys' ? 'sys' : 'bot');
+    return '<div class="asst-b '+cls+'">'+esc(m.content)+'</div>';
+  }).join('');
+  box.scrollTop = box.scrollHeight;
+}
+function asstAddBot(text){ _asstHistory.push({role:'assistant', content:text}); asstRender(); }
+function asstAddSys(text){ _asstHistory.push({role:'sys', content:text}); asstRender(); }
+
+function asstQuick(q){
+  const inp = document.getElementById('asstInput');
+  if (inp) inp.value = q;
+  sendAssistantMessage();
+}
+
+// צילום-מצב קומפקטי של הנתונים שהמוח צריך כדי לענות ולפעול.
+function buildAssistantSnapshot(){
+  const products = (db.products||[]).filter(p=>p.id!=='__settings__').map(p=>({
+    id:p.id, name:p.name, price:p.price, qty:p.qty, published:!!p.published,
+    kosher:p.kosher, unit:p.unit, sortOrder:p.sortOrder, minOrder:p.minOrder,
+    flavors:p.flavors||''
+  }));
+  const s = Object.assign({}, DEFAULT_SETTINGS, db.settings||{});
+  let hours, overrides;
+  try { hours = JSON.parse(s.hours); } catch(e){ hours = null; }
+  try { overrides = JSON.parse(s.overrides); } catch(e){ overrides = []; }
+  return {
+    settings: {
+      acceptingOrders: isAcceptingValue(s.acceptingOrders),
+      leadDays: parseInt(s.leadDays,10)||0,
+      closedMessage: s.closedMessage||'',
+      hours: hours, overrides: overrides
+    },
+    products: products,
+    dayNames: ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'],
+    today: todayStr()
+  };
+}
+
+async function sendAssistantMessage(){
+  if (_asstBusy) return;
+  const inp = document.getElementById('asstInput');
+  if (!inp) return;
+  const text = (inp.value||'').trim();
+  if (!text) return;
+  inp.value = '';
+  _asstHistory.push({role:'user', content:text});
+  asstRender();
+  asstSetBusy(true);
+  asstShowTyping(true);
+  try {
+    const ok = await ensureToken();
+    if (!ok || !accessToken){ asstShowTyping(false); asstAddSys('צריך להתחבר מחדש לגוגל כדי שאוכל לעבוד. רענני (F5) והתחברי שוב.'); asstSetBusy(false); return; }
+    const apiMsgs = _asstHistory.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role, content:m.content}));
+    const resp = await fetch(AGENT_URL.replace(/\/$/,'') + '/api/chat', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+accessToken },
+      body: JSON.stringify({ messages: apiMsgs, snapshot: buildAssistantSnapshot() })
+    });
+    asstShowTyping(false);
+    if (!resp.ok){
+      let msg = 'שגיאה ('+resp.status+').';
+      if (resp.status===401||resp.status===403) msg = 'אין לי הרשאה כרגע. רענני והתחברי מחדש.';
+      else if (resp.status>=500) msg = 'המוח לא זמין כרגע, נסי שוב עוד רגע.';
+      asstAddSys(msg); asstSetBusy(false); return;
+    }
+    const data = await resp.json();
+    if (data.reply) asstAddBot(data.reply);
+    if (data.pendingActions && data.pendingActions.actions && data.pendingActions.actions.length){
+      asstShowConfirm(data.pendingActions);
+    }
+    if (data.pendingCode && data.pendingCode.edits && data.pendingCode.edits.length){
+      asstShowCodeConfirm(data.pendingCode, data.codeEnabled);
+    }
+  } catch(e){
+    asstShowTyping(false);
+    asstAddSys('לא הצלחתי להתחבר למוח. בדקי חיבור אינטרנט ונסי שוב.');
+    console.error('[assistant]', e);
+  } finally {
+    asstSetBusy(false);
+  }
+}
+
+function asstSetBusy(b){ _asstBusy=b; const btn=document.getElementById('asstSend'); if(btn) btn.disabled=b; }
+function asstShowTyping(on){
+  const box=document.getElementById('asstMsgs'); if(!box) return;
+  let t=document.getElementById('asstTyping');
+  if(on){ if(!t){ t=document.createElement('div'); t.id='asstTyping'; t.className='asst-typing'; t.textContent='כותב/ת...'; box.appendChild(t);} box.scrollTop=box.scrollHeight; }
+  else if(t){ t.remove(); }
+}
+
+// כרטיס אישור: אישור → מבצע; ביטול → מודיע שבוטל.
+function asstShowConfirm(pending){
+  const box=document.getElementById('asstMsgs'); if(!box) return;
+  const div=document.createElement('div');
+  div.className='asst-confirm';
+  div.innerHTML = '<div class="q">'+esc(pending.summary||'לבצע את השינוי?')+'</div>'+
+    '<div class="acts">'+
+      '<button class="btn btn-ok" type="button">✓ אשרי וביצוע</button>'+
+      '<button class="btn btn-s" type="button">ביטול</button>'+
+    '</div>';
+  const btns = div.querySelectorAll('button');
+  btns[0].onclick = async ()=>{ div.remove(); await applyAssistantActions(pending); };
+  btns[1].onclick = ()=>{ div.remove(); asstAddSys('בוטל — לא שונה כלום.'); };
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// מבצע את הפעולות המאושרות דרך הפונקציות הקיימות (עם ההרשאה של קרן).
+async function applyAssistantActions(pending){
+  const actions = pending.actions||[];
+  const done = [];
+  try {
+    for (const a of actions){
+      if (a.type==='order_settings'){ await applyAsstSettings(a); done.push('הגדרות הזמנות'); }
+      else if (a.type==='product_update'){ const nm = await applyAsstProduct(a); done.push('מוצר: '+nm); }
+    }
+    asstAddSys('✓ בוצע: '+done.join(' · '));
+  } catch(e){
+    console.error('[assistant apply]', e);
+    asstAddSys('⚠️ '+(e.message||'משהו השתבש בביצוע')+(done.length?(' (כן בוצע: '+done.join(', ')+')'):''));
+  }
+}
+
+// הגדרות הזמנות — ממלא את הטופס ומריץ את saveOrderSettings הקיים (מיזוג עם המצב הנוכחי).
+async function applyAsstSettings(a){
+  renderSettings();
+  if (a.acceptingOrders!=null){ const el=document.getElementById('setAccepting'); if(el) el.checked=!!a.acceptingOrders; }
+  if (a.leadDays!=null){ const el=document.getElementById('setLeadDays'); if(el) el.value=String(Math.max(0,parseInt(a.leadDays,10)||0)); }
+  if (a.closedMessage!=null){ const el=document.getElementById('setClosedMsg'); if(el) el.value=String(a.closedMessage); }
+  if (Array.isArray(a.days)){
+    a.days.forEach(d=>{
+      const row=document.querySelector('#hoursRows .hours-row[data-day="'+(d.day)+'"]');
+      if(!row) return;
+      if(d.open!=null) row.querySelector('.h-open').checked=!!d.open;
+      if(d.from) row.querySelector('.h-from').value=d.from;
+      if(d.to) row.querySelector('.h-to').value=d.to;
+    });
+  }
+  if (Array.isArray(a.specialDates)){
+    a.specialDates.forEach(o=>{
+      if(!o.date) return;
+      _overrides=(_overrides||[]).filter(x=>x.date!==o.date);
+      _overrides.push({date:o.date, open:!!o.open});
+    });
+    renderOverridesList();
+  }
+  await saveOrderSettings();
+}
+
+// מוצר — מאתר לפי id/שם ומעדכן ישירות דרך persistProductRow הקיים.
+async function applyAsstProduct(a){
+  const list=(db.products||[]).filter(p=>p.id!=='__settings__');
+  let p = a.productId ? list.find(x=>x.id===a.productId) : null;
+  if (!p && a.productName){
+    const nm=String(a.productName).trim();
+    p = list.find(x=>x.name===nm) || list.find(x=>String(x.name).includes(nm)) || list.find(x=>nm.includes(String(x.name)));
+  }
+  if (!p) throw new Error('לא מצאתי את המוצר "'+(a.productName||a.productId||'')+'"');
+  const set=a.set||{};
+  if (set.price!=null){ const v=parseFloat(set.price); if(v>0) p.price=v; }
+  if (set.unit!=null) p.unit=String(set.unit);
+  if (set.desc!=null) p.desc=String(set.desc);
+  if (set.kosher!=null) p.kosher=String(set.kosher);
+  if (set.sortOrder!=null) p.sortOrder=parseInt(set.sortOrder,10)||p.sortOrder;
+  if (set.minOrder!=null){ p.minOrder=Math.max(0,parseInt(set.minOrder,10)||0); p.minNote=p.minOrder>0?('* מינימום להזמנה '+p.minOrder+' יח׳'):''; }
+  if (set.published!=null) p.published = set.published?1:0;
+  if (set.qty!=null){
+    const flavors=parseFlavors(p.flavors,p.qty);
+    if(!flavors.length) p.qty=Math.max(0,parseInt(set.qty,10)||0);
+    else asstAddSys('שמתי לב ש"'+p.name+'" מחולק לטעמים — את הכמות הכוללת לא שיניתי. עדכני טעם ספציפי דרך מסך המוצרים.');
+  }
+  p.updatedAt=new Date().toISOString();
+  saveCache(); renderProducts();
+  await persistProductRow(p);
+  return p.name;
+}
+
+// ---- שלב 2: שינוי קוד קל + החזרה אחורה ----
+async function asstPost(path, body){
+  const ok = await ensureToken();
+  if (!ok || !accessToken) throw new Error('צריך להתחבר מחדש לגוגל');
+  const resp = await fetch(AGENT_URL.replace(/\/$/,'') + path, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+accessToken },
+    body: JSON.stringify(body||{})
+  });
+  let data={}; try{ data=await resp.json(); }catch(e){}
+  return { status: resp.status, data };
+}
+
+function asstShowCodeConfirm(pending, codeEnabled){
+  const box=document.getElementById('asstMsgs'); if(!box) return;
+  const div=document.createElement('div');
+  div.className='asst-confirm';
+  if (codeEnabled === false){
+    div.innerHTML = '<div class="q">✏️ '+esc(pending.summary||'שינוי בקוד')+'</div>'+
+      '<div style="font-size:13px;color:var(--mute)">עריכת קוד עוד לא חוברה (ממתין שטל יוסיף טוקן GitHub). בינתיים אפשר לשנות הגדרות ומוצרים.</div>';
+    box.appendChild(div); box.scrollTop=box.scrollHeight; return;
+  }
+  div.innerHTML = '<div class="q">✏️ שינוי בקוד האתר: '+esc(pending.summary||'')+'</div>'+
+    '<div style="font-size:12px;color:var(--mute);margin-bottom:8px">'+esc((pending.edits||[]).map(e=>e.path).join(', '))+'</div>'+
+    '<div class="acts">'+
+      '<button class="btn btn-ok" type="button">✓ אשרי ושנה</button>'+
+      '<button class="btn btn-s" type="button">ביטול</button>'+
+    '</div>';
+  const btns=div.querySelectorAll('button');
+  btns[0].onclick=async ()=>{ div.remove(); await asstApplyCode(pending); };
+  btns[1].onclick=()=>{ div.remove(); asstAddSys('בוטל — הקוד לא שונה.'); };
+  box.appendChild(div); box.scrollTop=box.scrollHeight;
+}
+
+async function asstApplyCode(pending){
+  asstAddSys('משנה את הקוד...');
+  try {
+    const { status, data } = await asstPost('/api/apply-code', { summary: pending.summary, edits: pending.edits });
+    if (data && data.ok){
+      asstAddSys('✓ '+(data.message||'השינוי נדחף.')+' ('+((data.changedFiles||[]).join(', '))+')');
+      asstVerifyDeploy();
+    } else {
+      asstAddSys('⚠️ '+((data && (data.message||data.error)) || ('שגיאה '+status))+'. לא שונה כלום.');
+    }
+  } catch(e){ asstAddSys('⚠️ '+(e.message||'שגיאת רשת')); }
+}
+
+// בדיקה שהאתר עדיין נטען אחרי השינוי (GitHub Pages לוקח ~דקה). אם נראה שבור — החזרה אוטומטית.
+async function asstVerifyDeploy(){
+  asstAddSys('בודק שהאתר נטען כשורה (כדקה)...');
+  let okSite=false;
+  for (const waitMs of [70000, 28000]){
+    await new Promise(r=>setTimeout(r, waitMs));
+    try {
+      const r = await fetch('/index.html?cb='+Date.now(), { cache:'no-store' });
+      const t = await r.text();
+      if (r.ok && /<\/html>/i.test(t) && /Carmel/i.test(t)) { okSite=true; break; }
+    } catch(e){ /* ננסה שוב */ }
+  }
+  if (okSite){ asstAddSys('✓ האתר נטען כרגיל. אם משהו לא נראה לך — אפשר תמיד "↩️ החזר".'); }
+  else { asstAddSys('⚠️ האתר לא נראה תקין אחרי השינוי — מחזיר אוטומטית למצב הקודם...'); await asstRollback(true); }
+}
+
+async function asstRollback(auto){
+  if (!auto) asstAddSys('מחזיר את האתר למצב לפני שינוי-הקוד האחרון...');
+  try {
+    const { status, data } = await asstPost('/api/rollback', {});
+    if (data && data.ok) asstAddSys('↩️ '+(data.message||'הוחזר למצב הקודם.'));
+    else asstAddSys('ℹ️ '+((data && (data.message||data.error)) || ('לא הוחזר ('+status+')')));
+  } catch(e){ asstAddSys('⚠️ '+(e.message||'שגיאת רשת בהחזרה')); }
+}
 function todayStr(){return new Date().toISOString().slice(0,10);}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
 function addDaysStr(s,n){const d=new Date(s);d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
