@@ -252,6 +252,20 @@ async function syncAll() {
     db.recipes = rec.map(r => rowToRecipe(r));
     db.products = prod.map(r => rowToProd(r));
     db.settings = settingsRowsToObj(setg);
+    // Make sure the public-facing "__settings__" row exists so the live site reads
+    // the open hours/days with NO Apps Script deploy. Only writes when missing —
+    // afterwards saveOrderSettings keeps it in sync. This auto-publishes whatever
+    // Keren already saved, just by opening the dashboard (no extra click).
+    try {
+      if (!(db.products||[]).some(p=>p.id==='__settings__') && db.settings && Object.keys(db.settings).length) {
+        await writeSettingsProductRow({
+          acceptingOrders: String(db.settings.acceptingOrders!=null?db.settings.acceptingOrders:'1'),
+          leadDays:        String(db.settings.leadDays!=null?db.settings.leadDays:'2'),
+          closedMessage:   String(db.settings.closedMessage||DEFAULT_SETTINGS.closedMessage),
+          hours:           String(db.settings.hours||DEFAULT_SETTINGS.hours)
+        });
+      }
+    } catch(e){ console.warn('settings row migrate', e); }
     refreshRecipesList();
     saveCache();
     renderAll();
@@ -402,6 +416,26 @@ async function writeSettings(s){
   });
 }
 
+// Mirror the settings into a hidden "__settings__" row in the Products sheet, so
+// the PUBLIC site can read them through the already-deployed products endpoint
+// (?action=products) with no Apps Script deploy. The public site hides this row.
+async function writeSettingsProductRow(s){
+  const now = new Date().toISOString();
+  const row = prodToRow({
+    id:'__settings__', name:'__settings__', desc: JSON.stringify(s),
+    price:0, unit:'', qty:0, kosher:'', img:'', published:1,
+    sortOrder:99999, minOrder:0, minNote:'', flavors:'', updatedAt:now
+  });
+  const idx = (db.products||[]).findIndex(p=>p.id==='__settings__');
+  if (idx >= 0) {
+    await updateRow('Products', idx+2, row);
+  } else {
+    await appendRow('Products', row);
+    db.products = db.products || [];
+    db.products.push(rowToProd(row)); // keep a local copy so the next save updates instead of appending again
+  }
+}
+
 async function saveOrderSettings(){
   const accepting = document.getElementById('setAccepting').checked ? '1' : '0';
   const leadDays = String(Math.max(0, parseInt(document.getElementById('setLeadDays').value,10)||0));
@@ -419,6 +453,7 @@ async function saveOrderSettings(){
   try {
     if (typeof gapi !== 'undefined' && gapi.client) gapi.client.setToken({access_token: accessToken});
     await writeSettings(s);
+    await writeSettingsProductRow(s);
     setSync('ok','מסונכרן'); toast('ההגדרות נשמרו ✓','ok');
   } catch(e) { console.error(e); setSync('err','שגיאת שמירה'); alert('שמירת ההגדרות נכשלה (אולי תקלת רשת). נסי שוב.'); }
 }
@@ -1050,7 +1085,9 @@ function renderExpenses(){
 function renderProducts() {
   const el = document.getElementById('prodList');
   if (!el) return;
-  const list = [...(db.products||[])].sort((a,b)=>(a.sortOrder||100)-(b.sortOrder||100));
+  // The hidden "__settings__" row carries order-availability settings to the
+  // public site (so it needs no Apps Script deploy); never show it as a product.
+  const list = (db.products||[]).filter(p=>p.id!=='__settings__').sort((a,b)=>(a.sortOrder||100)-(b.sortOrder||100));
   if (!list.length) {
     el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--mute)">אין מוצרים עדיין. לחצי "➕ מוצר חדש".</div>';
     return;

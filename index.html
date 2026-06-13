@@ -678,11 +678,18 @@ function loadProductsFromSheet(){
     // If we got rows back at all, sheet data is authoritative — even an empty
     // visible set means "everything is unpublished" and we should show nothing.
     if(allRows.length){
+      // Order settings (open days/hours, lead time, message) ride along in a
+      // hidden "__settings__" product row, so the public site reads them through
+      // the same products endpoint that already works — no Apps Script deploy
+      // needed. We parse it here and hide that row from the catalogue.
+      const sr=allRows.find(p=>p.id==='__settings__');
+      if(sr&&sr.desc){try{orderSettings=parseSettings(JSON.parse(sr.desc));}catch(e){}}
+      refreshDateMin();applyOrderAvailability();
       // Show every PUBLISHED product — even one whose stock is 0. Out-of-stock
       // items stay on the page marked "אזל" (render() handles that) instead of
       // vanishing. In-stock items are listed first so customers see what they
       // can buy, then the sold-out ones below, each keeping its sortOrder order.
-      const live=allRows.filter(p=>p.id&&p.name&&p.published)
+      const live=allRows.filter(p=>p.id&&p.id!=='__settings__'&&p.name&&p.published)
                        .sort((a,b)=>{
                          const sa=(typeof a.qty==='number'&&a.qty<=0)?1:0;
                          const sb=(typeof b.qty==='number'&&b.qty<=0)?1:0;
