@@ -250,6 +250,11 @@ const DAY_NAMES=['ראשון','שני','שלישי','רביעי','חמישי','�
 // she configures it, and also if the settings fetch ever fails (fail-open: we
 // never block real orders because of a transient network error).
 let orderSettings={acceptingOrders:true,leadDays:2,closedMessage:'כרגע איננו מקבלים הזמנות 💛 נשמח לקבל את הזמנתכם כשנפתח שוב.',hours:null,overrides:[]};
+// Apply the last-known settings from localStorage synchronously on load, so the
+// calendar shows the correct open/closed days IMMEDIATELY (no flash of "all days
+// available" before the live fetch returns). The fresh fetch then refreshes them.
+let _settingsLoaded=false;
+try{const _cs=localStorage.getItem('carmel-settings-v1');if(_cs){orderSettings=parseSettings(JSON.parse(_cs));_settingsLoaded=true;}}catch(e){}
 let payMethod='cash';
 // Get available qty for a specific flavor (or whole product when flavor is '')
 function flavorAvail(p, flavorName){
@@ -312,6 +317,7 @@ function toggleCalendar(){const cal=$('#date-cal');if(!cal)return;if(cal.style.d
 function calNav(delta){_calMonth=new Date(_calMonth.getFullYear(),_calMonth.getMonth()+delta,1);renderCalendar();}
 function renderCalendar(){
   const cal=$('#date-cal');if(!cal)return;
+  if(!_settingsLoaded){cal.innerHTML='<div class="dc-closed">טוען זמינות…</div>';return;}
   const av=orderAvailability();
   if(!av.open){cal.innerHTML='<div class="dc-closed">'+(av.msg||'כרגע איננו מקבלים הזמנות 💛')+'</div>';return;}
   const m=calMinDate();if(!_calMonth)_calMonth=new Date(m.getFullYear(),m.getMonth(),1);
@@ -757,7 +763,8 @@ function loadProductsFromSheet(){
       // the same products endpoint that already works — no Apps Script deploy
       // needed. We parse it here and hide that row from the catalogue.
       const sr=allRows.find(p=>p.id==='__settings__');
-      if(sr&&sr.desc){try{orderSettings=parseSettings(JSON.parse(sr.desc));}catch(e){}}
+      if(sr&&sr.desc){try{orderSettings=parseSettings(JSON.parse(sr.desc));}catch(e){}try{localStorage.setItem('carmel-settings-v1',sr.desc);}catch(e){}}
+      _settingsLoaded=true;
       refreshDateMin();applyOrderAvailability();
       // Show every PUBLISHED product — even one whose stock is 0. Out-of-stock
       // items stay on the page marked "אזל" (render() handles that) instead of
@@ -780,7 +787,8 @@ function loadProductsFromSheet(){
         $('#products').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--is);font-size:16px">כרגע אין מוצרים זמינים. נסו שוב מאוחר יותר 💛</div>';
       }
     }
-  }).catch(e=>console.log('[Carmel] Using fallback products:',e.message));
+  }).catch(e=>console.log('[Carmel] Using fallback products:',e.message))
+    .then(()=>{ if(!_settingsLoaded){ _settingsLoaded=true; const cal=$('#date-cal'); if(cal&&cal.style.display!=='none')renderCalendar(); } });
 }
 loadProductsFromSheet();
 // Re-fetch every 60s so admin edits (products + open hours) propagate to long-open
