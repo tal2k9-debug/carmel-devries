@@ -443,6 +443,22 @@ th,td{padding:8px}
     <div id="hoursRows"></div>
   </div>
 
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-bottom:6px">תאריכים מיוחדים (חופשה / חג / יום מיוחד)</h3>
+    <div style="font-size:13px;color:var(--ink2);background:#FAF1E8;padding:10px 14px;border-radius:8px;margin-bottom:14px;line-height:1.7">
+      קביעה מראש של תאריך מסוים: לסגור יום שבדרך כלל פתוח (חופשה/חג), או לפתוח יום שבדרך כלל סגור. גובר על שעות הפתיחה הקבועות.
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <input type="date" id="ovDate" style="padding:8px 10px;border:1px solid var(--bd);border-radius:8px;background:#fff">
+      <select id="ovOpen" style="padding:8px 10px;border:1px solid var(--bd);border-radius:8px;background:#fff">
+        <option value="0">סגור ביום זה</option>
+        <option value="1">פתוח ביום זה</option>
+      </select>
+      <button class="btn btn-s" onclick="addOverride()">➕ הוסף תאריך</button>
+    </div>
+    <div id="overridesList"></div>
+  </div>
+
   <div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap">
     <button class="btn btn-p" onclick="saveOrderSettings()">💾 שמירת הגדרות</button>
     <button class="btn btn-s" onclick="renderSettings()">ביטול שינויים</button>
@@ -511,6 +527,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=49"></script>
+<script src="app.js?v=50"></script>
 </body>
 </html>

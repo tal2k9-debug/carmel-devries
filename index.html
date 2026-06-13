@@ -229,7 +229,7 @@ const DAY_NAMES=['ראשון','שני','שלישי','רביעי','חמישי','�
 // "always open, 2 days lead time" so the site behaves exactly as before until
 // she configures it, and also if the settings fetch ever fails (fail-open: we
 // never block real orders because of a transient network error).
-let orderSettings={acceptingOrders:true,leadDays:2,closedMessage:'כרגע איננו מקבלים הזמנות 💛 נשמח לקבל את הזמנתכם כשנפתח שוב.',hours:null};
+let orderSettings={acceptingOrders:true,leadDays:2,closedMessage:'כרגע איננו מקבלים הזמנות 💛 נשמח לקבל את הזמנתכם כשנפתח שוב.',hours:null,overrides:[]};
 let payMethod='cash';
 // Get available qty for a specific flavor (or whole product when flavor is '')
 function flavorAvail(p, flavorName){
@@ -278,13 +278,19 @@ function leadDaysVal(){return Math.max(0,parseInt(orderSettings.leadDays,10)||0)
 function refreshDateMin(){const d=$('#cust-date');if(!d)return;const t=new Date();t.setDate(t.getDate()+leadDaysVal());d.min=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
 function setupDate(){refreshDateMin();$('#cust-date').addEventListener('change',validateDate);}
 function dateLeadOK(v){if(!v)return true;const p=String(v).split('-');if(p.length!==3)return true;const sel=new Date(+p[0],+p[1]-1,+p[2]);const now=new Date();now.setHours(0,0,0,0);const diff=Math.round((sel-now)/86400000);return diff>=leadDaysVal();}
-// Is the chosen pickup date on a weekday Keren keeps open? hours=null -> all open.
-function dateDayOpen(v){const h=orderSettings.hours;if(!Array.isArray(h)||h.length<7)return true;const p=String(v).split('-');if(p.length!==3)return true;const dow=new Date(+p[0],+p[1]-1,+p[2]).getDay();const day=h[dow];return !!(day&&day.open);}
+// Is the chosen pickup date available? A specific-date override (חופשה / יום מיוחד)
+// wins over the weekly pattern; otherwise fall back to the open weekday. hours=null
+// and no override -> all open.
+function dateOverride(v){const ov=orderSettings.overrides;if(!Array.isArray(ov))return null;for(let i=0;i<ov.length;i++){if(ov[i]&&ov[i].date===v)return ov[i];}return null;}
+function dateDayOpen(v){const o=dateOverride(v);if(o)return !!o.open;const h=orderSettings.hours;if(!Array.isArray(h)||h.length<7)return true;const p=String(v).split('-');if(p.length!==3)return true;const dow=new Date(+p[0],+p[1]-1,+p[2]).getDay();const day=h[dow];return !!(day&&day.open);}
 function openDaysText(){const h=orderSettings.hours;if(!Array.isArray(h)||h.length<7)return '';const out=[];for(let i=0;i<7;i++){if(h[i]&&h[i].open)out.push(DAY_NAMES[i]);}return out.join(', ');}
 // Day names with hours when they aren't a full day, e.g. "ראשון 09:00–18:00".
 function openDaysDetailed(){const h=orderSettings.hours;if(!Array.isArray(h)||h.length<7)return '';const out=[];for(let i=0;i<7;i++){const d=h[i];if(d&&d.open){const allDay=(d.from==='00:00'&&(d.to==='23:59'||d.to==='24:00'))||!d.from||!d.to;out.push(DAY_NAMES[i]+(allDay?'':' '+d.from+'–'+d.to));}}return out.join(', ');}
 function allDaysOpen(){const h=orderSettings.hours;return !Array.isArray(h)||h.length<7||h.every(d=>d&&d.open);}
 function dayWord(n){return n===1?'יום':(n===2?'יומיים':n+' ימים');}
+function ddmm(iso){const p=String(iso).split('-');return p.length===3?p[2]+'/'+p[1]:iso;}
+// Upcoming dates Keren specifically closed (חופשה/חג), for the public note.
+function upcomingClosedDates(){const ov=orderSettings.overrides;if(!Array.isArray(ov))return '';const today=new Date();today.setHours(0,0,0,0);const out=[];ov.forEach(o=>{if(o&&o.open===false&&o.date){const p=String(o.date).split('-');if(p.length===3){const d=new Date(+p[0],+p[1]-1,+p[2]);if(d>=today)out.push(o.date);}}});out.sort();return out.slice(0,6).map(ddmm).join(', ');}
 // Smart "order times" note that always matches Keren's current settings, instead
 // of a hardcoded "Sun-Thu 2 days, Fri 3 days" line.
 function orderTimesNote(){
@@ -293,6 +299,8 @@ function orderTimesNote(){
   let s='<b>זמני הזמנה:</b> '+(n<=0?'אפשר להזמין גם לאותו יום':'יש להזמין לפחות '+dayWord(n)+' מראש')+'.';
   const days=openDaysDetailed();
   if(days&&!allDaysOpen()){s+='<br>מקבלים הזמנות לימים: '+days+'.';}
+  const closed=upcomingClosedDates();
+  if(closed){s+='<br>סגורים בתאריכים: '+closed+'.';}
   return s;
 }
 // "HH:MM" → minutes since midnight (null if blank/invalid).
@@ -326,12 +334,13 @@ function applyOrderAvailability(){
 }
 // Merge a raw settings object (string values from the sheet) into orderSettings.
 function parseSettings(s){
-  const o={acceptingOrders:true,leadDays:2,closedMessage:orderSettings.closedMessage,hours:null};
+  const o={acceptingOrders:true,leadDays:2,closedMessage:orderSettings.closedMessage,hours:null,overrides:[]};
   if(!s||typeof s!=='object')return o;
   if(s.acceptingOrders!==undefined){const v=String(s.acceptingOrders).trim().toLowerCase();o.acceptingOrders=!(v==='0'||v==='false'||v==='no'||v==='');}
   if(s.leadDays!==undefined&&String(s.leadDays).trim()!=='')o.leadDays=Math.max(0,parseInt(s.leadDays,10)||0);
   if(s.closedMessage&&String(s.closedMessage).trim())o.closedMessage=String(s.closedMessage);
   if(s.hours){try{const h=JSON.parse(s.hours);if(Array.isArray(h))o.hours=h;}catch(e){}}
+  if(s.overrides){try{const ov=JSON.parse(s.overrides);if(Array.isArray(ov))o.overrides=ov;}catch(e){}}
   return o;
 }
 function loadSettings(){

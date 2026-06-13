@@ -262,7 +262,8 @@ async function syncAll() {
           acceptingOrders: String(db.settings.acceptingOrders!=null?db.settings.acceptingOrders:'1'),
           leadDays:        String(db.settings.leadDays!=null?db.settings.leadDays:'2'),
           closedMessage:   String(db.settings.closedMessage||DEFAULT_SETTINGS.closedMessage),
-          hours:           String(db.settings.hours||DEFAULT_SETTINGS.hours)
+          hours:           String(db.settings.hours||DEFAULT_SETTINGS.hours),
+          overrides:       String(db.settings.overrides||'[]')
         });
       }
     } catch(e){ console.warn('settings row migrate', e); }
@@ -364,10 +365,12 @@ function flavorsTotalQty(arr) {
 // a "Settings" sheet; the public site reads them through the Apps Script. Defaults
 // below = "always open, 2 days lead" so nothing changes on the site until she edits.
 const SETTINGS_DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת']; // index = getDay() (0=Sunday)
+let _overrides = []; // working list of special-date overrides [{date,open}] for the settings form
 const DEFAULT_SETTINGS = {
   acceptingOrders: '1',
   leadDays: '2',
   closedMessage: 'כרגע איננו מקבלים הזמנות 💛 נשמח לקבל את הזמנתכם כשנפתח שוב.',
+  overrides: '[]',
   hours: JSON.stringify([
     {open:true,from:'00:00',to:'23:59'},{open:true,from:'00:00',to:'23:59'},
     {open:true,from:'00:00',to:'23:59'},{open:true,from:'00:00',to:'23:59'},
@@ -386,8 +389,7 @@ function renderSettings(){
   let hours; try { hours = JSON.parse(s.hours); } catch(e) { hours = null; }
   if (!Array.isArray(hours) || hours.length < 7) hours = JSON.parse(DEFAULT_SETTINGS.hours);
   const el = document.getElementById('hoursRows');
-  if (!el) return;
-  el.innerHTML = SETTINGS_DAYS.map((dn,i)=>{
+  if (el) el.innerHTML = SETTINGS_DAYS.map((dn,i)=>{
     const d = hours[i] || {open:false, from:'09:00', to:'20:00'};
     return `<div class="hours-row" data-day="${i}" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 0;border-bottom:1px solid #f0e0d0">
       <label style="display:flex;align-items:center;gap:8px;min-width:110px;cursor:pointer;font-weight:600">
@@ -398,6 +400,46 @@ function renderSettings(){
       <input type="time" class="h-to" value="${esc(d.to||'20:00')}" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:#fff">
     </div>`;
   }).join('');
+  try { _overrides = JSON.parse(s.overrides); } catch(e) { _overrides = []; }
+  if (!Array.isArray(_overrides)) _overrides = [];
+  renderOverridesList();
+}
+
+// Hebrew weekday + DD/MM label for a yyyy-mm-dd date.
+function fmtOverrideDate(iso){
+  const p = String(iso).split('-'); if (p.length!==3) return iso;
+  const d = new Date(+p[0], +p[1]-1, +p[2]);
+  return SETTINGS_DAYS[d.getDay()] + ' · ' + p[2] + '/' + p[1] + '/' + p[0];
+}
+function renderOverridesList(){
+  const el = document.getElementById('overridesList');
+  if (!el) return;
+  const list = (_overrides||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  if (!list.length) { el.innerHTML = '<div style="color:var(--mute);font-size:13px">אין תאריכים מיוחדים. הכל לפי שעות הפתיחה הקבועות.</div>'; return; }
+  el.innerHTML = list.map(o=>{
+    const isOpen = !!o.open;
+    const tag = isOpen
+      ? '<span class="tag ready">פתוח</span>'
+      : '<span class="tag" style="background:#ffebee;color:var(--err)">סגור</span>';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0e0d0">
+      <span style="min-width:170px;font-weight:600">${esc(fmtOverrideDate(o.date))}</span>
+      ${tag}
+      <button class="btn btn-d" style="padding:4px 10px;font-size:12px;margin-inline-start:auto" onclick="removeOverride('${esc(o.date)}')">הסר</button>
+    </div>`;
+  }).join('');
+}
+function addOverride(){
+  const date = (document.getElementById('ovDate')||{}).value;
+  const open = (document.getElementById('ovOpen')||{}).value === '1';
+  if (!date) { toast('בחרי תאריך','err'); return; }
+  _overrides = (_overrides||[]).filter(o=>o.date!==date); // one entry per date
+  _overrides.push({date, open});
+  document.getElementById('ovDate').value = '';
+  renderOverridesList();
+}
+function removeOverride(date){
+  _overrides = (_overrides||[]).filter(o=>o.date!==date);
+  renderOverridesList();
 }
 
 // Write the 4 known settings rows (+ header) to the Settings sheet. Always the same
@@ -408,7 +450,8 @@ async function writeSettings(s){
     ['acceptingOrders', s.acceptingOrders],
     ['leadDays', s.leadDays],
     ['closedMessage', s.closedMessage],
-    ['hours', s.hours]
+    ['hours', s.hours],
+    ['overrides', s.overrides || '[]']
   ];
   await gapi.client.sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID, range: 'Settings!A1:B'+rows.length, valueInputOption: 'RAW',
@@ -445,7 +488,7 @@ async function saveOrderSettings(){
     from: row.querySelector('.h-from').value || '00:00',
     to:   row.querySelector('.h-to').value   || '23:59'
   }));
-  const s = { acceptingOrders: accepting, leadDays, closedMessage, hours: JSON.stringify(hours) };
+  const s = { acceptingOrders: accepting, leadDays, closedMessage, hours: JSON.stringify(hours), overrides: JSON.stringify(_overrides||[]) };
   db.settings = s; saveCache();
   const ok = await ensureToken();
   if (!ok || !accessToken) { setSync('err','צריך להתחבר מחדש'); alert('ההתחברות לגוגל פגה — ההגדרות לא נשמרו לגיליון. רענני (F5), התחברי מחדש, ונסי שוב.'); return; }
