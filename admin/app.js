@@ -1926,6 +1926,38 @@ function asstShowTyping(on){
   }
 }
 
+// ---- הקלטה קולית (זיהוי דיבור מובנה של הדפדפן, עברית) ----
+let _asstRec=null, _asstRecording=false, _asstRecBase='';
+function asstMicSupported(){ return ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window); }
+function asstMicUI(on){ const b=document.getElementById('asstMic'); if(b){ b.classList.toggle('rec',on); b.textContent= on?'⏹️':'🎙️'; } }
+function asstStopMic(){ if(_asstRec){ try{ _asstRec.stop(); }catch(e){} } _asstRecording=false; asstMicUI(false); }
+function toggleAsstMic(){
+  if(!asstMicSupported()){
+    initAssistant();
+    asstAddSys('הקלטה קולית לא נתמכת בדפדפן הזה. נסי בכרום במחשב או באנדרואיד (אם את על אייפון — תגידו לטל ונוסיף תמיכה).');
+    return;
+  }
+  if(_asstRecording){ asstStopMic(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const r = new SR();
+  r.lang='he-IL'; r.continuous=true; r.interimResults=true;
+  const inp=document.getElementById('asstInput');
+  _asstRecBase = inp && inp.value ? inp.value.replace(/\s+$/,'')+' ' : '';
+  let finalText='';
+  r.onresult=(e)=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t=e.results[i][0].transcript;
+      if(e.results[i].isFinal) finalText+=t+' '; else interim+=t;
+    }
+    if(inp) inp.value = _asstRecBase + finalText + interim;
+  };
+  r.onerror=(e)=>{ const err=e&&e.error; asstStopMic(); if(err && err!=='no-speech' && err!=='aborted'){ initAssistant(); asstAddSys('בעיה בהקלטה: '+(err==='not-allowed'?'אין הרשאת מיקרופון — אשרי גישה למיקרופון בדפדפן':err)); } };
+  r.onend=()=>{ _asstRecording=false; _asstRec=null; asstMicUI(false); };
+  _asstRec=r; _asstRecording=true; asstMicUI(true);
+  try{ r.start(); }catch(e){ _asstRecording=false; _asstRec=null; asstMicUI(false); }
+}
+
 // כרטיס אישור: אישור → מבצע; ביטול → מודיע שבוטל.
 function asstShowConfirm(pending){
   const box=document.getElementById('asstMsgs'); if(!box) return;

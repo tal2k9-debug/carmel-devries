@@ -211,6 +211,9 @@ th,td{padding:8px}
 .asst-input input:focus{outline:none;border-color:var(--p)}
 .asst-input button{padding:11px 18px;border-radius:10px;background:var(--p);color:#fff;font-weight:600;font-size:15px}
 .asst-input button:disabled{opacity:.5;cursor:default}
+.asst-mic{background:#fff !important;color:var(--p) !important;border:1px solid var(--bd) !important;padding:11px 14px !important;font-size:18px !important}
+.asst-mic.rec{background:var(--err) !important;color:#fff !important;border-color:var(--err) !important;animation:micpulse 1.1s infinite}
+@keyframes micpulse{0%,100%{box-shadow:0 0 0 0 rgba(198,40,40,.5)}50%{box-shadow:0 0 0 7px rgba(198,40,40,0)}}
 .asst-quick{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .asst-quick button{background:#fff;border:1px solid var(--bd);color:var(--ink2);padding:7px 12px;border-radius:20px;font-size:13px}
 .asst-quick button:hover{background:#FAF1E8;border-color:var(--p)}
@@ -288,7 +291,8 @@ th,td{padding:8px}
     <div class="asst-chat">
       <div class="asst-msgs" id="asstMsgs"></div>
       <div class="asst-input">
-        <input id="asstInput" placeholder="כתבי כאן ואני אעזור..." autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();sendAssistantMessage();}">
+        <input id="asstInput" placeholder="כתבי כאן, או לחצי 🎙️ לדבר..." autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();sendAssistantMessage();}">
+        <button id="asstMic" class="asst-mic" type="button" title="הקלטה קולית" onclick="toggleAsstMic()">🎙️</button>
         <button id="asstSend" onclick="sendAssistantMessage()">שליחה</button>
       </div>
     </div>
@@ -574,6 +578,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=52"></script>
+<script src="app.js?v=53"></script>
 </body>
 </html>
