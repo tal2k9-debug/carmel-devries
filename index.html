@@ -125,6 +125,26 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 .cn .ic{width:36px;height:36px;border-radius:50%;background:var(--gold);color:var(--bk);display:flex;align-items:center;justify-content:center;font-size:16px}
 .cr{font-size:12px;color:#7a6a52;margin-top:18px;opacity:.8}
 @media (max-width:600px){.bl{font-size:56px}.fr{grid-template-columns:1fr}.oc{padding:22px}section{padding:36px 16px}.hero{padding:44px 16px 32px}.st h2{font-size:28px}.fwa{bottom:84px;left:14px;width:52px;height:52px}}
+/* ===== custom availability calendar ===== */
+.date-display{width:100%;text-align:right;padding:12px 14px;border:1px solid #e0c9a6;border-radius:10px;background:#fff;font-size:15px;color:#3a2f1f;cursor:pointer;font-family:inherit}
+.date-display.has{font-weight:600}
+.date-display.inv{border-color:#c0392b;background:#fdecea}
+.date-cal{margin-top:8px;background:#fff;border:1px solid #e8cfa6;border-radius:14px;padding:14px;box-shadow:0 8px 26px rgba(0,0,0,.10)}
+.dc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.dc-head button{background:#faf1e6;border:1px solid #e8cfa6;border-radius:9px;width:38px;height:38px;cursor:pointer;font-size:18px;color:#7a5a2b;line-height:1}
+.dc-head .dc-title{font-weight:700;font-size:16px;color:#5a4632}
+.dc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.dc-dow{text-align:center;font-size:12px;color:#a08c6e;font-weight:700;padding:4px 0}
+.dc-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:9px;font-size:15px;border:1px solid transparent}
+.dc-day.avail{background:#e9f6e9;color:#256b25;font-weight:700;cursor:pointer;border-color:#bfe0bf}
+.dc-day.avail:hover{background:#d2ecd2}
+.dc-day.sel{background:#2e7d32;color:#fff;font-weight:700;cursor:pointer}
+.dc-day.off{color:#ccbfa8;background:#fbfaf8;text-decoration:line-through;cursor:not-allowed}
+.dc-day.empty{cursor:default}
+.dc-legend{display:flex;gap:16px;justify-content:center;margin-top:12px;font-size:12.5px;color:#6b5d47;flex-wrap:wrap}
+.dc-legend span{display:inline-flex;align-items:center;gap:6px}
+.dc-dot{width:13px;height:13px;border-radius:4px;display:inline-block}
+.dc-closed{text-align:center;padding:18px 10px;color:#8a5a2b;font-size:15px;line-height:1.7;white-space:pre-line}
 </style></head>
 <body>
 <header class="hero">
@@ -161,7 +181,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 </div>
 <div class="fr">
 <div class="ff"><label for="cust-fulfill">סוג קבלה</label><select id="cust-fulfill"><option value="delivery">🚚 משלוח באופקים</option><option value="pickup">🏠 איסוף עצמי - אורים 20</option></select></div>
-<div class="ff"><label for="cust-date">תאריך מבוקש</label><input id="cust-date" type="date"><span id="date-msg" style="display:none;color:#c0392b;font-size:13px;margin-top:6px"></span></div>
+<div class="ff"><label>תאריך מבוקש לאיסוף / משלוח</label><input id="cust-date" type="hidden"><button type="button" id="date-display" class="date-display">בחרי תאריך ▾</button><div id="date-cal" class="date-cal" style="display:none"></div><span id="date-msg" style="display:none;color:#c0392b;font-size:13px;margin-top:6px"></span></div>
 </div>
 <div class="fr fl" id="addr-row"><div class="ff"><label for="cust-address">כתובת למשלוח (באופקים)</label><input id="cust-address" type="text" placeholder="רחוב, מספר" autocomplete="street-address"></div></div>
 <div class="fr fl"><div class="ff"><label for="cust-notes">הערות (אופציונלי)</label><textarea id="cust-notes" placeholder="טעמים מועדפים, אריזה מיוחדת וכו'"></textarea></div></div>
@@ -275,8 +295,52 @@ function totalQty(id){if(!cart[id])return 0;return Object.values(cart[id]).reduc
 function ful(){return $('#cust-fulfill').value;}
 function calcD(s){if(ful()==='pickup')return 0;if(s<=0||s>=FREE)return 0;return FEE;}
 function leadDaysVal(){return Math.max(0,parseInt(orderSettings.leadDays,10)||0);}
-function refreshDateMin(){const d=$('#cust-date');if(!d)return;const t=new Date();t.setDate(t.getDate()+leadDaysVal());d.min=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
-function setupDate(){refreshDateMin();$('#cust-date').addEventListener('change',validateDate);}
+// ===== Custom availability calendar =====
+// Replaces the native date input: customers SEE upfront which days are open for
+// orders (green) and which are not (greyed + struck-through) — no more "pick a
+// day then get told no". A date is available when it's >= today+leadDays AND the
+// weekday/override is open. Selecting is only possible on available days.
+let _calMonth=null; // first-of-month currently shown
+const MONTH_NAMES=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+function calToday(){const d=new Date();d.setHours(0,0,0,0);return d;}
+function calIso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function calMinDate(){const t=calToday();t.setDate(t.getDate()+leadDaysVal());return t;}
+function dateAvailable(d){return d>=calMinDate()&&dateDayOpen(calIso(d));}
+function refreshDateMin(){_calMonth=null;const cal=$('#date-cal');if(cal&&cal.style.display!=='none')renderCalendar();}
+function setupDate(){const b=$('#date-display');if(b)b.onclick=toggleCalendar;}
+function toggleCalendar(){const cal=$('#date-cal');if(!cal)return;if(cal.style.display==='none'){const m=calMinDate();if(!_calMonth)_calMonth=new Date(m.getFullYear(),m.getMonth(),1);renderCalendar();cal.style.display='block';}else{cal.style.display='none';}}
+function calNav(delta){_calMonth=new Date(_calMonth.getFullYear(),_calMonth.getMonth()+delta,1);renderCalendar();}
+function renderCalendar(){
+  const cal=$('#date-cal');if(!cal)return;
+  const av=orderAvailability();
+  if(!av.open){cal.innerHTML='<div class="dc-closed">'+(av.msg||'כרגע איננו מקבלים הזמנות 💛')+'</div>';return;}
+  const m=calMinDate();if(!_calMonth)_calMonth=new Date(m.getFullYear(),m.getMonth(),1);
+  const y=_calMonth.getFullYear(),mo=_calMonth.getMonth();
+  const firstDow=new Date(y,mo,1).getDay();
+  const daysInMonth=new Date(y,mo+1,0).getDate();
+  const sel=$('#cust-date').value;
+  const today=calToday();
+  const canPrev=new Date(y,mo,1)>new Date(today.getFullYear(),today.getMonth(),1);
+  let h='<div class="dc-head"><button type="button" onclick="calNav(-1)" '+(canPrev?'':'disabled style="opacity:.25;cursor:default"')+'>›</button>'
+    +'<span class="dc-title">'+MONTH_NAMES[mo]+' '+y+'</span>'
+    +'<button type="button" onclick="calNav(1)">‹</button></div><div class="dc-grid">';
+  ['א','ב','ג','ד','ה','ו','ש'].forEach(d=>h+='<div class="dc-dow">'+d+'</div>');
+  for(let i=0;i<firstDow;i++)h+='<div class="dc-day empty"></div>';
+  for(let day=1;day<=daysInMonth;day++){
+    const d=new Date(y,mo,day);d.setHours(0,0,0,0);
+    const iso=calIso(d);const avail=dateAvailable(d);const isSel=sel===iso;
+    h+='<div class="dc-day '+(isSel?'sel':(avail?'avail':'off'))+'"'+(avail?' onclick="pickDate(\''+iso+'\')"':'')+'>'+day+'</div>';
+  }
+  h+='</div><div class="dc-legend"><span><i class="dc-dot" style="background:#e9f6e9;border:1px solid #256b25"></i> אפשר להזמין</span><span><i class="dc-dot" style="background:#fbfaf8;border:1px solid #ddd"></i> סגור</span></div>';
+  cal.innerHTML=h;
+}
+function pickDate(iso){
+  $('#cust-date').value=iso;
+  const p=iso.split('-');const d=new Date(+p[0],+p[1]-1,+p[2]);
+  const b=$('#date-display');if(b){b.textContent='יום '+DAY_NAMES[d.getDay()]+' · '+p[2]+'/'+p[1]+'/'+p[0]+'  ✎';b.classList.add('has');b.classList.remove('inv');}
+  $('#date-cal').style.display='none';
+  const msg=document.getElementById('date-msg');if(msg)msg.style.display='none';
+}
 function dateLeadOK(v){if(!v)return true;const p=String(v).split('-');if(p.length!==3)return true;const sel=new Date(+p[0],+p[1]-1,+p[2]);const now=new Date();now.setHours(0,0,0,0);const diff=Math.round((sel-now)/86400000);return diff>=leadDaysVal();}
 // Is the chosen pickup date available? A specific-date override (חופשה / יום מיוחד)
 // wins over the weekly pattern; otherwise fall back to the open weekday. hours=null
@@ -330,6 +394,7 @@ function applyOrderAvailability(){
     if(bsb){bsb.disabled=true;bsb.style.opacity='.5';bsb.style.cursor='not-allowed';}
   }
   const note=$('#order-times-note'); if(note)note.innerHTML=orderTimesNote();
+  const cal=$('#date-cal'); if(cal&&cal.style.display!=='none')renderCalendar();
   return av;
 }
 // Merge a raw settings object (string values from the sheet) into orderSettings.
@@ -518,7 +583,7 @@ function send(){
   const need=[];
   if(!_name)need.push(['#cust-name','שם מלא']);
   if(!_phone)need.push(['#cust-phone','טלפון']);
-  if(!_date)need.push(['#cust-date','תאריך מבוקש']);
+  if(!_date)need.push(['#date-display','תאריך מבוקש']);
   if(_del&&!_addr)need.push(['#cust-address','כתובת למשלוח']);
   $$('.inv').forEach(e=>e.classList.remove('inv'));
   if(need.length){
