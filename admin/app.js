@@ -1811,7 +1811,13 @@ function initAssistant(){
   if (_asstInited) return;
   _asstInited = true;
   asstRender();
-  asstAddBot('היי קרן 🍪 איך אפשר לעזור? אפשר לשאול אותי על האתר, על המלאי או על ההגדרות — או לבקש לשנות משהו.');
+  asstAddBot('היי קרן 🍪 איך אפשר לעזור? אפשר לשאול אותי על האתר, על המלאי או על ההגדרות, לדבר 🎙️ או לצרף צילום מסך 🖼️ — או לבקש לשנות משהו.');
+  // הדבקת תמונה (Ctrl+V) ישירות לצ'אט
+  const inp=document.getElementById('asstInput');
+  if(inp && !inp._pasteWired){ inp._pasteWired=true; inp.addEventListener('paste',(e)=>{
+    const items=(e.clipboardData&&e.clipboardData.items)||[];
+    for(const it of items){ if(it.type && it.type.indexOf('image')===0){ const f=it.getAsFile(); if(f){ e.preventDefault(); asstSetImage(f); break; } } }
+  }); }
 }
 
 // מרנדר מרקדאון בסיסי בבטחה (מודגש, קישורים, שורות) — קודם בריחה, ואז המרה.
@@ -1822,13 +1828,22 @@ function asstMd(s){
   h = h.replace(/\n/g, '<br>');
   return h;
 }
+function asstContentHtml(m){
+  if (Array.isArray(m.content)){
+    return m.content.map(b=>{
+      if(b && b.type==='image' && b.source) return '<img class="chatimg" src="data:'+b.source.media_type+';base64,'+b.source.data+'">';
+      if(b && b.type==='text') return m.role==='assistant' ? asstMd(b.text) : esc(b.text).replace(/\n/g,'<br>');
+      return '';
+    }).join('');
+  }
+  return m.role==='assistant' ? asstMd(m.content) : esc(m.content).replace(/\n/g,'<br>');
+}
 function asstRender(){
   const box = document.getElementById('asstMsgs');
   if (!box) return;
   box.innerHTML = _asstHistory.map(m=>{
     const cls = m.role==='user' ? 'me' : (m.role==='sys' ? 'sys' : 'bot');
-    const html = m.role==='assistant' ? asstMd(m.content) : esc(m.content).replace(/\n/g,'<br>');
-    return '<div class="asst-b '+cls+'">'+html+'</div>';
+    return '<div class="asst-b '+cls+'">'+asstContentHtml(m)+'</div>';
   }).join('');
   box.scrollTop = box.scrollHeight;
 }
@@ -1870,9 +1885,16 @@ async function sendAssistantMessage(){
   const inp = document.getElementById('asstInput');
   if (!inp) return;
   const text = (inp.value||'').trim();
-  if (!text) return;
+  const img = _asstPendingImg;
+  if (!text && !img) return;
   inp.value = '';
-  _asstHistory.push({role:'user', content:text});
+  let content;
+  if (img){
+    content = [{ type:'image', source:{ type:'base64', media_type:img.mediaType, data:img.data } },
+               { type:'text', text: text || 'מה את/ה רואה בצילום הזה? עזרי לי לפי מה שרואים.' }];
+  } else { content = text; }
+  asstClearImage();
+  _asstHistory.push({role:'user', content});
   asstRender();
   asstSetBusy(true);
   asstShowTyping(true);
@@ -1956,6 +1978,41 @@ function toggleAsstMic(){
   r.onend=()=>{ _asstRecording=false; _asstRec=null; asstMicUI(false); };
   _asstRec=r; _asstRecording=true; asstMicUI(true);
   try{ r.start(); }catch(e){ _asstRecording=false; _asstRec=null; asstMicUI(false); }
+}
+
+// ---- צירוף צילום מסך / תמונה (Claude קורא אותה) ----
+let _asstPendingImg=null; // {data(base64), mediaType, dataUrl}
+function asstResizeImage(file){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
+      const max=1400; if(w>max||h>max){ const s=Math.min(max/w,max/h); w=Math.max(1,Math.round(w*s)); h=Math.max(1,Math.round(h*s)); }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      const dataUrl=c.toDataURL('image/jpeg',0.85);
+      resolve({ data:dataUrl.split(',')[1], mediaType:'image/jpeg', dataUrl });
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error('bad image')); };
+    img.src=url;
+  });
+}
+async function asstSetImage(file){
+  try{
+    if(!file || !/^image\//.test(file.type||'')) return;
+    const r=await asstResizeImage(file);
+    _asstPendingImg=r;
+    const prev=document.getElementById('asstImgPreview');
+    if(prev){ prev.style.display='flex'; prev.innerHTML='<img src="'+r.dataUrl+'"><span style="flex:1;font-size:13px;color:var(--ink2)">צילום מצורף — יישלח עם ההודעה</span><button type="button" onclick="asstClearImage()">הסר</button>'; }
+    const inp=document.getElementById('asstInput'); if(inp) inp.focus();
+  }catch(e){ initAssistant(); asstAddSys('לא הצלחתי לקרוא את התמונה. נסי קובץ אחר.'); }
+}
+function asstClearImage(){
+  _asstPendingImg=null;
+  const prev=document.getElementById('asstImgPreview');
+  if(prev){ prev.style.display='none'; prev.innerHTML=''; }
 }
 
 // כרטיס אישור: אישור → מבצע; ביטול → מודיע שבוטל.
