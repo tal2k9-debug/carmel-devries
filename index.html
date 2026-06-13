@@ -150,6 +150,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <section class="os"><div class="cont">
 <div class="st"><h2>הזמנה</h2><div class="or"><span class="ln"></span><span class="ht">❤</span><span class="ln"></span></div></div>
 <div class="oc">
+<div id="closed-banner" style="display:none;white-space:pre-line;background:#fff3e0;border:1px solid #e8cfa6;border-radius:14px;padding:16px 18px;margin-bottom:18px;text-align:center;color:#8a5a2b;font-size:15px;line-height:1.7;font-weight:500"></div>
 <div class="fr">
 <div class="ff"><label for="cust-name">שם מלא</label><input id="cust-name" type="text" placeholder="הכניסו שם" autocomplete="name"></div>
 <!-- honeypot: בני אדם לא רואים את השדה; בוט שממלא אותו נחסם בשרת בשקט.
@@ -222,6 +223,13 @@ const WEBAPP_URL='https://script.google.com/macros/s/AKfycbw2KPB_GWD7T4ylM9DiCKp
 const PAYBOX_LINK='https://links.payboxapp.com/WERg82nyK3b';
 const BIT_LINK='https://www.bitpay.co.il/app/me/5CFDC8A3-CD4F-086D-E483-3133A7F0D6CE496E';
 const PAY_LABELS={cash:'מזומן',paybox:'פייבוקס',bit:'ביט'};
+const DAY_NAMES=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+// Order-availability rules — Keren controls these from the dashboard and they
+// are served through the Apps Script (?action=settings). Safe defaults below =
+// "always open, 2 days lead time" so the site behaves exactly as before until
+// she configures it, and also if the settings fetch ever fails (fail-open: we
+// never block real orders because of a transient network error).
+let orderSettings={acceptingOrders:true,leadDays:2,closedMessage:'כרגע איננו מקבלים הזמנות 💛 נשמח לקבל את הזמנתכם כשנפתח שוב.',hours:null};
 let payMethod='cash';
 // Get available qty for a specific flavor (or whole product when flavor is '')
 function flavorAvail(p, flavorName){
@@ -266,9 +274,69 @@ function totalQty(id){if(!cart[id])return 0;return Object.values(cart[id]).reduc
 
 function ful(){return $('#cust-fulfill').value;}
 function calcD(s){if(ful()==='pickup')return 0;if(s<=0||s>=FREE)return 0;return FEE;}
-function setupDate(){const d=$('#cust-date');const t=new Date();t.setDate(t.getDate()+2);d.min=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');d.addEventListener('change',validateDate);}
-function dateLeadOK(v){if(!v)return true;const p=String(v).split('-');if(p.length!==3)return true;const sel=new Date(+p[0],+p[1]-1,+p[2]);const now=new Date();now.setHours(0,0,0,0);const diff=Math.round((sel-now)/86400000);let need=2;if(sel.getDay()===5)need=3;return diff>=need;}
-function validateDate(){const d=$('#cust-date'),msg=document.getElementById('date-msg');if(msg)msg.style.display='none';d.classList.remove('inv');if(!d.value)return;const p=String(d.value).split('-');if(p.length!==3)return;const sel=new Date(+p[0],+p[1]-1,+p[2]);const day=sel.getDay();let need=2;if(day===5)need=3;if(!dateLeadOK(d.value)){if(msg){msg.textContent=(day===5?'ליום שישי':'לתאריך זה')+' צריך להזמין '+need+' ימים מראש — אפשר לבחור תאריך מאוחר יותר.';msg.style.display='block';}d.classList.add('inv');}}
+function leadDaysVal(){return Math.max(0,parseInt(orderSettings.leadDays,10)||0);}
+function refreshDateMin(){const d=$('#cust-date');if(!d)return;const t=new Date();t.setDate(t.getDate()+leadDaysVal());d.min=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
+function setupDate(){refreshDateMin();$('#cust-date').addEventListener('change',validateDate);}
+function dateLeadOK(v){if(!v)return true;const p=String(v).split('-');if(p.length!==3)return true;const sel=new Date(+p[0],+p[1]-1,+p[2]);const now=new Date();now.setHours(0,0,0,0);const diff=Math.round((sel-now)/86400000);return diff>=leadDaysVal();}
+// "HH:MM" → minutes since midnight (null if blank/invalid).
+function hmToMin(s){const m=String(s||'').match(/^(\d{1,2}):(\d{2})$/);if(!m)return null;return (+m[1])*60+(+m[2]);}
+// Is the shop accepting orders right now? Uses the visitor's local clock (Keren's
+// customers are in Israel). Returns {open} or {open:false,msg} with a friendly
+// "opens again ..." hint when we can compute the next open window.
+function orderAvailability(){
+  if(orderSettings.acceptingOrders===false)return {open:false,msg:orderSettings.closedMessage};
+  const h=orderSettings.hours;
+  if(!Array.isArray(h)||h.length<7)return {open:true};
+  const now=new Date(),cur=now.getHours()*60+now.getMinutes(),today=h[now.getDay()];
+  let openNow=false;
+  if(today&&today.open){const f=hmToMin(today.from),t=hmToMin(today.to);openNow=(f==null||t==null)?true:(cur>=f&&cur<=t);}
+  if(openNow)return {open:true};
+  // Scan the next 7 days for the next open window to build a helpful hint.
+  let hint='';
+  for(let i=0;i<=7;i++){
+    const dd=new Date(now);dd.setDate(now.getDate()+i);const day=h[dd.getDay()];
+    if(!day||!day.open)continue;
+    const f=hmToMin(day.from);
+    if(i===0){ if(f!=null&&cur<f){hint='היום'+(day.from?' בשעה '+day.from:'');break;} continue; }
+    hint=(i===1?'מחר':'ביום '+DAY_NAMES[dd.getDay()])+(day.from?' בשעה '+day.from:'');break;
+  }
+  let msg=orderSettings.closedMessage||'כרגע איננו מקבלים הזמנות.';
+  if(hint)msg+='\nנפתח שוב '+hint+'.';
+  return {open:false,msg:msg};
+}
+// Reflect availability in the UI: show/hide the closed banner and enable/disable
+// both order buttons so a closed shop cannot receive an order.
+function applyOrderAvailability(){
+  const av=orderAvailability(),banner=$('#closed-banner'),sb=$('#sb'),bsb=$('#bsb');
+  if(av.open){
+    if(banner)banner.style.display='none';
+    if(sb){sb.disabled=false;sb.style.opacity='';sb.style.cursor='';sb.innerHTML='🍪 שליחת הזמנה';}
+    if(bsb){bsb.disabled=false;bsb.style.opacity='';bsb.style.cursor='';}
+  }else{
+    if(banner){banner.textContent=av.msg;banner.style.display='block';}
+    if(sb){sb.disabled=true;sb.style.opacity='.5';sb.style.cursor='not-allowed';sb.textContent='ההזמנות סגורות כרגע';}
+    if(bsb){bsb.disabled=true;bsb.style.opacity='.5';bsb.style.cursor='not-allowed';}
+  }
+  return av;
+}
+// Merge a raw settings object (string values from the sheet) into orderSettings.
+function parseSettings(s){
+  const o={acceptingOrders:true,leadDays:2,closedMessage:orderSettings.closedMessage,hours:null};
+  if(!s||typeof s!=='object')return o;
+  if(s.acceptingOrders!==undefined){const v=String(s.acceptingOrders).trim().toLowerCase();o.acceptingOrders=!(v==='0'||v==='false'||v==='no'||v==='');}
+  if(s.leadDays!==undefined&&String(s.leadDays).trim()!=='')o.leadDays=Math.max(0,parseInt(s.leadDays,10)||0);
+  if(s.closedMessage&&String(s.closedMessage).trim())o.closedMessage=String(s.closedMessage);
+  if(s.hours){try{const h=JSON.parse(s.hours);if(Array.isArray(h))o.hours=h;}catch(e){}}
+  return o;
+}
+function loadSettings(){
+  fetch(WEBAPP_URL+'?action=settings&t='+Date.now(),{cache:'no-store'})
+    .then(r=>r.json())
+    .then(d=>{if(d&&d.ok&&d.settings)orderSettings=parseSettings(d.settings);})
+    .catch(()=>{})
+    .then(()=>{refreshDateMin();applyOrderAvailability();});
+}
+function validateDate(){const d=$('#cust-date'),msg=document.getElementById('date-msg');if(msg)msg.style.display='none';d.classList.remove('inv');if(!d.value)return;if(!dateLeadOK(d.value)){const n=leadDaysVal();if(msg){msg.textContent='לתאריך זה צריך להזמין '+n+' '+(n===1?'יום':'ימים')+' מראש לפחות — אפשר לבחור תאריך מאוחר יותר.';msg.style.display='block';}d.classList.add('inv');}}
 function updAddr(){$('#addr-row').style.display=ful()==='delivery'?'':'none';}
 
 function buildQtyRow(id,flav,placeholder){
@@ -406,6 +474,10 @@ function buildOrderObj(){
 }
 
 function send(){
+  // Shop closed (master switch or outside the open hours/days Keren set)? Block
+  // the order and explain — the buttons are already disabled, this is a safety net.
+  const av=applyOrderAvailability();
+  if(!av.open){alert(av.msg);return;}
   let subtotal=0;
   products.forEach(p=>{if(cart[p.id])Object.values(cart[p.id]).forEach(q=>subtotal+=q*p.price);});
   if(!subtotal){alert('בחרו לפחות פריט אחד');return;}
@@ -440,8 +512,8 @@ function send(){
   }
   if(!dateLeadOK(_date)){
     const el=$('#cust-date');el.classList.add('inv');el.focus();el.scrollIntoView({block:'center',behavior:'smooth'});
-    const sd=_date.split('-');const dow=new Date(+sd[0],+sd[1]-1,+sd[2]).getDay();
-    alert('התאריך שנבחר מוקדם מדי — צריך להזמין '+(dow===5?3:2)+' ימים מראש לפחות. בחרי תאריך מאוחר יותר.');
+    const n=leadDaysVal();
+    alert('התאריך שנבחר מוקדם מדי — צריך להזמין '+n+' '+(n===1?'יום':'ימים')+' מראש לפחות. בחרי תאריך מאוחר יותר.');
     return;
   }
   if(!WEBAPP_URL){
@@ -530,7 +602,7 @@ $$('#paym .pm').forEach(b=>b.onclick=()=>{payMethod=b.dataset.m;$$('#paym .pm').
 $$('#cust-name,#cust-phone,#cust-date,#cust-address').forEach(el=>el.addEventListener('input',()=>el.classList.remove('inv')));
 function computeTotal(){let sub=0;products.forEach(p=>{if(cart[p.id])Object.values(cart[p.id]).forEach(q=>sub+=q*p.price);});return sub+calcD(sub);}
 $('#cust-fulfill').onchange=()=>{updAddr();upd();};
-setupDate();updAddr();render();upd();
+setupDate();updAddr();render();upd();loadSettings();
 
 // Load live product data through the Apps Script web app — the spreadsheet
 // itself is PRIVATE; the script (running as the owner) serves published
@@ -588,14 +660,23 @@ function loadProductsFromSheet(){
     // If we got rows back at all, sheet data is authoritative — even an empty
     // visible set means "everything is unpublished" and we should show nothing.
     if(allRows.length){
-      const live=allRows.filter(p=>p.id&&p.name&&p.published&&p.qty>0)
-                       .sort((a,b)=>a.sortOrder-b.sortOrder);
+      // Show every PUBLISHED product — even one whose stock is 0. Out-of-stock
+      // items stay on the page marked "אזל" (render() handles that) instead of
+      // vanishing. In-stock items are listed first so customers see what they
+      // can buy, then the sold-out ones below, each keeping its sortOrder order.
+      const live=allRows.filter(p=>p.id&&p.name&&p.published)
+                       .sort((a,b)=>{
+                         const sa=(typeof a.qty==='number'&&a.qty<=0)?1:0;
+                         const sb=(typeof b.qty==='number'&&b.qty<=0)?1:0;
+                         if(sa!==sb)return sa-sb;
+                         return a.sortOrder-b.sortOrder;
+                       });
       products.length=0;
       live.forEach(p=>products.push(p));
       try{localStorage.setItem('carmel-products-v1',JSON.stringify(live));}catch(e){}
       Object.keys(cart).forEach(id=>{if(!products.find(p=>p.id===id))delete cart[id];});
       render();upd();
-      console.log('[Carmel] Sheet has',allRows.length,'rows, showing',live.length,'published in-stock');
+      console.log('[Carmel] Sheet has',allRows.length,'rows, showing',live.length,'published (incl. sold-out)');
       if(!live.length){
         $('#products').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--is);font-size:16px">כרגע אין מוצרים זמינים. נסו שוב מאוחר יותר 💛</div>';
       }
@@ -603,9 +684,11 @@ function loadProductsFromSheet(){
   }).catch(e=>console.log('[Carmel] Using fallback products:',e.message));
 }
 loadProductsFromSheet();
-// Re-fetch every 60s so admin edits propagate to long-open tabs
-setInterval(loadProductsFromSheet, 60000);
-// Re-fetch immediately when the user returns to the tab
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) loadProductsFromSheet(); });
+// Re-fetch every 60s so admin edits (products + open hours) propagate to long-open
+// tabs, and re-evaluate availability so the shop "closes" on time even if nobody
+// reloads the page.
+setInterval(function(){loadProductsFromSheet();loadSettings();}, 60000);
+// Re-evaluate the minute the user returns to the tab.
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ loadProductsFromSheet(); loadSettings(); } });
 </script>
 </body></html>

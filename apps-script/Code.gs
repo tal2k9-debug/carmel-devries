@@ -165,8 +165,30 @@ function doGet(e) {
   var p = (e && e.parameter) || {};
   if (p.action === 'products') return getProducts_(p);
   if (p.action === 'orders') return getOrders_(p);
+  if (p.action === 'settings') return getSettings_();
   if (p.action === 'set_secret') return setSecret_(p);
   return json({ ok: true, service: 'carmel-order-intake' });
+}
+
+// Order-availability settings (open days/hours, lead time, closed message) that
+// Keren edits in the dashboard. These are NOT sensitive — the public site needs
+// them to know when ordering is open — so no secret is required. Returns a flat
+// {key: value} map from the Settings sheet; an empty map if the tab is missing
+// (the site then falls back to its "always open" defaults).
+function getSettings_() {
+  try {
+    var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Settings');
+    if (!sh) return json({ ok: true, settings: {} });
+    var data = sh.getDataRange().getDisplayValues();
+    var out = {};
+    for (var r = 1; r < data.length; r++) {
+      var k = String(data[r][0] || '').trim();
+      if (k) out[k] = data[r][1];
+    }
+    return json({ ok: true, settings: out });
+  } catch (err) {
+    return json({ ok: true, settings: {} });
+  }
 }
 
 function botSecretOk_(s) {

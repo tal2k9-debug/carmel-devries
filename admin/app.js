@@ -24,7 +24,7 @@ const PRODUCTS_SEED = [
 ];
 
 let tokenClient, accessToken=null, user=null, _tokenRefreshResolve=null;
-let db = {customers:[], orders:[], expenses:[], recipes:[], products:[]};
+let db = {customers:[], orders:[], expenses:[], recipes:[], products:[], settings:{}};
 let calCursor = new Date();
 let editingCustId=null, editingExpId=null, editingProdId=null;
 let pendingWrites = []; // queue for offline
@@ -177,6 +177,7 @@ async function ensureTabs() {
     if (!existing.includes('Expenses')) toAdd.push({addSheet:{properties:{title:'Expenses'}}});
     if (!existing.includes('Recipes'))  toAdd.push({addSheet:{properties:{title:'Recipes'}}});
     if (!existing.includes('Products')) toAdd.push({addSheet:{properties:{title:'Products'}}});
+    if (!existing.includes('Settings')) toAdd.push({addSheet:{properties:{title:'Settings'}}});
     if (toAdd.length){
       await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:SHEET_ID, resource:{requests:toAdd}});
     }
@@ -200,6 +201,10 @@ async function ensureTabs() {
         spreadsheetId: SHEET_ID, range: 'Products!A1:N' + rows.length, valueInputOption: 'RAW',
         resource: {values: rows}
       });
+    }
+    if (!existing.includes('Settings')) {
+      // Seed "always open, 2 days lead" so the public site behaves exactly as before.
+      await writeSettings(DEFAULT_SETTINGS);
     }
   } catch(e){ console.warn('ensureTabs', e); }
 }
@@ -233,18 +238,20 @@ async function updateRow(sheetName, rowNum, row) {
 async function syncAll() {
   setSync('syncing', 'מסנכרן...');
   try {
-    const [cust, ord, exp, rec, prod] = await Promise.all([
+    const [cust, ord, exp, rec, prod, setg] = await Promise.all([
       readRange('Customers!A2:H'),
       readRange('Orders!A2:N'),
       readRange('Expenses!A2:F').catch(()=>[]),
       readRange('Recipes!A2:H').catch(()=>[]),
-      readRange('Products!A2:N').catch(()=>[])
+      readRange('Products!A2:N').catch(()=>[]),
+      readRange('Settings!A2:B').catch(()=>[])
     ]);
     db.customers = cust.map(r => rowToCust(r));
     db.orders = ord.map(r => rowToOrder(r));
     db.expenses = exp.map(r => rowToExp(r));
     db.recipes = rec.map(r => rowToRecipe(r));
     db.products = prod.map(r => rowToProd(r));
+    db.settings = settingsRowsToObj(setg);
     refreshRecipesList();
     saveCache();
     renderAll();
@@ -271,6 +278,7 @@ function loadCache() {
     if (!db.expenses) db.expenses = [];
     if (!db.recipes) db.recipes = [];
     if (!db.products) db.products = [];
+    if (!db.settings) db.settings = {};
   } catch(e){}
 }
 function saveCache(){ localStorage.setItem(CACHE_KEY, JSON.stringify(db)); }
@@ -337,6 +345,84 @@ function flavorsTotalQty(arr) {
   return (arr || []).reduce((s, f) => s + (parseInt(f.qty)||0), 0);
 }
 
+/* ============ ORDER SETTINGS (open hours / lead time / closed message) ============ */
+// Keren controls when the public site accepts orders. Stored as key/value rows in
+// a "Settings" sheet; the public site reads them through the Apps Script. Defaults
+// below = "always open, 2 days lead" so nothing changes on the site until she edits.
+const SETTINGS_DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת']; // index = getDay() (0=Sunday)
+const DEFAULT_SETTINGS = {
+  acceptingOrders: '1',
+  leadDays: '2',
+  closedMessage: 'כרגע איננו מקבלים הזמנות 💛 נשמח לקבל את הזמנתכם כשנפתח שוב.',
+  hours: JSON.stringify([
+    {open:true,from:'00:00',to:'23:59'},{open:true,from:'00:00',to:'23:59'},
+    {open:true,from:'00:00',to:'23:59'},{open:true,from:'00:00',to:'23:59'},
+    {open:true,from:'00:00',to:'23:59'},{open:true,from:'00:00',to:'23:59'},
+    {open:true,from:'00:00',to:'23:59'}
+  ])
+};
+function settingsRowsToObj(rows){ const o={}; (rows||[]).forEach(r=>{ const k=String(r[0]||'').trim(); if(k) o[k]=r[1]; }); return o; }
+function isAcceptingValue(v){ const s=String(v==null?'':v).trim().toLowerCase(); return !(s==='0'||s==='false'||s==='no'||s===''); }
+
+function renderSettings(){
+  const s = Object.assign({}, DEFAULT_SETTINGS, db.settings||{});
+  const acc = document.getElementById('setAccepting'); if (acc) acc.checked = isAcceptingValue(s.acceptingOrders);
+  const lead = document.getElementById('setLeadDays'); if (lead) lead.value = parseInt(s.leadDays,10)||0;
+  const msg = document.getElementById('setClosedMsg'); if (msg) msg.value = s.closedMessage||'';
+  let hours; try { hours = JSON.parse(s.hours); } catch(e) { hours = null; }
+  if (!Array.isArray(hours) || hours.length < 7) hours = JSON.parse(DEFAULT_SETTINGS.hours);
+  const el = document.getElementById('hoursRows');
+  if (!el) return;
+  el.innerHTML = SETTINGS_DAYS.map((dn,i)=>{
+    const d = hours[i] || {open:false, from:'09:00', to:'20:00'};
+    return `<div class="hours-row" data-day="${i}" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 0;border-bottom:1px solid #f0e0d0">
+      <label style="display:flex;align-items:center;gap:8px;min-width:110px;cursor:pointer;font-weight:600">
+        <input type="checkbox" class="h-open" ${d.open?'checked':''} style="width:18px;height:18px;cursor:pointer"> ${dn}
+      </label>
+      <input type="time" class="h-from" value="${esc(d.from||'09:00')}" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:#fff">
+      <span style="color:var(--mute)">עד</span>
+      <input type="time" class="h-to" value="${esc(d.to||'20:00')}" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:#fff">
+    </div>`;
+  }).join('');
+}
+
+// Write the 4 known settings rows (+ header) to the Settings sheet. Always the same
+// shape, so it overwrites cleanly with no stale rows.
+async function writeSettings(s){
+  const rows = [
+    ['key','value'],
+    ['acceptingOrders', s.acceptingOrders],
+    ['leadDays', s.leadDays],
+    ['closedMessage', s.closedMessage],
+    ['hours', s.hours]
+  ];
+  await gapi.client.sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID, range: 'Settings!A1:B'+rows.length, valueInputOption: 'RAW',
+    resource: { values: rows }
+  });
+}
+
+async function saveOrderSettings(){
+  const accepting = document.getElementById('setAccepting').checked ? '1' : '0';
+  const leadDays = String(Math.max(0, parseInt(document.getElementById('setLeadDays').value,10)||0));
+  const closedMessage = document.getElementById('setClosedMsg').value.trim() || DEFAULT_SETTINGS.closedMessage;
+  const hours = Array.from(document.querySelectorAll('#hoursRows .hours-row')).map(row=>({
+    open: row.querySelector('.h-open').checked,
+    from: row.querySelector('.h-from').value || '00:00',
+    to:   row.querySelector('.h-to').value   || '23:59'
+  }));
+  const s = { acceptingOrders: accepting, leadDays, closedMessage, hours: JSON.stringify(hours) };
+  db.settings = s; saveCache();
+  const ok = await ensureToken();
+  if (!ok || !accessToken) { setSync('err','צריך להתחבר מחדש'); alert('ההתחברות לגוגל פגה — ההגדרות לא נשמרו לגיליון. רענני (F5), התחברי מחדש, ונסי שוב.'); return; }
+  setSync('syncing','שומר...');
+  try {
+    if (typeof gapi !== 'undefined' && gapi.client) gapi.client.setToken({access_token: accessToken});
+    await writeSettings(s);
+    setSync('ok','מסונכרן'); toast('ההגדרות נשמרו ✓','ok');
+  } catch(e) { console.error(e); setSync('err','שגיאת שמירה'); alert('שמירת ההגדרות נכשלה (אולי תקלת רשת). נסי שוב.'); }
+}
+
 /* ============ UI BINDING ============ */
 function bindUI() {
   document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.page));
@@ -361,6 +447,7 @@ function switchTab(page) {
   if (page==='expenses') renderExpenses();
   if (page==='shopping') generateShoppingList();
   if (page==='products') renderProducts();
+  if (page==='settings') renderSettings();
 }
 
 function renderAll() {
@@ -368,6 +455,7 @@ function renderAll() {
   if (document.getElementById('page-calendar').classList.contains('active')) renderCalendar();
   if (document.getElementById('page-pnl').classList.contains('active')) renderPL();
   if (document.getElementById('page-expenses').classList.contains('active')) renderExpenses();
+  if (document.getElementById('page-settings').classList.contains('active')) renderSettings();
 }
 
 /* ============ TODAY ============ */

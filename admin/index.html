@@ -235,6 +235,7 @@ th,td{padding:8px}
   <button class="tab" data-page="expenses">💰 הוצאות</button>
   <button class="tab" data-page="pnl">📊 דוח P&L</button>
   <button class="tab" data-page="shopping">🛒 קניות</button>
+  <button class="tab" data-page="settings">⚙️ הגדרות הזמנות</button>
 </nav>
 
 <main>
@@ -408,6 +409,46 @@ th,td{padding:8px}
   <div class="card"><div style="background:#FAF1E8;padding:10px;border-radius:8px;margin-bottom:14px;font-size:13px;color:var(--ink2)">רשימה מחושבת מההזמנות הפתוחות לפי המתכונים שאת/ה שומר/ת ב-🧮 תמחור. רק עם מתכון שמור — מצרך אמיתי נכנס לרשימה.</div><div id="shopList">לחץ "רענון" כדי לחשב</div></div>
 </section>
 
+<!-- ORDER SETTINGS -->
+<section class="page" id="page-settings">
+  <div class="page-h"><h2>הגדרות הזמנות</h2><div class="actions"><button class="btn btn-s" onclick="renderSettings()">🔄 רענון</button></div></div>
+  <div class="card" style="margin-bottom:16px;background:#FAF1E8">
+    <div style="font-size:14px;color:var(--ink2);line-height:1.7">
+      <strong>מה זה:</strong> כאן את קובעת מתי הלקוחות יכולים להזמין באתר. כשסגור — מופיעה ללקוח הודעה והכפתור "שליחת הזמנה" חסום.<br>
+      השינויים נשמרים לגיליון ומשפיעים על האתר תוך כדקה.
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:16px">
+      <input type="checkbox" id="setAccepting" style="width:22px;height:22px;cursor:pointer">
+      <strong>האתר מקבל הזמנות</strong>
+    </label>
+    <div style="font-size:13px;color:var(--mute);margin-top:8px">הסירי את הסימון כדי לסגור הזמנות לגמרי (חופשה, יום עמוס) — גובר על שעות הפתיחה למטה.</div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="form-grid">
+      <div class="field"><label>מינימום ימים מראש להזמנה</label><input id="setLeadDays" type="number" min="0" step="1" value="2"><span style="font-size:12px;color:var(--mute);margin-top:4px">כמה ימים קדימה לפחות הלקוח חייב לבחור. למשל 2 = אי אפשר להזמין להיום או למחר.</span></div>
+    </div>
+    <div class="field full" style="margin-top:14px"><label>הודעה ללקוח כשסגור</label><textarea id="setClosedMsg" placeholder="כרגע איננו מקבלים הזמנות 💛"></textarea></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:6px">שעות פתיחה להזמנות</h3>
+    <div style="font-size:13px;color:var(--ink2);background:#FAF1E8;padding:10px 14px;border-radius:8px;margin-bottom:14px;line-height:1.7">
+      סמני ✅ ליום פתוח וקבעי שעות. לקוח שייכנס מחוץ לשעות יראה את הודעת הסגירה והכפתור יהיה חסום.<br>
+      <span style="color:var(--mute)">רוצה שתמיד אפשר להזמין? סמני את כל הימים עם 00:00–23:59 (זו גם ברירת המחדל).</span>
+    </div>
+    <div id="hoursRows"></div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap">
+    <button class="btn btn-p" onclick="saveOrderSettings()">💾 שמירת הגדרות</button>
+    <button class="btn btn-s" onclick="renderSettings()">ביטול שינויים</button>
+  </div>
+</section>
+
 </main>
 
 <!-- PRODUCT MODAL -->
@@ -470,6 +511,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=47"></script>
+<script src="app.js?v=48"></script>
 </body>
 </html>
