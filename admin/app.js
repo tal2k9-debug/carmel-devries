@@ -1814,12 +1814,21 @@ function initAssistant(){
   asstAddBot('היי קרן 🍪 איך אפשר לעזור? אפשר לשאול אותי על האתר, על המלאי או על ההגדרות — או לבקש לשנות משהו.');
 }
 
+// מרנדר מרקדאון בסיסי בבטחה (מודגש, קישורים, שורות) — קודם בריחה, ואז המרה.
+function asstMd(s){
+  let h = esc(s);
+  h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:var(--p);text-decoration:underline">$1</a>');
+  h = h.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/\n/g, '<br>');
+  return h;
+}
 function asstRender(){
   const box = document.getElementById('asstMsgs');
   if (!box) return;
   box.innerHTML = _asstHistory.map(m=>{
     const cls = m.role==='user' ? 'me' : (m.role==='sys' ? 'sys' : 'bot');
-    return '<div class="asst-b '+cls+'">'+esc(m.content)+'</div>';
+    const html = m.role==='assistant' ? asstMd(m.content) : esc(m.content).replace(/\n/g,'<br>');
+    return '<div class="asst-b '+cls+'">'+html+'</div>';
   }).join('');
   box.scrollTop = box.scrollHeight;
 }
@@ -1901,11 +1910,20 @@ async function sendAssistantMessage(){
 }
 
 function asstSetBusy(b){ _asstBusy=b; const btn=document.getElementById('asstSend'); if(btn) btn.disabled=b; }
+let _asstTypingTimer=null;
 function asstShowTyping(on){
   const box=document.getElementById('asstMsgs'); if(!box) return;
   let t=document.getElementById('asstTyping');
-  if(on){ if(!t){ t=document.createElement('div'); t.id='asstTyping'; t.className='asst-typing'; t.textContent='כותב/ת...'; box.appendChild(t);} box.scrollTop=box.scrollHeight; }
-  else if(t){ t.remove(); }
+  if(on){
+    if(!t){ t=document.createElement('div'); t.id='asstTyping'; t.className='asst-typing'; t.textContent='כותב/ת...'; box.appendChild(t);}
+    box.scrollTop=box.scrollHeight;
+    clearTimeout(_asstTypingTimer);
+    // אם זה לוקח זמן — כנראה מחפש/ת באינטרנט; להראות שזה עובד.
+    _asstTypingTimer=setTimeout(()=>{ const e=document.getElementById('asstTyping'); if(e) e.textContent='מחפש/ת מידע… (כמה שניות)'; }, 5000);
+  } else {
+    clearTimeout(_asstTypingTimer);
+    if(t){ t.remove(); }
+  }
 }
 
 // כרטיס אישור: אישור → מבצע; ביטול → מודיע שבוטל.
