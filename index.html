@@ -50,13 +50,13 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .pi{width:100%;height:260px;background:linear-gradient(135deg,#1a1612,#2a1f15);display:flex;align-items:center;justify-content:center;color:var(--gl);overflow:hidden;flex-shrink:0;position:relative}
 .pi.has{background:transparent}
 .pi img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
-.pi .copyr{position:absolute;bottom:8px;right:10px;background:rgba(0,0,0,.45);color:#fff;font-size:11px;padding:3px 8px;border-radius:8px;letter-spacing:.02em;pointer-events:none;font-weight:500}
-.kbadge{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;padding:3px 10px;border-radius:10px;margin-inline-start:8px;vertical-align:middle}
-.kbadge.parve{background:#e8f5e9;color:#2e7d32}
-.kbadge.dairy{background:#fff3e0;color:#c2185b}
-.kbadge.mixed{background:#ede7f6;color:#5e35b1}
-.soldout{display:inline-block;background:#fbe9e7;color:#bf360c;font-size:14px;font-weight:700;padding:5px 14px;border-radius:12px;margin-inline-start:8px;white-space:nowrap;unicode-bidi:isolate;border:1.5px solid #ef9a9a}
-.soldout bdi{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;display:inline-block;margin:0 3px;color:#b71c1c}
+.pi .copyr{position:absolute;bottom:8px;right:10px;background:rgba(0,0,0,.24);color:rgba(255,255,255,.88);font-size:10.5px;padding:3px 8px;border-radius:8px;letter-spacing:.02em;pointer-events:none;font-weight:400;backdrop-filter:blur(2px)}
+.kbadge{display:inline-block;font-family:'Heebo',sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.02em;padding:3px 11px;border-radius:11px;margin-inline-start:8px;vertical-align:middle}
+.kbadge.parve{background:#eef5ec;color:#4a7a4e}
+.kbadge.dairy{background:#eaf1fa;color:#3f72b0}
+.kbadge.mixed{background:#f1ecf7;color:#6b54a8}
+.soldout{display:inline-block;background:#fbe9e7;color:#bf360c;font-family:'Heebo',sans-serif;font-size:14px;font-weight:600;padding:5px 14px;border-radius:12px;margin-inline-start:8px;white-space:nowrap;unicode-bidi:isolate;border:1.5px solid #ef9a9a;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1}
+.soldout bdi{font-family:'Heebo',sans-serif;font-size:17px;font-weight:700;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1;display:inline-block;margin:0 3px;color:#b71c1c}
 @media (max-width:600px){.pi{height:220px}}
 .pb{padding:22px 22px 18px;flex:1;display:flex;flex-direction:column}
 .pn{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:24px;color:var(--ink);margin-bottom:8px}
@@ -446,7 +446,7 @@ function render(){
         const fQty=typeof f==='string'?Infinity:(f.qty||0);
         const sold=fQty<=0;
         const lowFlav=fQty>0&&fQty<=3;
-        const stockTxt=sold?'<span style="color:#bf360c;font-size:11px;font-weight:600;margin-inline-start:6px">אזל</span>':(lowFlav?'<span style="color:#bf360c;font-size:11px;margin-inline-start:6px">נותרו '+fQty+'</span>':'');
+        const stockTxt=sold?'<span style="font-family:Heebo,sans-serif;color:#bf360c;font-size:11px;font-weight:600;margin-inline-start:6px">אזל</span>':(lowFlav?'<span style="font-family:Heebo,sans-serif;color:#bf360c;font-size:11px;margin-inline-start:6px;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:\'lnum\' 1,\'tnum\' 1">נותרו '+fQty+'</span>':'');
         qtyHtml+='<div class="flav-row" '+(sold?'style="opacity:.45"':'')+'><span class="flav-name">'+fName+stockTxt+'</span><div class="flav-qc"><button class="qb" '+(sold?'disabled':'')+' data-id="'+p.id+'" data-flav="'+fName+'" data-act="dec" aria-label="הפחת כמות">−</button><input class="qi" type="number" min="0" max="'+(typeof fQty==='number'&&isFinite(fQty)?fQty:'')+'" value="0" '+(sold?'disabled':'')+' data-id="'+p.id+'" data-flav="'+fName+'" inputmode="numeric"><button class="qb" '+(sold?'disabled':'')+' data-id="'+p.id+'" data-flav="'+fName+'" data-act="inc" aria-label="הוסף כמות">+</button></div></div>';
       });
       qtyHtml+='</div>';
