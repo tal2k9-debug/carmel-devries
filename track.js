@@ -11,6 +11,18 @@
     var HB_MS = 20000;       // פעימת "אונליין" כל 20 שניות
     var TICK_MS = 1000;
 
+    // --- אופט-אאוט לבעלים (קרן/טל) — לא לספור אותם בכניסות ---
+    // ביקור עם ?notrack=1 מסמן את המכשיר הזה כ"בעלים" (נשמר ב-localStorage)
+    // ומפסיק כל מעקב על המכשיר. ?notrack=0 מבטל. פר-דפדפן, אנונימי.
+    try {
+      var _q = location.search || '';
+      if (_q.indexOf('notrack') > -1) {
+        if (/notrack=(0|off|false)/i.test(_q)) { try { localStorage.removeItem('ca_notrack'); } catch (e) {} }
+        else { try { localStorage.setItem('ca_notrack', '1'); } catch (e) {} }
+      }
+      if (localStorage.getItem('ca_notrack') === '1') return; // מכשיר של הבעלים — לא עוקבים בכלל
+    } catch (e) {}
+
     // --- מזהה סשן אנונימי (כרטיסייה בלבד) ---
     var sid;
     try {
