@@ -529,6 +529,7 @@ function switchTab(page) {
   if (page==='products') renderProducts();
   if (page==='settings') renderSettings();
   if (page==='assistant') initAssistant();
+  if (page==='analytics') renderAnalytics();
 }
 
 function renderAll() {
@@ -1611,6 +1612,131 @@ function renderPL(){
   document.getElementById('plExpList').innerHTML = Object.keys(byCat).length ?
     Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([c,s])=>`<div style="display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #f0e0d0"><span><strong>${esc(c)}</strong></span><span>₪${s.toFixed(0)}</span></div>`).join('')
     : '<div style="color:var(--mute);text-align:center;padding:20px">אין הוצאות</div>';
+}
+
+/* ============ ANALYTICS ============ */
+// Returns a predicate that keeps orders inside the selected range.
+function anRangeFilter(){
+  const sel = (document.getElementById('anRange')||{}).value || 'all';
+  const today = todayStr();
+  if (sel==='month'){ const mo = today.slice(0,7); return o => o.date && o.date.startsWith(mo); }
+  if (sel==='30' || sel==='90'){ const from = addDaysStr(today, -parseInt(sel,10)); return o => o.date && o.date >= from; }
+  return () => true;
+}
+// Dependency-free horizontal bars. items: [{label,value,sub?}]. opts: {money,unit,alt}.
+function anBars(items, opts){
+  opts = opts || {};
+  if (!items || !items.length) return '<div class="an-empty">אין נתונים בטווח</div>';
+  const max = Math.max.apply(null, items.map(i=>i.value).concat([1]));
+  return items.map(i=>{
+    const pct = Math.max(2, Math.round((i.value/max)*100));
+    const val = opts.money ? '₪'+Math.round(i.value).toLocaleString('he-IL')
+                           : (Math.round(i.value).toLocaleString('he-IL')+(opts.unit||''));
+    const sub = i.sub ? ' <span style="color:var(--mute);font-weight:400;font-size:12px">'+esc(i.sub)+'</span>' : '';
+    return '<div class="an-row"><span class="an-lab" title="'+esc(i.label)+'">'+esc(i.label)+'</span>'+
+           '<span class="an-track"><span class="an-fill'+(opts.alt?' alt':'')+'" style="width:'+pct+'%"></span></span>'+
+           '<span class="an-val">'+val+sub+'</span></div>';
+  }).join('');
+}
+function anMonthLabel(m){
+  const MN=['ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצמ'];
+  const p=String(m).split('-'); return (MN[(+p[1])-1]||p[1])+' '+(p[0]||'').slice(2);
+}
+function renderAnalytics(){
+  // ---- Orders analytics (from data already loaded — no backend, no risk) ----
+  try {
+    const f = anRangeFilter();
+    const ords = db.orders.filter(f);
+    const revenue = ords.reduce((s,o)=>s+orderTotal(o), 0);
+    const cnt = ords.length;
+    const aov = cnt ? revenue/cnt : 0;
+    const paidCnt = ords.filter(o=>o.paid).length;
+    const byCust = {};
+    ords.forEach(o=>{ const k=o.customerId||o.phone||o.name; if(k) byCust[k]=(byCust[k]||0)+1; });
+    const custCnt = Object.keys(byCust).length;
+    const repeat = Object.values(byCust).filter(n=>n>1).length;
+    const kp = [
+      {l:'הזמנות', v:cnt},
+      {l:'הכנסות', v:'₪'+Math.round(revenue).toLocaleString('he-IL'), cls:'good'},
+      {l:'הזמנה ממוצעת', v:'₪'+Math.round(aov).toLocaleString('he-IL')},
+      {l:'לקוחות חוזרים', v: repeat + (custCnt? ' / '+custCnt : ''), cls: repeat?'urgent':''},
+      {l:'שולמו', v: paidCnt + ' / ' + cnt}
+    ];
+    document.getElementById('anOrderKpis').innerHTML = kp.map(k=>'<div class="kpi '+(k.cls||'')+'"><div class="lab">'+k.l+'</div><div class="val">'+k.v+'</div><div class="sub"></div></div>').join('');
+
+    const revMo = {};
+    db.orders.forEach(o=>{ if(o.date){ const m=o.date.slice(0,7); revMo[m]=(revMo[m]||0)+orderTotal(o); }});
+    const months = Object.keys(revMo).sort().slice(-8);
+    document.getElementById('anRevByMonth').innerHTML = anBars(months.map(m=>({label:anMonthLabel(m), value:revMo[m]})), {money:true});
+
+    const byProd = {};
+    ords.forEach(o=>{ (o.items||'').split(/[,\n]/).forEach(line=>{ const m=matchProductLine(line); if(m){ const id=m.product.id; if(!byProd[id]) byProd[id]={name:m.product.name, qty:0, rev:0}; byProd[id].qty+=m.qty; byProd[id].rev+=m.qty*m.product.price; }}); });
+    const prodArr = Object.values(byProd);
+    const topQty = prodArr.slice().sort((a,b)=>b.qty-a.qty).slice(0,8);
+    const topRev = prodArr.slice().sort((a,b)=>b.rev-a.rev).slice(0,8);
+    document.getElementById('anTopQty').innerHTML = anBars(topQty.map(p=>({label:p.name, value:p.qty})), {unit:' יח׳'});
+    document.getElementById('anTopRev').innerHTML = anBars(topRev.map(p=>({label:p.name, value:p.rev})), {money:true, alt:true});
+
+    const pickup = ords.filter(o=>o.fulfillment!=='delivery').length;
+    const delivery = ords.filter(o=>o.fulfillment==='delivery').length;
+    document.getElementById('anFulfill').innerHTML = anBars([{label:'איסוף 🏠', value:pickup},{label:'משלוח 🚚', value:delivery}], {});
+
+    const pay = {};
+    ords.forEach(o=>{ const k=o.paymentMethod || 'לא צויין'; pay[k]=(pay[k]||0)+1; });
+    document.getElementById('anPayment').innerHTML = anBars(Object.entries(pay).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({label:k, value:v})), {alt:true});
+
+    const dow=[0,0,0,0,0,0,0];
+    ords.forEach(o=>{ if(o.date){ const p=o.date.split('-'); const d=new Date(+p[0],+p[1]-1,+p[2]); if(!isNaN(d.getTime())) dow[d.getDay()]++; }});
+    const DOWN=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+    document.getElementById('anWeekday').innerHTML = anBars(dow.map((v,i)=>({label:DOWN[i], value:v})), {alt:true});
+  } catch(e){ console.warn('renderAnalytics orders', e); }
+  // ---- Web traffic (from carmel-agent) — isolated; never blocks the above ----
+  anLoadWeb();
+}
+function anWebUnavailable(msg){
+  const k=document.getElementById('anWebKpis'); if(k) k.innerHTML='';
+  ['anTopViewed','anTopDwell','anReferrers'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML='<div class="an-empty">—</div>'; });
+  const note=document.getElementById('anWebNote'); if(note) note.textContent=msg||'';
+}
+function anRefLabel(h){
+  h=String(h||'').toLowerCase();
+  if(!h||h==='direct') return 'ישיר / נשמר';
+  if(h.indexOf('whatsapp')>-1||h==='wa') return 'וואטסאפ';
+  if(h.indexOf('instagram')>-1||h==='ig') return 'אינסטגרם';
+  if(h.indexOf('facebook')>-1||h==='fb') return 'פייסבוק';
+  if(h.indexOf('google')>-1) return 'גוגל';
+  if(h.indexOf('t.co')>-1||h.indexOf('twitter')>-1||h.indexOf('x.com')>-1) return 'X/טוויטר';
+  return h;
+}
+async function anLoadWeb(){
+  try {
+    const sel=(document.getElementById('anRange')||{}).value||'all';
+    const days = sel==='month' ? 31 : (sel==='all' ? 365 : (parseInt(sel,10)||30));
+    let ok=false; try{ ok=await ensureToken(); }catch(e){}
+    if(!ok || !accessToken){ anWebUnavailable('צריך להתחבר מחדש לגוגל כדי לראות נתוני צפיות.'); return; }
+    const resp = await fetch(AGENT_URL.replace(/\/$/,'')+'/api/analytics', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+accessToken },
+      body: JSON.stringify({ days })
+    });
+    if(!resp.ok){ anWebUnavailable('מעקב הצפיות עדיין לא הופעל.'); return; }
+    let d={}; try{ d=await resp.json(); }catch(e){}
+    if(!d || d.configured===false){ anWebUnavailable((d&&d.note) ? d.note : 'מעקב הצפיות עדיין לא הופעל (צריך לחבר את מאגר הנתונים).'); return; }
+    const online=d.onlineNow||0;
+    const wk=[
+      {l:'אונליין עכשיו', v:online, live:true},
+      {l:'מבקרים (טווח)', v:(d.visitors||0).toLocaleString('he-IL')},
+      {l:'צפיות בדפים', v:(d.pageviews||0).toLocaleString('he-IL')},
+      {l:'התחילו הזמנה', v:(d.checkouts||0).toLocaleString('he-IL')},
+      {l:'נייד / מחשב', v:(d.mobile||0)+' / '+(d.desktop||0)}
+    ];
+    document.getElementById('anWebKpis').innerHTML = wk.map(k=>'<div class="kpi"><div class="lab">'+k.l+'</div><div class="val">'+(k.live?'<span class="an-live"><span class="an-dot '+(online>0?'on':'')+'"></span>'+k.v+'</span>':k.v)+'</div><div class="sub"></div></div>').join('');
+    document.getElementById('anTopViewed').innerHTML = anBars((d.topViewed||[]).map(p=>({label:p.name||p.pid, value:p.views})), {unit:' צפ׳'});
+    document.getElementById('anTopDwell').innerHTML  = anBars((d.topDwell||[]).map(p=>({label:p.name||p.pid, value:Math.round((p.avgMs||0)/1000)})), {unit:' שנ׳', alt:true});
+    document.getElementById('anReferrers').innerHTML = anBars((d.referrers||[]).map(r=>({label:anRefLabel(r.host), value:r.count})), {alt:true});
+    const note=document.getElementById('anWebNote');
+    if(note) note.textContent='נאסף אנונימית, בלי עוגיות ובלי שמירת זהות.';
+  } catch(e){ anWebUnavailable('לא הצלחתי לטעון נתוני צפיות כרגע.'); }
 }
 
 /* ============ SHOPPING LIST ============ */

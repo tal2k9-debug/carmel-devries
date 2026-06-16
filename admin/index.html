@@ -263,6 +263,7 @@ th,td{padding:8px}
   <button class="tab" data-page="pricing">🧮 תמחור</button>
   <button class="tab" data-page="expenses">💰 הוצאות</button>
   <button class="tab" data-page="pnl">📊 דוח P&L</button>
+  <button class="tab" data-page="analytics">📈 אנליטיקס</button>
   <button class="tab" data-page="shopping">🛒 קניות</button>
   <button class="tab" data-page="settings">⚙️ הגדרות הזמנות</button>
 </nav>
@@ -461,6 +462,61 @@ th,td{padding:8px}
   </div>
 </section>
 
+<!-- ANALYTICS -->
+<section class="page" id="page-analytics">
+  <style>
+    #page-analytics .an-sub{font-size:13px;color:var(--mute);margin:-4px 0 14px}
+    #page-analytics .an-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+    #page-analytics .an-row{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:14px}
+    #page-analytics .an-row .an-lab{flex:0 0 auto;min-width:96px;color:var(--ink2)}
+    #page-analytics .an-track{flex:1;height:14px;background:#f3e7d8;border-radius:8px;overflow:hidden}
+    #page-analytics .an-fill{height:100%;background:linear-gradient(90deg,#caa24a,#e8c97a);border-radius:8px;min-width:2px;transition:width .4s}
+    #page-analytics .an-fill.alt{background:linear-gradient(90deg,#7aa37e,#a9c9ab)}
+    #page-analytics .an-val{flex:0 0 auto;min-width:74px;text-align:left;font-weight:600;color:var(--ink);font-variant-numeric:lining-nums tabular-nums}
+    #page-analytics .an-empty{color:var(--mute);text-align:center;padding:18px}
+    #page-analytics .an-live{display:inline-flex;align-items:center;gap:7px}
+    #page-analytics .an-dot{width:9px;height:9px;border-radius:50%;background:#cfc3b2;box-shadow:0 0 0 0 rgba(122,163,126,.6)}
+    #page-analytics .an-dot.on{background:#5fa463;animation:anpulse 1.8s infinite}
+    @keyframes anpulse{0%{box-shadow:0 0 0 0 rgba(95,164,99,.55)}70%{box-shadow:0 0 0 9px rgba(95,164,99,0)}100%{box-shadow:0 0 0 0 rgba(95,164,99,0)}}
+  </style>
+  <div class="page-h"><h2>📈 אנליטיקס</h2>
+    <div class="actions">
+      <select id="anRange" onchange="renderAnalytics()">
+        <option value="month">החודש הנוכחי</option>
+        <option value="30">30 הימים האחרונים</option>
+        <option value="90">90 הימים האחרונים</option>
+        <option value="all" selected>כל הזמן</option>
+      </select>
+      <button class="btn btn-s" onclick="renderAnalytics(true)">🔄 רענון</button>
+    </div>
+  </div>
+
+  <!-- LIVE / WEB TRAFFIC -->
+  <div class="card" style="margin-bottom:16px">
+    <h3 style="margin-bottom:4px;color:var(--ink)">👀 תנועה באתר</h3>
+    <div class="an-sub">כמה אנשים גולשים באתר, על מה הם מסתכלים ועל מה מתעכבים. הנתונים נאספים אנונימית, בלי עוגיות.</div>
+    <div class="kpis" id="anWebKpis"></div>
+    <div class="an-grid" style="margin-top:6px">
+      <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">🔥 המוצרים הכי נצפים</h3><div id="anTopViewed"><div class="an-empty">טוען…</div></div></div>
+      <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">⏱️ הכי מתעכבים עליהם</h3><div id="anTopDwell"><div class="an-empty">טוען…</div></div></div>
+      <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">📲 מאיפה מגיעים</h3><div id="anReferrers"><div class="an-empty">טוען…</div></div></div>
+    </div>
+    <div id="anWebNote" style="font-size:12.5px;color:var(--mute);margin-top:10px"></div>
+  </div>
+
+  <!-- ORDERS ANALYTICS -->
+  <h3 style="margin:6px 0 12px;color:var(--ink)">🧾 ניתוח הזמנות</h3>
+  <div class="kpis" id="anOrderKpis"></div>
+  <div class="an-grid" style="margin-top:6px">
+    <div class="card"><h3 style="margin-bottom:12px;font-size:16px">💰 הכנסות לפי חודש</h3><div id="anRevByMonth"><div class="an-empty">—</div></div></div>
+    <div class="card"><h3 style="margin-bottom:12px;font-size:16px">🍪 מוצרים מובילים (כמות)</h3><div id="anTopQty"><div class="an-empty">—</div></div></div>
+    <div class="card"><h3 style="margin-bottom:12px;font-size:16px">🏆 מוצרים מובילים (הכנסה)</h3><div id="anTopRev"><div class="an-empty">—</div></div></div>
+    <div class="card"><h3 style="margin-bottom:12px;font-size:16px">🚚 איסוף מול משלוח</h3><div id="anFulfill"><div class="an-empty">—</div></div></div>
+    <div class="card"><h3 style="margin-bottom:12px;font-size:16px">💳 אמצעי תשלום</h3><div id="anPayment"><div class="an-empty">—</div></div></div>
+    <div class="card"><h3 style="margin-bottom:12px;font-size:16px">📅 ימים עמוסים (לפי תאריך אספקה)</h3><div id="anWeekday"><div class="an-empty">—</div></div></div>
+  </div>
+</section>
+
 <!-- SHOPPING LIST -->
 <section class="page" id="page-shopping">
   <div class="page-h"><h2>רשימת קניות</h2><div class="actions"><button class="btn btn-s" onclick="generateShoppingList()">🔄 רענון</button><button class="btn btn-p" onclick="copyShoppingList()">📋 העתק</button></div></div>
@@ -585,6 +641,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=54"></script>
+<script src="app.js?v=55"></script>
 </body>
 </html>
