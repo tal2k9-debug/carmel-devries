@@ -798,4 +798,6 @@ setInterval(function(){loadProductsFromSheet();loadSettings();}, 60000);
 // Re-evaluate the minute the user returns to the tab.
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ loadProductsFromSheet(); loadSettings(); } });
 </script>
+<!-- מעקב אנונימי (אנליטיקס) — קובץ נפרד, fail-silent, לא משפיע על האתר -->
+<script src="track.js?v=1" defer></script>
 </body></html>
