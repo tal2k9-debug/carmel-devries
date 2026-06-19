@@ -64,17 +64,41 @@
       } catch (e) { return 'm'; }
     }
 
-    function refHost() {
-      try {
-        if (!document.referrer) return '';
-        var u = new URL(document.referrer);
-        if (u.hostname && u.hostname.indexOf(location.hostname) > -1) return ''; // ניווט פנימי = ישיר
-        return u.hostname || '';
-      } catch (e) { return ''; }
+    // מאחד מקור תנועה לטוקן קנוני אחד: כל כתובות-המשנה של פייסבוק → facebook,
+    // וואטסאפ (כולל com.whatsapp באנדרואיד) → whatsapp, וכן הלאה.
+    function normSrc(h) {
+      h = String(h || '').toLowerCase();
+      if (!h) return '';
+      if (h.indexOf('facebook') > -1 || h === 'fb' || h.indexOf('fb.com') > -1 || h.indexOf('fb.me') > -1) return 'facebook';
+      if (h.indexOf('instagram') > -1 || h === 'ig') return 'instagram';
+      if (h.indexOf('whatsapp') > -1 || h === 'wa' || h.indexOf('wa.me') > -1) return 'whatsapp';
+      if (h.indexOf('google') > -1) return 'google';
+      if (h.indexOf('t.co') > -1 || h.indexOf('twitter') > -1 || h === 'x.com') return 'twitter';
+      if (h.indexOf('tiktok') > -1) return 'tiktok';
+      if (h.indexOf('youtube') > -1 || h.indexOf('youtu.be') > -1) return 'youtube';
+      return h;
     }
 
-    // --- pageview ---
-    send({ t: 'pv', ref: refHost(), dev: deviceKind() });
+    // מקור הביקור: (1) תיוג מפורש בקישור ?s= / ?utm_source= — הכי אמין, היחיד
+    // שתופס וואטסאפ בוודאות; (2) ה-referrer של הדפדפן; (3) אין מקור → כניסה ישירה.
+    function source() {
+      try {
+        var sp = new URLSearchParams(location.search || '');
+        var tag = (sp.get('s') || sp.get('utm_source') || '').trim();
+        if (tag) return normSrc(tag) || 'direct';
+        if (document.referrer) {
+          var u = new URL(document.referrer);
+          var host = u.hostname || '';
+          if (host && host.indexOf(location.hostname) === -1) return normSrc(host) || host;
+        }
+        return 'direct';
+      } catch (e) { return 'direct'; }
+    }
+
+    // --- pageview (המקור נספר פעם אחת לכל ביקור, לא בכל רענון/מעבר עמוד) ---
+    var firstPv = true;
+    try { if (sessionStorage.getItem('ca_pv1')) firstPv = false; else sessionStorage.setItem('ca_pv1', '1'); } catch (e) {}
+    send({ t: 'pv', ref: firstPv ? source() : '', dev: deviceKind() });
 
     // --- heartbeat ("אונליין עכשיו") ---
     setInterval(function () { try { if (!document.hidden) send({ t: 'hb' }); } catch (e) {} }, HB_MS);

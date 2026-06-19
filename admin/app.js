@@ -1700,11 +1700,13 @@ function anWebUnavailable(msg){
 }
 function anRefLabel(h){
   h=String(h||'').toLowerCase();
-  if(!h||h==='direct') return 'ישיר / נשמר';
+  if(!h||h==='direct') return 'ישיר / שמור';
   if(h.indexOf('whatsapp')>-1||h==='wa') return 'וואטסאפ';
   if(h.indexOf('instagram')>-1||h==='ig') return 'אינסטגרם';
   if(h.indexOf('facebook')>-1||h==='fb') return 'פייסבוק';
   if(h.indexOf('google')>-1) return 'גוגל';
+  if(h.indexOf('tiktok')>-1) return 'טיקטוק';
+  if(h.indexOf('youtube')>-1||h.indexOf('youtu.be')>-1) return 'יוטיוב';
   if(h.indexOf('t.co')>-1||h.indexOf('twitter')>-1||h.indexOf('x.com')>-1) return 'X/טוויטר';
   return h;
 }
@@ -1733,7 +1735,9 @@ async function anLoadWeb(){
     document.getElementById('anWebKpis').innerHTML = wk.map(k=>'<div class="kpi"><div class="lab">'+k.l+'</div><div class="val">'+(k.live?'<span class="an-live"><span class="an-dot '+(online>0?'on':'')+'"></span>'+k.v+'</span>':k.v)+'</div><div class="sub"></div></div>').join('');
     document.getElementById('anTopViewed').innerHTML = anBars((d.topViewed||[]).map(p=>({label:p.name||p.pid, value:p.views})), {unit:' צפ׳'});
     document.getElementById('anTopDwell').innerHTML  = anBars((d.topDwell||[]).map(p=>({label:p.name||p.pid, value:Math.round((p.avgMs||0)/1000)})), {unit:' שנ׳', alt:true});
-    document.getElementById('anReferrers').innerHTML = anBars((d.referrers||[]).map(r=>({label:anRefLabel(r.host), value:r.count})), {alt:true});
+    var refAgg={}; (d.referrers||[]).forEach(function(r){ var l=anRefLabel(r.host); refAgg[l]=(refAgg[l]||0)+(r.count||0); });
+    var refRows=Object.keys(refAgg).map(function(l){return {label:l,value:refAgg[l]};}).sort(function(a,b){return b.value-a.value;});
+    document.getElementById('anReferrers').innerHTML = anBars(refRows, {alt:true});
     const note=document.getElementById('anWebNote');
     if(note) note.textContent='נאסף אנונימית, בלי עוגיות ובלי שמירת זהות.';
   } catch(e){ anWebUnavailable('לא הצלחתי לטעון נתוני צפיות כרגע.'); }
