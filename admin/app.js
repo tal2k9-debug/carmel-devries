@@ -1678,9 +1678,16 @@ function renderAnalytics(){
     document.getElementById('anTopRev').innerHTML = anBars(topRev.map(p=>({label:p.name, value:p.rev})), {money:true, alt:true});
 
     const costMap = anCostByPid();
-    const profRows = Object.entries(byProd).map(([id,v])=>{ const c=costMap[id]; if(!c) return null; const prod=(db.products||[]).find(p=>p.id===id); const price=prod?(parseFloat(prod.price)||0):0; const unitProfit=price-c.cost; const profit=unitProfit*v.qty; if(!isFinite(profit)) return null; return {name:v.name, profit:profit, margin: price>0?unitProfit/price:0}; }).filter(Boolean);
-    const topProfit = profRows.sort((a,b)=>b.profit-a.profit).slice(0,8);
-    document.getElementById('anProfit').innerHTML = topProfit.length ? anBars(topProfit.map(p=>({label:p.name, value:Math.round(p.profit), sub:Math.round(p.margin*100)+'%'})), {money:true, alt:true}) : '<div class="an-empty">הוסיפי מתכון למוצר ב-🧮 תמחור כדי לראות רווח</div>';
+    const withCost = [], without = [];
+    Object.entries(byProd).forEach(([id,v])=>{
+      const c=costMap[id];
+      if(c){ const prod=(db.products||[]).find(p=>p.id===id); const price=prod?(parseFloat(prod.price)||0):0; const unitProfit=price-c.cost; const profit=unitProfit*v.qty; if(isFinite(profit)) withCost.push({name:v.name, profit:profit, margin: price>0?unitProfit/price:0}); }
+      else { without.push(v.name); }
+    });
+    const topProfit = withCost.sort((a,b)=>b.profit-a.profit).slice(0,8);
+    let profHtml = topProfit.length ? anBars(topProfit.map(p=>({label:p.name, value:Math.round(p.profit), sub:Math.round(p.margin*100)+'%'})), {money:true, alt:true}) : '<div class="an-empty">אין עדיין מוצר עם מתכון שמור שנמכר בטווח</div>';
+    if(without.length){ profHtml += '<div style="font-size:12.5px;color:var(--mute);margin-top:10px;border-top:1px solid #f0e2cf;padding-top:8px">ל-'+without.length+' מוצרים שנמכרו אין מתכון, אז אי-אפשר לחשב להם רווח: '+without.slice(0,6).map(esc).join(', ')+(without.length>6?' ועוד…':'')+'. הוסיפי מתכון ב-🧮 תמחור כדי לראות את הרווח שלהם.</div>'; }
+    document.getElementById('anProfit').innerHTML = profHtml;
 
     const pickup = ords.filter(o=>o.fulfillment!=='delivery').length;
     const delivery = ords.filter(o=>o.fulfillment==='delivery').length;
