@@ -1677,6 +1677,11 @@ function renderAnalytics(){
     document.getElementById('anTopQty').innerHTML = anBars(topQty.map(p=>({label:p.name, value:p.qty})), {unit:' יח׳'});
     document.getElementById('anTopRev').innerHTML = anBars(topRev.map(p=>({label:p.name, value:p.rev})), {money:true, alt:true});
 
+    const costMap = anCostByPid();
+    const profRows = Object.entries(byProd).map(([id,v])=>{ const c=costMap[id]; if(!c) return null; const prod=(db.products||[]).find(p=>p.id===id); const price=prod?(parseFloat(prod.price)||0):0; const unitProfit=price-c.cost; const profit=unitProfit*v.qty; if(!isFinite(profit)) return null; return {name:v.name, profit:profit, margin: price>0?unitProfit/price:0}; }).filter(Boolean);
+    const topProfit = profRows.sort((a,b)=>b.profit-a.profit).slice(0,8);
+    document.getElementById('anProfit').innerHTML = topProfit.length ? anBars(topProfit.map(p=>({label:p.name, value:Math.round(p.profit), sub:Math.round(p.margin*100)+'%'})), {money:true, alt:true}) : '<div class="an-empty">הוסיפי מתכון למוצר ב-🧮 תמחור כדי לראות רווח</div>';
+
     const pickup = ords.filter(o=>o.fulfillment!=='delivery').length;
     const delivery = ords.filter(o=>o.fulfillment==='delivery').length;
     document.getElementById('anFulfill').innerHTML = anBars([{label:'איסוף 🏠', value:pickup},{label:'משלוח 🚚', value:delivery}], {});
@@ -1695,7 +1700,7 @@ function renderAnalytics(){
 }
 function anWebUnavailable(msg){
   const k=document.getElementById('anWebKpis'); if(k) k.innerHTML='';
-  ['anTopViewed','anTopDwell','anReferrers'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML='<div class="an-empty">—</div>'; });
+  ['anTopViewed','anTopDwell','anReferrers','anFunnel','anInterest','anCities','anRevSource'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML='<div class="an-empty">—</div>'; });
   const note=document.getElementById('anWebNote'); if(note) note.textContent=msg||'';
 }
 function anRefLabel(h){
@@ -1709,6 +1714,143 @@ function anRefLabel(h){
   if(h.indexOf('youtube')>-1||h.indexOf('youtu.be')>-1) return 'יוטיוב';
   if(h.indexOf('t.co')>-1||h.indexOf('twitter')>-1||h.indexOf('x.com')>-1) return 'X/טוויטר';
   return h;
+}
+// Phase 0 — sales units per product id, in the current range (joins with web views/adds).
+function anSalesByPid(){
+  const f = anRangeFilter(); const out = {};
+  (db.orders||[]).filter(f).forEach(o=>{ (o.items||'').split(/[,\n]/).forEach(line=>{ const m=matchProductLine(line); if(m){ const id=m.product.id; if(!out[id]) out[id]={name:m.product.name, qty:0, rev:0}; out[id].qty+=m.qty; out[id].rev+=m.qty*m.product.price; }}); });
+  return out;
+}
+// Browsing funnel: visitors -> add-to-cart -> checkout started -> actual orders.
+function anFunnelRender(fn){
+  const el = document.getElementById('anFunnel'); if(!el) return;
+  fn = fn || {};
+  const ords = (db.orders||[]).filter(anRangeFilter()).length;
+  const vis = fn.visitors||0, add = fn.addToCarts||0, co = fn.checkouts||0;
+  if(!vis && !add && !co && !ords){ el.innerHTML='<div class="an-empty">אין נתונים בטווח</div>'; return; }
+  const steps = [
+    {l:'מבקרים', v:vis}, {l:'הוסיפו לעגלה', v:add},
+    {l:'התחילו הזמנה', v:co}, {l:'הזמנות בפועל', v:ords}
+  ];
+  const max = Math.max(vis, add, co, ords, 1);
+  el.innerHTML = steps.map((s,i)=>{
+    const pct = Math.max(2, Math.round((s.v/max)*100));
+    const cv = (i>0 && vis) ? ' <span class="an-cv">· '+Math.round((s.v/vis)*100)+'% מהמבקרים</span>' : '';
+    return '<div class="an-step"><span class="an-lab">'+s.l+'</span>'+
+           '<span class="an-track"><span class="an-fill" style="width:'+pct+'%"></span></span>'+
+           '<span class="an-val">'+(s.v).toLocaleString('he-IL')+cv+'</span></div>';
+  }).join('');
+}
+// Interest vs sales: which products draw eyes but don't convert, and which are quiet stars.
+function anInterestRender(products){
+  const el = document.getElementById('anInterest'); if(!el) return;
+  const sales = anSalesByPid();
+  const rows = (products||[]).filter(p=>p.views>=1);
+  if(!rows.length){ el.innerHTML='<div class="an-empty">אין נתוני צפיות בטווח</div>'; return; }
+  const enriched = rows.map(p=>{
+    const sold = (sales[p.pid]||{}).qty || 0;
+    const addRate = p.addRate || 0;
+    const sellRate = p.views ? sold/p.views : 0;
+    let chip='ok', txt='✅ מתעניינים';
+    if(p.views < 5){ chip='low'; txt='👁️ מעט צפיות'; }
+    else if(sellRate>=0.12 && sold>=2){ chip='star'; txt='⭐ ממיר חזק — לדחוף'; }
+    else if(addRate<0.06 && sold<1){ chip='leak'; txt='🔻 מושך עין, לא נמכר'; }
+    else if(addRate>=0.06){ chip='ok'; txt='✅ מתעניינים'; }
+    else { chip='low'; txt='👁️ נצפה, מעט פעולה'; }
+    const priority = chip==='leak'?0 : chip==='star'?1 : chip==='ok'?2 : 3;
+    return {p, sold, addRate, chip, txt, priority};
+  }).sort((a,b)=> a.priority-b.priority || b.p.views-a.p.views).slice(0,12);
+  el.innerHTML = enriched.map(e=>{
+    const name = e.p.name || e.p.pid;
+    const stats = '👁️ '+e.p.views.toLocaleString('he-IL')+' · 🛒 '+Math.round(e.addRate*100)+'% · 🧾 '+e.sold.toLocaleString('he-IL')+' נמכרו';
+    return '<div class="an-irow"><span class="an-lab" title="'+esc(name)+'">'+esc(name)+'</span>'+
+           '<span class="an-istats">'+stats+'</span>'+
+           '<span class="an-chip '+e.chip+'">'+e.txt+'</span></div>';
+  }).join('');
+}
+// Phase 1 + geo — city breakdown and revenue-by-source renderers.
+function anCitiesRender(cities){
+  const el=document.getElementById('anCities'); if(!el) return;
+  const rows=(cities||[]).map(c=>({label:c.city, value:c.count}));
+  el.innerHTML = rows.length ? anBars(rows, {alt:true}) : '<div class="an-empty">אין נתוני מיקום בטווח</div>';
+}
+function anRevSourceRender(rev){
+  const el=document.getElementById('anRevSource'); if(!el) return;
+  const rows=(rev||[]).filter(r=>(r.revenue||0)>0||(r.checkouts||0)>0).map(r=>({label:anRefLabel(r.source), value:r.revenue||0, sub:(r.checkouts||0)+' הזמנות'}));
+  el.innerHTML = rows.length ? anBars(rows, {money:true}) : '<div class="an-empty">עדיין אין הכנסה משויכת למקור — נאסף מהזמנות חדשות</div>';
+}
+// Phase 2 — cost per unit from a saved recipe, matched to a product (id → exact name → prefix).
+function anRecipeCostPerUnit(r){
+  if(!r) return 0;
+  let ingredCost=0;
+  (r.ingredients||[]).forEach(ing=>{ try{ ingredCost += rowCostBoughtUsed(normalizeIngr(ing)); }catch(e){} });
+  const labor=(parseFloat(r.hours)||0)*(parseFloat(r.rate)||0);
+  const overPct=parseFloat(r.over)||0;
+  const totalCost=(ingredCost+labor)*(1+overPct/100);
+  const yld=parseFloat(r.yield)||0;
+  return yld>0 ? totalCost/yld : 0;
+}
+function anCostByPid(){
+  const out={};
+  (db.recipes||[]).forEach(r=>{
+    const cpu=anRecipeCostPerUnit(r);
+    if(!(cpu>0)) return;
+    let prod=(db.products||[]).find(p=>p.id===r.id);
+    if(!prod && r.name){ const rn=String(r.name).trim(); prod=(db.products||[]).find(p=>p.name&&String(p.name).trim()===rn); }
+    if(!prod && r.name){ const r4=String(r.name).slice(0,4); prod=(db.products||[]).find(p=>p.name&&(p.name.includes(r4)||String(r.name).includes(String(p.name).slice(0,4)))); }
+    if(prod && !out[prod.id]) out[prod.id]={cost:cpu, name:prod.name};
+  });
+  return out;
+}
+// Phase 4 — marketing advisor: build a real summary from loaded data, ask the agent.
+function anGetInsights(){
+  const box=document.getElementById('anInsights'); const btn=document.getElementById('anInsightsBtn');
+  if(!box) return;
+  box.innerHTML='<div class="an-empty">חושב המלצות… ⏳</div>';
+  if(btn) btn.disabled=true;
+  const restore=()=>{ if(btn) btn.disabled=false; };
+  try{
+    const f=anRangeFilter(); const ords=(db.orders||[]).filter(f);
+    const rev=ords.reduce((s,o)=>s+orderTotal(o),0);
+    const byProd={};
+    ords.forEach(o=>{ (o.items||'').split(/[,\n]/).forEach(line=>{ const m=matchProductLine(line); if(m){ const id=m.product.id; if(!byProd[id]) byProd[id]={name:m.product.name, qty:0, rev:0}; byProd[id].qty+=m.qty; byProd[id].rev+=m.qty*m.product.price; }}); });
+    const costMap=anCostByPid();
+    const prodList=Object.entries(byProd).map(([id,v])=>{ const c=costMap[id]; const prod=(db.products||[]).find(p=>p.id===id); const price=prod?(parseFloat(prod.price)||0):0; const profit=c?((price-c.cost)*v.qty):null; return {name:v.name, sold:v.qty, revenue:Math.round(v.rev), profit:(profit!=null&&isFinite(profit))?Math.round(profit):null}; }).sort((a,b)=>b.revenue-a.revenue).slice(0,10);
+    const dow=[0,0,0,0,0,0,0]; ords.forEach(o=>{ if(o.date){ const p=o.date.split('-'); const dd=new Date(+p[0],+p[1]-1,+p[2]); if(!isNaN(dd.getTime())) dow[dd.getDay()]++; }});
+    const DOWN=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+    const busiest = ords.length ? DOWN[dow.indexOf(Math.max.apply(null,dow))] : '';
+    const w=window.anLastWeb||{};
+    const summary={
+      range:(document.getElementById('anRange')||{}).value,
+      web:{ visitors:w.visitors||0, pageviews:w.pageviews||0, checkouts:w.checkouts||0, funnel:w.funnel||null,
+            products:(w.products||w.topViewed||[]).slice(0,10), referrers:w.referrers||[], revBySource:w.revBySource||[], cities:w.cities||[] },
+      orders:{ count:ords.length, revenue:Math.round(rev), busiestWeekday:busiest, products:prodList }
+    };
+    Promise.resolve(typeof ensureToken==='function'?ensureToken():true).then(ok=>{
+      if(!ok || !accessToken){ box.innerHTML='<div class="an-empty">צריך להתחבר מחדש לגוגל כדי לקבל המלצות.</div>'; restore(); return; }
+      fetch(AGENT_URL.replace(/\/$/,'')+'/api/insights', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify({summary}) })
+        .then(r=>r.json()).then(d=>{ anRenderInsights(d); restore(); })
+        .catch(e=>{ box.innerHTML='<div class="an-empty">לא הצלחתי לקבל המלצות כרגע. נסי שוב בעוד רגע.</div>'; restore(); });
+    }).catch(e=>{ box.innerHTML='<div class="an-empty">תקלה זמנית בהתחברות.</div>'; restore(); });
+  }catch(e){ box.innerHTML='<div class="an-empty">תקלה בחישוב הסיכום.</div>'; restore(); }
+}
+function anRenderInsights(d){
+  const box=document.getElementById('anInsights'); if(!box) return;
+  if(!d || d.configured===false){ box.innerHTML='<div class="an-empty">'+esc((d&&d.note)||'היועץ עדיין לא חובר.')+'</div>'; return; }
+  const recs=(d.recommendations||[]);
+  if(!recs.length){ box.innerHTML='<div class="an-empty">אין מספיק נתונים להמלצות עדיין — תני לאתר עוד כמה ימים של תנועה.</div>'; return; }
+  const col={high:'#c62828', medium:'#a9772a', low:'#5b6470'}, bg={high:'#ffebee', medium:'#fff6e3', low:'#eef0f2'}, plab={high:'דחוף', medium:'כדאי', low:'רעיון'};
+  box.innerHTML = recs.map(r=>{
+    const pr=(r.priority==='high'||r.priority==='medium'||r.priority==='low')?r.priority:'medium';
+    return '<div style="border:1px solid #f0e2cf;border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#fff">'+
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">'+
+        '<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:9px;color:'+col[pr]+';background:'+bg[pr]+'">'+plab[pr]+'</span>'+
+        '<strong style="color:var(--ink)">'+esc(r.title||'')+'</strong>'+
+      '</div>'+
+      (r.why?'<div style="font-size:13.5px;color:var(--ink2);margin:2px 0">📊 '+esc(r.why)+'</div>':'')+
+      (r.action?'<div style="font-size:13.5px;color:var(--ink);margin-top:4px">✅ '+esc(r.action)+'</div>':'')+
+    '</div>';
+  }).join('');
 }
 async function anLoadWeb(){
   try {
@@ -1738,6 +1880,11 @@ async function anLoadWeb(){
     var refAgg={}; (d.referrers||[]).forEach(function(r){ var l=anRefLabel(r.host); refAgg[l]=(refAgg[l]||0)+(r.count||0); });
     var refRows=Object.keys(refAgg).map(function(l){return {label:l,value:refAgg[l]};}).sort(function(a,b){return b.value-a.value;});
     document.getElementById('anReferrers').innerHTML = anBars(refRows, {alt:true});
+    anFunnelRender(d.funnel);
+    anInterestRender(d.products);
+    window.anLastWeb = d;
+    anCitiesRender(d.cities);
+    anRevSourceRender(d.revBySource);
     const note=document.getElementById('anWebNote');
     if(note) note.textContent='נאסף אנונימית, בלי עוגיות ובלי שמירת זהות.';
   } catch(e){ anWebUnavailable('לא הצלחתי לטעון נתוני צפיות כרגע.'); }

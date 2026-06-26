@@ -500,6 +500,7 @@ function upd(){
     });
   });
   const dl=calcD(sub),tot=sub+dl;
+  try{window.caCartSub=sub;}catch(e){}
   $('#bar').classList.toggle('vis',sub>0);
   $('#sc').textContent=cnt+' פריטים';$('#st').textContent=fmt(tot);
   const lst=$('#ol-lines');
@@ -799,5 +800,5 @@ setInterval(function(){loadProductsFromSheet();loadSettings();}, 60000);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ loadProductsFromSheet(); loadSettings(); } });
 </script>
 <!-- מעקב אנונימי (אנליטיקס) — קובץ נפרד, fail-silent, לא משפיע על האתר -->
-<script src="track.js?v=3" defer></script>
+<script src="track.js?v=4" defer></script>
 </body></html>

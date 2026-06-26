@@ -177,7 +177,11 @@
           return;
         }
         var sb = t.closest('#sb, #bsb');
-        if (sb && !checkoutSent) { checkoutSent = true; send({ t: 'co' }); }
+        if (sb && !checkoutSent) {
+          checkoutSent = true;
+          var val = 0; try { if (typeof window.caCartSub === 'number' && isFinite(window.caCartSub)) val = window.caCartSub; } catch (e3) {}
+          send({ t: 'co', val: val, src: source() });
+        }
       } catch (err) {}
     }, true);
   } catch (e) { /* מעקב כבוי בשקט אם משהו נכשל */ }

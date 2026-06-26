@@ -478,6 +478,20 @@ th,td{padding:8px}
     #page-analytics .an-dot{width:9px;height:9px;border-radius:50%;background:#cfc3b2;box-shadow:0 0 0 0 rgba(122,163,126,.6)}
     #page-analytics .an-dot.on{background:#5fa463;animation:anpulse 1.8s infinite}
     @keyframes anpulse{0%{box-shadow:0 0 0 0 rgba(95,164,99,.55)}70%{box-shadow:0 0 0 9px rgba(95,164,99,0)}100%{box-shadow:0 0 0 0 rgba(95,164,99,0)}}
+    #page-analytics .an-irow{display:flex;align-items:center;gap:10px;margin:9px 0;font-size:14px;flex-wrap:wrap}
+    #page-analytics .an-irow .an-lab{flex:1 1 120px;min-width:96px;color:var(--ink);font-weight:600}
+    #page-analytics .an-istats{flex:0 0 auto;color:var(--ink2);font-size:13px;font-variant-numeric:lining-nums tabular-nums;white-space:nowrap}
+    #page-analytics .an-chip{flex:0 0 auto;font-size:12px;font-weight:600;padding:3px 9px;border-radius:9px;white-space:nowrap}
+    #page-analytics .an-chip.star{background:#e8f5e9;color:#2e7d32}
+    #page-analytics .an-chip.leak{background:#ffebee;color:#c62828}
+    #page-analytics .an-chip.ok{background:#fff6e3;color:#a9772a}
+    #page-analytics .an-chip.low{background:#eef0f2;color:#5b6470}
+    #page-analytics .an-step{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:14px}
+    #page-analytics .an-step .an-lab{flex:0 0 auto;min-width:104px;color:var(--ink2)}
+    #page-analytics .an-step .an-track{flex:1;height:16px;background:#f3e7d8;border-radius:8px;overflow:hidden}
+    #page-analytics .an-step .an-fill{height:100%;background:linear-gradient(90deg,#caa24a,#e8c97a);border-radius:8px;min-width:2px;transition:width .4s}
+    #page-analytics .an-step .an-val{flex:0 0 auto;min-width:118px;text-align:left;font-weight:600;color:var(--ink);font-variant-numeric:lining-nums tabular-nums}
+    #page-analytics .an-step .an-cv{color:var(--mute);font-weight:400;font-size:12px}
   </style>
   <div class="page-h"><h2>📈 אנליטיקס</h2>
     <div class="actions">
@@ -491,6 +505,15 @@ th,td{padding:8px}
     </div>
   </div>
 
+  <!-- AI MARKETING ADVISOR (Phase 4) -->
+  <div class="card" style="margin-bottom:16px;border:1px solid #e7d3a8;background:linear-gradient(180deg,#fffaf0,#fff)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div><h3 style="margin-bottom:2px;color:var(--ink)">🧠 יועץ השיווק</h3><div class="an-sub" style="margin:0">המלצות פעולה מהנתונים שלך — מה לקדם, מתי, ובאיזה ערוץ.</div></div>
+      <button class="btn btn-p" id="anInsightsBtn" onclick="anGetInsights()">✨ קבלי המלצות</button>
+    </div>
+    <div id="anInsights" style="margin-top:12px"><div class="an-empty">לחצי "קבלי המלצות" כדי שאחזור עם 3-6 צעדים מומלצים מהנתונים.</div></div>
+  </div>
+
   <!-- LIVE / WEB TRAFFIC -->
   <div class="card" style="margin-bottom:16px">
     <h3 style="margin-bottom:4px;color:var(--ink)">👀 תנועה באתר</h3>
@@ -500,8 +523,21 @@ th,td{padding:8px}
       <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">🔥 המוצרים הכי נצפים</h3><div id="anTopViewed"><div class="an-empty">טוען…</div></div></div>
       <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">⏱️ הכי מתעכבים עליהם</h3><div id="anTopDwell"><div class="an-empty">טוען…</div></div></div>
       <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">📲 מאיפה מגיעים</h3><div id="anReferrers"><div class="an-empty">טוען…</div></div></div>
+      <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">📍 מאיפה הגולשים (עיר)</h3><div id="anCities"><div class="an-empty">טוען…</div></div></div>
+      <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">💰 הכנסה לפי מקור</h3><div id="anRevSource"><div class="an-empty">טוען…</div></div></div>
     </div>
     <div id="anWebNote" style="font-size:12.5px;color:var(--mute);margin-top:10px"></div>
+  </div>
+
+  <!-- DECISION: FUNNEL + INTEREST vs SALES (Phase 0) -->
+  <div class="card" style="margin-bottom:16px">
+    <h3 style="margin-bottom:4px;color:var(--ink)">🎯 מה כדאי לקדם</h3>
+    <div class="an-sub">מהצפייה ועד ההזמנה — איפה אנשים נושרים, ומה מושך עין אבל עדיין לא נמכר.</div>
+    <div class="an-grid" style="margin-top:6px">
+      <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">🧭 משפך הגלישה</h3><div id="anFunnel"><div class="an-empty">טוען…</div></div></div>
+      <div class="card" style="box-shadow:none;border:1px solid #f0e2cf;grid-column:1/-1"><h3 style="margin-bottom:10px;font-size:15px">⚖️ עניין מול מכירות — לכל מוצר</h3><div id="anInterest"><div class="an-empty">טוען…</div></div></div>
+    </div>
+    <div style="font-size:12.5px;color:var(--mute);margin-top:10px">צפיות והוספות-לעגלה נאספות אנונימית מהאתר; "נמכר" מחושב מההזמנות שלך באותו טווח.</div>
   </div>
 
   <!-- ORDERS ANALYTICS -->
@@ -511,6 +547,7 @@ th,td{padding:8px}
     <div class="card"><h3 style="margin-bottom:12px;font-size:16px">💰 הכנסות לפי חודש</h3><div id="anRevByMonth"><div class="an-empty">—</div></div></div>
     <div class="card"><h3 style="margin-bottom:12px;font-size:16px">🍪 מוצרים מובילים (כמות)</h3><div id="anTopQty"><div class="an-empty">—</div></div></div>
     <div class="card"><h3 style="margin-bottom:12px;font-size:16px">🏆 מוצרים מובילים (הכנסה)</h3><div id="anTopRev"><div class="an-empty">—</div></div></div>
+    <div class="card"><h3 style="margin-bottom:12px;font-size:16px">💎 רווח לפי מוצר</h3><div id="anProfit"><div class="an-empty">—</div></div></div>
     <div class="card"><h3 style="margin-bottom:12px;font-size:16px">🚚 איסוף מול משלוח</h3><div id="anFulfill"><div class="an-empty">—</div></div></div>
     <div class="card"><h3 style="margin-bottom:12px;font-size:16px">💳 אמצעי תשלום</h3><div id="anPayment"><div class="an-empty">—</div></div></div>
     <div class="card"><h3 style="margin-bottom:12px;font-size:16px">📅 ימים עמוסים (לפי תאריך אספקה)</h3><div id="anWeekday"><div class="an-empty">—</div></div></div>
@@ -641,6 +678,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=56"></script>
+<script src="app.js?v=57"></script>
 </body>
 </html>
