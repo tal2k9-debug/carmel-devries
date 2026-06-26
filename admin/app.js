@@ -1780,7 +1780,7 @@ function anRevSourceRender(rev){
   el.innerHTML = rows.length ? anBars(rows, {money:true}) : '<div class="an-empty">עדיין אין הכנסה משויכת למקור — נאסף מהזמנות חדשות</div>';
 }
 // Phase 3 — when are people online: hour-of-day strip + strong weekdays.
-function anHoursRender(hours){
+function anHoursRender(hours, hourDays){
   const el=document.getElementById('anHours'); if(!el) return;
   const arr=new Array(24).fill(0);
   (hours||[]).forEach(h=>{ const i=+h.hour; if(i>=0&&i<24) arr[i]=h.count||0; });
@@ -1789,7 +1789,7 @@ function anHoursRender(hours){
   const max=Math.max.apply(null,arr); const peak=arr.indexOf(max);
   const pad=n=>(n<10?'0':'')+n;
   const bars=arr.map((v,i)=>'<div class="an-hbar'+(i===peak?' peak':'')+'" title="'+pad(i)+':00 — '+v+'" style="height:'+Math.max(4,Math.round((v/max)*100))+'%"></div>').join('');
-  el.innerHTML='<div style="font-size:13px;color:var(--ink2);margin-bottom:2px">שיא גלישה: <strong>'+pad(peak)+':00</strong></div>'+
+  el.innerHTML='<div style="font-size:13px;color:var(--ink2);margin-bottom:2px">שיא גלישה: <strong>'+pad(peak)+':00</strong>'+(((hourDays||0)<7)?' <span style="color:var(--mute);font-weight:400">· נאסף '+(hourDays||0)+' ימים</span>':'')+'</div>'+
     '<div class="an-hours">'+bars+'</div>'+
     '<div class="an-hours-ax"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>';
 }
@@ -1801,8 +1801,9 @@ function anWeekdayWebRender(weekdays){
   el.innerHTML = arr.some(v=>v>0) ? anBars(arr.map((v,i)=>({label:DOWN[i], value:v})), {}) : '<div class="an-empty">אין נתוני ימים בטווח</div>';
 }
 // Phase 3+ — weekday × hour heatmap: the exact best window to publish.
-function anHeatmapRender(heatmap, peakSlot){
+function anHeatmapRender(heatmap, peakSlot, hourDays, weekdays){
   const el=document.getElementById('anHeatmap'); if(!el) return;
+  const enough=(hourDays||0)>=7; // לא מכריזים על "חלון הכי חזק" עד שבוע שלם של נתוני שעה
   const SH=['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'], FULL=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const m=heatmap||[]; let max=0;
   m.forEach(row=>(row||[]).forEach(v=>{ if(v>max) max=v; }));
@@ -1817,12 +1818,19 @@ function anHeatmapRender(heatmap, peakSlot){
     body+='<tr><td class="rl">'+SH[d]+'</td>';
     for(let h=0;h<24;h++){
       const v=(m[d]&&m[d][h])||0;
-      const pk=peakSlot&&peakSlot.dow===d&&peakSlot.hour===h;
+      const pk=enough&&peakSlot&&peakSlot.dow===d&&peakSlot.hour===h;
       body+='<td><div class="cell'+(pk?' pk':'')+'" title="'+SH[d]+' '+pad(h)+':00 — '+v+'" style="background:'+color(v)+'"></div></td>';
     }
     body+='</tr>';
   }
-  const callout=peakSlot?'<div style="font-size:13px;color:var(--ink2);margin-bottom:4px">החלון הכי חזק: <strong>'+FULL[peakSlot.dow]+' '+pad(peakSlot.hour)+':00</strong> — הזמן האידיאלי לפרסם</div>':'';
+  let callout;
+  if(enough && peakSlot){
+    callout='<div style="font-size:13px;color:var(--ink2);margin-bottom:4px">החלון הכי חזק: <strong>'+FULL[peakSlot.dow]+' '+pad(peakSlot.hour)+':00</strong> — הזמן האידיאלי לפרסם</div>';
+  } else {
+    let topDay='', mx=-1;
+    (weekdays||[]).forEach(w=>{ if((w.count||0)>mx){ mx=w.count||0; topDay=FULL[w.dow]; }});
+    callout='<div style="font-size:12.5px;color:var(--ink2);margin-bottom:6px;background:#fff6e3;border:1px solid #f0e2cf;border-radius:8px;padding:7px 10px">⏳ נאסף '+(hourDays||0)+' ימים מתוך שבוע — עדיין מוקדם להכריז על "החלון הכי חזק" (מה שמואר הוא בעיקר היום).'+(topDay?' לפי ההיסטוריה, היום החזק ביותר הוא <strong>'+topDay+'</strong>.':'')+'</div>';
+  }
   el.innerHTML=callout+'<div class="an-heat"><table>'+head+body+'</table></div>';
 }
 // Phase 2 — cost per unit from a saved recipe, matched to a product (id → exact name → prefix).
@@ -1931,9 +1939,9 @@ async function anLoadWeb(){
     window.anLastWeb = d;
     anCitiesRender(d.cities);
     anRevSourceRender(d.revBySource);
-    anHoursRender(d.hours);
+    anHoursRender(d.hours, d.hourDays);
     anWeekdayWebRender(d.weekdays);
-    anHeatmapRender(d.heatmap, d.peakSlot);
+    anHeatmapRender(d.heatmap, d.peakSlot, d.hourDays, d.weekdays);
     const note=document.getElementById('anWebNote');
     if(note) note.textContent='נאסף אנונימית, בלי עוגיות ובלי שמירת זהות.';
   } catch(e){ anWebUnavailable('לא הצלחתי לטעון נתוני צפיות כרגע.'); }
