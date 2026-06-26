@@ -929,22 +929,73 @@ async function decrementPickedItems(picked) {
   return decremented;
 }
 
+// Parse a pasted order message into the CUSTOMER fields only.
+// The website (index.html buildMsg) emits a fixed, labelled format whose customer
+// block sits after a "----------" separator, so we parse by exact label — never by
+// guessing. A field is filled ONLY when its label is found; otherwise it is left
+// untouched (no invented values). Items are never parsed here — they are picked
+// from the catalog. We report exactly what was recognised and what to complete by hand.
 function parseWA() {
-  const t = document.getElementById('waPaste').value;
-  if (!t.trim()) return;
-  const nameM=t.match(/שם[:\s]+([^\n]+)/); if(nameM)document.getElementById('oName').value=nameM[1].trim();
-  const phM=t.match(/(05\d[-\s]?\d{7})/); if(phM)document.getElementById('oPhone').value=phM[1].replace(/\D/g,'');
-  if (t.includes('משלוח')) document.getElementById('oFulfill').value='delivery';
-  const addM=t.match(/כתובת[:\s]+([^\n]+)/); if(addM){document.getElementById('oAddress').value=addM[1].trim(); document.getElementById('addrField').style.display='block';}
-  const dM=t.match(/(\d{1,2}[\/\.]\d{1,2}[\/\.]\d{2,4})/);
-  if (dM) {
-    const p=dM[1].split(/[\/\.]/);
-    document.getElementById('oDate').value = `${p[2].length===2?'20'+p[2]:p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+  const raw = document.getElementById('waPaste').value;
+  if (!raw.trim()) return;
+
+  // Customer details live after the "----------" separator the site emits.
+  // Fall back to the whole text for free-form pastes that have no separator.
+  const sep = raw.match(/\n-{3,}\s*\n/);
+  const block = sep ? raw.slice(sep.index + sep[0].length) : raw;
+
+  const grab = (re) => { const m = block.match(re); return m ? m[1].trim() : null; };
+  const filled = [], missing = [];
+
+  // Name — accepts the exact labels "שם:" / "שם מלא:" (never the item lines above).
+  const name = grab(/^[ \t]*שם(?:\s+מלא)?\s*:\s*(.+)$/m);
+  if (name) { document.getElementById('oName').value = name; filled.push('שם'); }
+  else missing.push('שם');
+
+  // Phone — prefer the labelled line; otherwise an unambiguous Israeli number anywhere.
+  let phone = grab(/^[ \t]*(?:טלפון|נייד|טל['׳]?)\s*:\s*(.+)$/m);
+  if (!phone) { const pm = raw.match(/0\d{1,2}[-\s]?\d{7,8}/); if (pm) phone = pm[0]; }
+  const digits = phone ? phone.replace(/\D/g, '') : '';
+  if (digits.length >= 9) { document.getElementById('oPhone').value = digits; filled.push('טלפון'); }
+  else missing.push('טלפון');
+
+  // Fulfillment — read from the totals lines in the FULL text (above the separator).
+  // Line-anchored so the words "משלוח"/"איסוף" inside notes can never flip it.
+  if (/^[ \t]*משלוח\s*:/m.test(raw)) { document.getElementById('oFulfill').value = 'delivery'; filled.push('משלוח'); }
+  else if (/^[ \t]*איסוף\s*:/m.test(raw)) { document.getElementById('oFulfill').value = 'pickup'; filled.push('איסוף'); }
+
+  // Address — present only for delivery; strip the exact ", אופקים" suffix the site appends.
+  const addr = grab(/^[ \t]*כתובת\s*:\s*(.+)$/m);
+  if (addr) {
+    document.getElementById('oAddress').value = addr.replace(/[,]?\s*אופקים\s*$/, '').trim();
+    document.getElementById('addrField').style.display = 'block';
+    filled.push('כתובת');
   }
-  // Items are NOT parsed — they are selected from the catalog (sharp, no guessing).
-  // Pull any free-text notes if present.
-  const notesM=t.match(/הערות[:\s]+([^\n]+)/); if(notesM){const nEl=document.getElementById('oNotes'); if(nEl&&!nEl.value)nEl.value=notesM[1].trim();}
-  toast('פרטי לקוח פוענחו — בחר פריטים מהקטלוג','ok');
+
+  // Date — the site emits ISO (YYYY-MM-DD). Also accept DD/MM/YYYY (Israeli order) → ISO.
+  // Anything else is left empty rather than guessed.
+  const dRaw = grab(/^[ \t]*תאריך(?:\s+מבוקש)?\s*:\s*(.+)$/m);
+  if (dRaw) {
+    let iso = null;
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(dRaw)) {
+      const p = dRaw.split('-'); iso = `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
+    } else {
+      const dm = dRaw.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})$/);
+      if (dm) iso = `${dm[3].length === 2 ? '20' + dm[3] : dm[3]}-${dm[2].padStart(2, '0')}-${dm[1].padStart(2, '0')}`;
+    }
+    if (iso) { document.getElementById('oDate').value = iso; filled.push('תאריך'); }
+    else missing.push('תאריך (פורמט לא מזוהה)');
+  } else missing.push('תאריך');
+
+  // Notes — don't overwrite anything the user already typed.
+  const notes = grab(/^[ \t]*הערות\s*:\s*(.+)$/m);
+  if (notes) { const nEl = document.getElementById('oNotes'); if (nEl && !nEl.value) { nEl.value = notes; filled.push('הערות'); } }
+
+  // No silent gaps: say exactly what was recognised and what to fill by hand.
+  let msg = filled.length ? ('פוענח: ' + filled.join(', ')) : 'לא זוהו פרטים מההודעה';
+  if (missing.length) msg += ' · להשלים: ' + missing.join(', ');
+  msg += ' · בחר פריטים מהקטלוג';
+  toast(msg, filled.length ? 'ok' : 'err');
 }
 
 /* ============ PRICING ============ */
