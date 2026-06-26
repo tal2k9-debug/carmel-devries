@@ -530,6 +530,7 @@ function switchTab(page) {
   if (page==='settings') renderSettings();
   if (page==='assistant') initAssistant();
   if (page==='analytics') renderAnalytics();
+  if (page==='neworder') renderPickedItems();
 }
 
 function renderAll() {
@@ -804,9 +805,14 @@ function renderCalendar() {
 async function saveNewOrder() {
   const name=document.getElementById('oName').value.trim();
   const phone=document.getElementById('oPhone').value.trim();
-  const items=document.getElementById('oItems').value.trim();
+  // structured picked items — snapshot now (the form is cleared before the async save/decrement)
+  const picked=pickedItems.filter(it=>(parseInt(it.qty)||0)>0).map(x=>({...x}));
+  const items=pickedItemsText();
   const date=document.getElementById('oDate').value;
-  if (!name||!phone||!items||!date) { toast('שדות חובה חסרים','err'); return; }
+  if (!name||!phone||!picked.length||!date) { toast('שדות חובה חסרים — בחר לפחות פריט אחד','err'); return; }
+  // block over-selling: no line may exceed available stock
+  const over=picked.filter(it=>{const p=(db.products||[]).find(x=>x.id===it.id);return p && it.qty>availForProduct(p,it.flavor);});
+  if (over.length){ toast('מעל המלאי: '+over.map(it=>it.name).join(', '),'err'); return; }
   const ful=document.getElementById('oFulfill').value;
   // find or create customer
   let c = db.customers.find(x=>x.phone===phone);
@@ -838,7 +844,7 @@ async function saveNewOrder() {
   // stock would drop for an order that doesn't exist.
   if (saved) {
     try {
-      const dec = await decrementProductsForOrder(o);
+      const dec = await decrementPickedItems(picked);
       if (dec.length) {
         const summary = dec.map(d => `${d.name} −${d.qty} (נשאר ${d.remaining})`).join(' · ');
         toast('עודכן מלאי: ' + summary, 'ok');
@@ -848,9 +854,79 @@ async function saveNewOrder() {
 }
 
 function clearOrderForm() {
-  ['oName','oPhone','oItems','oDate','oAddress','oNotes','waPaste'].forEach(i=>document.getElementById(i).value='');
+  ['oName','oPhone','oItems','oDate','oAddress','oNotes','waPaste','itemSearch'].forEach(i=>{const el=document.getElementById(i); if(el)el.value='';});
   document.getElementById('oFulfill').value='pickup';
   document.getElementById('addrField').style.display='none';
+  pickedItems = []; renderPickedItems(); hideItemResults();
+}
+
+/* ============ ITEM PICKER — sharp & deterministic (select from catalog, no parsing/guessing) ============ */
+let pickedItems = []; // [{id, name, flavor, qty, unit}]
+
+function availForProduct(p, flavor) {
+  if (!p) return 0;
+  if (flavor) { const f = parseFlavors(p.flavors, p.qty).find(x => x.name === flavor); return f ? f.qty : 0; }
+  return parseInt(p.qty) || 0;
+}
+function renderItemResults() {
+  const box = document.getElementById('itemResults'); if (!box) return;
+  const q = (document.getElementById('itemSearch').value || '').trim().toLowerCase();
+  const list = (db.products || []).filter(p => p.name && (!q || p.name.toLowerCase().includes(q)))
+    .sort((a,b) => (a.sortOrder||100)-(b.sortOrder||100)).slice(0, 30);
+  if (!list.length) { box.style.display='none'; return; }
+  box.innerHTML = list.map(p => {
+    const stock = parseInt(p.qty)||0, low = stock <= 0;
+    return `<div onmousedown="addPickedItem('${esc(p.id)}')" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid #f3eadf;display:flex;justify-content:space-between;gap:10px${low?';opacity:.55':''}" onmouseover="this.style.background='#faf3e8'" onmouseout="this.style.background='#fff'"><span>${esc(p.name)}</span><span style="color:${low?'var(--err)':'var(--mute)'};font-size:.85rem;white-space:nowrap">${low?'אזל':'נשאר '+stock}</span></div>`;
+  }).join('');
+  box.style.display='block';
+}
+function hideItemResults(){ const b=document.getElementById('itemResults'); if(b)b.style.display='none'; }
+function addPickedItem(id) {
+  const p = (db.products||[]).find(x => x.id === id); if (!p) return;
+  const flavors = parseFlavors(p.flavors, p.qty);
+  pickedItems.push({ id:p.id, name:p.name, flavor: flavors.length ? flavors[0].name : '', qty: Math.max(1, parseInt(p.minOrder)||1), unit:p.unit||'' });
+  document.getElementById('itemSearch').value=''; hideItemResults(); renderPickedItems();
+}
+function removePickedItem(i){ pickedItems.splice(i,1); renderPickedItems(); }
+function updatePickedQty(i,v){ pickedItems[i].qty = Math.max(0, parseInt(v)||0); renderPickedItems(); }
+function updatePickedFlavor(i,v){ pickedItems[i].flavor = v; renderPickedItems(); }
+function pickedItemsText(){ return pickedItems.filter(it=>(parseInt(it.qty)||0)>0).map(it => `${it.name}${it.flavor?' ('+it.flavor+')':''} ×${it.qty}`).join(', '); }
+function syncItemsField(){ const t=document.getElementById('oItems'); if(t) t.value = pickedItemsText(); }
+function renderPickedItems() {
+  const box = document.getElementById('pickedItems'); if (!box) return;
+  if (!pickedItems.length) { box.innerHTML='<div style="color:var(--mute);font-size:.88rem;padding:4px 2px">לא נבחרו פריטים עדיין</div>'; syncItemsField(); return; }
+  box.innerHTML = pickedItems.map((it,i) => {
+    const p = (db.products||[]).find(x=>x.id===it.id) || {};
+    const flavors = parseFlavors(p.flavors, p.qty);
+    const avail = availForProduct(p, it.flavor), over = it.qty > avail;
+    const flavorSel = flavors.length ? `<select onchange="updatePickedFlavor(${i},this.value)" style="padding:6px;border:1px solid var(--bd);border-radius:6px">${flavors.map(f=>`<option value="${esc(f.name)}" ${f.name===it.flavor?'selected':''}>${esc(f.name)} (${f.qty})</option>`).join('')}</select>` : '';
+    return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#faf6ef;border:1px solid ${over?'var(--err)':'#eaddc9'};border-radius:8px;padding:8px 10px"><span style="flex:1;min-width:110px;font-weight:600">${esc(it.name)}</span>${flavorSel}<input type="number" min="0" value="${it.qty}" onchange="updatePickedQty(${i},this.value)" style="width:68px;padding:6px;border:1px solid var(--bd);border-radius:6px;text-align:center"><span style="font-size:.8rem;color:${over?'var(--err)':'var(--mute)'};white-space:nowrap">${over?'⚠ מעל המלאי ('+avail+')':'נשאר '+avail}</span><button class="btn btn-s" onclick="removePickedItem(${i})" style="padding:4px 10px">✕</button></div>`;
+  }).join('');
+  syncItemsField();
+}
+
+// exact, deterministic stock decrement — matches by product id (never guesses from text)
+async function decrementPickedItems(picked) {
+  const decremented = []; const touched = new Set();
+  (picked||[]).forEach(it => {
+    const qty = parseInt(it.qty)||0; if (qty<=0) return;
+    const p = (db.products||[]).find(x => x.id === it.id); if (!p) return;
+    const flavors = parseFlavors(p.flavors, p.qty);
+    if (flavors.length && it.flavor) {
+      const f = flavors.find(x => x.name === it.flavor); if (!f) return;
+      f.qty = Math.max(0, f.qty - qty);
+      p.flavors = serializeFlavors(flavors); p.qty = flavorsTotalQty(flavors);
+      decremented.push({ name:`${p.name} (${it.flavor})`, qty, remaining:f.qty });
+    } else {
+      p.qty = Math.max(0, (parseInt(p.qty)||0) - qty);
+      decremented.push({ name:p.name, qty, remaining:p.qty });
+    }
+    p.updatedAt = new Date().toISOString(); touched.add(p.id);
+  });
+  if (!decremented.length) return [];
+  saveCache(); renderProducts();
+  if (accessToken) await Promise.all(Array.from(touched).map(id => { const p=db.products.find(x=>x.id===id); return p?persistProductRow(p):null; }));
+  return decremented;
 }
 
 function parseWA() {
@@ -865,10 +941,10 @@ function parseWA() {
     const p=dM[1].split(/[\/\.]/);
     document.getElementById('oDate').value = `${p[2].length===2?'20'+p[2]:p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
   }
-  // Extract items section
-  const im=t.match(/פריטים?[:\s\n]+([\s\S]+?)(?:הערות|תאריך|סה|$)/);
-  if (im) document.getElementById('oItems').value=im[1].trim();
-  toast('פוענח ✓','ok');
+  // Items are NOT parsed — they are selected from the catalog (sharp, no guessing).
+  // Pull any free-text notes if present.
+  const notesM=t.match(/הערות[:\s]+([^\n]+)/); if(notesM){const nEl=document.getElementById('oNotes'); if(nEl&&!nEl.value)nEl.value=notesM[1].trim();}
+  toast('פרטי לקוח פוענחו — בחר פריטים מהקטלוג','ok');
 }
 
 /* ============ PRICING ============ */

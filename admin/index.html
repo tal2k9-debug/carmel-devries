@@ -361,7 +361,14 @@ th,td{padding:8px}
       <div class="field"><label>סוג מסירה</label><select id="oFulfill"><option value="pickup">איסוף עצמי</option><option value="delivery">משלוח באופקים</option></select></div>
       <div class="field"><label>תאריך*</label><input id="oDate" type="date" required></div>
       <div class="field full" id="addrField" style="display:none"><label>כתובת למשלוח</label><input id="oAddress"></div>
-      <div class="field full"><label>פריטים*</label><textarea id="oItems" placeholder="לדוגמה: 2 מארזי מרוקאיות, 30 כדורי שוקולד-קוקוס"></textarea></div>
+      <div class="field full"><label>פריטים* (בחירה מהקטלוג)</label>
+        <div style="position:relative">
+          <input id="itemSearch" type="text" autocomplete="off" placeholder="הקלד שם מוצר ובחר…" oninput="renderItemResults()" onfocus="renderItemResults()" onblur="setTimeout(hideItemResults,180)" style="width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;direction:rtl">
+          <div id="itemResults" style="display:none;position:absolute;top:100%;right:0;left:0;z-index:30;background:#fff;border:1px solid var(--bd);border-top:none;border-radius:0 0 8px 8px;max-height:240px;overflow:auto;box-shadow:0 8px 20px rgba(0,0,0,.08)"></div>
+        </div>
+        <div id="pickedItems" style="margin-top:10px;display:flex;flex-direction:column;gap:8px"></div>
+        <textarea id="oItems" style="display:none"></textarea>
+      </div>
       <div class="field full"><label>הערות</label><textarea id="oNotes" placeholder="אלרגיות, הוראות מיוחדות..."></textarea></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:18px"><button class="btn btn-p" onclick="saveNewOrder()">💾 שמירה</button><button class="btn btn-s" onclick="clearOrderForm()">נקה</button></div>
