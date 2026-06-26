@@ -492,6 +492,10 @@ th,td{padding:8px}
     #page-analytics .an-step .an-fill{height:100%;background:linear-gradient(90deg,#caa24a,#e8c97a);border-radius:8px;min-width:2px;transition:width .4s}
     #page-analytics .an-step .an-val{flex:0 0 auto;min-width:118px;text-align:left;font-weight:600;color:var(--ink);font-variant-numeric:lining-nums tabular-nums}
     #page-analytics .an-step .an-cv{color:var(--mute);font-weight:400;font-size:12px}
+    #page-analytics .an-hours{display:flex;align-items:flex-end;gap:2px;height:84px;margin-top:4px}
+    #page-analytics .an-hbar{flex:1;background:#f0e2cf;border-radius:3px 3px 0 0;min-height:3px;transition:height .3s}
+    #page-analytics .an-hbar.peak{background:linear-gradient(180deg,#caa24a,#e8c97a)}
+    #page-analytics .an-hours-ax{display:flex;justify-content:space-between;font-size:10px;color:var(--mute);margin-top:3px;font-variant-numeric:lining-nums tabular-nums}
   </style>
   <div class="page-h"><h2>📈 אנליטיקס</h2>
     <div class="actions">
@@ -525,6 +529,8 @@ th,td{padding:8px}
       <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">📲 מאיפה מגיעים</h3><div id="anReferrers"><div class="an-empty">טוען…</div></div></div>
       <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">📍 מאיפה הגולשים (עיר)</h3><div id="anCities"><div class="an-empty">טוען…</div></div></div>
       <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">💰 הכנסה לפי מקור</h3><div id="anRevSource"><div class="an-empty">טוען…</div></div></div>
+      <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">🕐 מתי הכי גולשים (שעות)</h3><div id="anHours"><div class="an-empty">טוען…</div></div></div>
+      <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">📆 ימים חזקים (תנועה)</h3><div id="anWeekdayWeb"><div class="an-empty">טוען…</div></div></div>
     </div>
     <div id="anWebNote" style="font-size:12.5px;color:var(--mute);margin-top:10px"></div>
   </div>
@@ -678,6 +684,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=57"></script>
+<script src="app.js?v=58"></script>
 </body>
 </html>

@@ -1700,7 +1700,7 @@ function renderAnalytics(){
 }
 function anWebUnavailable(msg){
   const k=document.getElementById('anWebKpis'); if(k) k.innerHTML='';
-  ['anTopViewed','anTopDwell','anReferrers','anFunnel','anInterest','anCities','anRevSource'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML='<div class="an-empty">—</div>'; });
+  ['anTopViewed','anTopDwell','anReferrers','anFunnel','anInterest','anCities','anRevSource','anHours','anWeekdayWeb'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML='<div class="an-empty">—</div>'; });
   const note=document.getElementById('anWebNote'); if(note) note.textContent=msg||'';
 }
 function anRefLabel(h){
@@ -1778,6 +1778,27 @@ function anRevSourceRender(rev){
   const el=document.getElementById('anRevSource'); if(!el) return;
   const rows=(rev||[]).filter(r=>(r.revenue||0)>0||(r.checkouts||0)>0).map(r=>({label:anRefLabel(r.source), value:r.revenue||0, sub:(r.checkouts||0)+' הזמנות'}));
   el.innerHTML = rows.length ? anBars(rows, {money:true}) : '<div class="an-empty">עדיין אין הכנסה משויכת למקור — נאסף מהזמנות חדשות</div>';
+}
+// Phase 3 — when are people online: hour-of-day strip + strong weekdays.
+function anHoursRender(hours){
+  const el=document.getElementById('anHours'); if(!el) return;
+  const arr=new Array(24).fill(0);
+  (hours||[]).forEach(h=>{ const i=+h.hour; if(i>=0&&i<24) arr[i]=h.count||0; });
+  const total=arr.reduce((a,b)=>a+b,0);
+  if(!total){ el.innerHTML='<div class="an-empty">אין נתוני שעות בטווח — נאסף מהיום קדימה</div>'; return; }
+  const max=Math.max.apply(null,arr); const peak=arr.indexOf(max);
+  const pad=n=>(n<10?'0':'')+n;
+  const bars=arr.map((v,i)=>'<div class="an-hbar'+(i===peak?' peak':'')+'" title="'+pad(i)+':00 — '+v+'" style="height:'+Math.max(4,Math.round((v/max)*100))+'%"></div>').join('');
+  el.innerHTML='<div style="font-size:13px;color:var(--ink2);margin-bottom:2px">שיא גלישה: <strong>'+pad(peak)+':00</strong></div>'+
+    '<div class="an-hours">'+bars+'</div>'+
+    '<div class="an-hours-ax"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>';
+}
+function anWeekdayWebRender(weekdays){
+  const el=document.getElementById('anWeekdayWeb'); if(!el) return;
+  const DOWN=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const arr=new Array(7).fill(0);
+  (weekdays||[]).forEach(w=>{ const i=+w.dow; if(i>=0&&i<7) arr[i]=w.count||0; });
+  el.innerHTML = arr.some(v=>v>0) ? anBars(arr.map((v,i)=>({label:DOWN[i], value:v})), {}) : '<div class="an-empty">אין נתוני ימים בטווח</div>';
 }
 // Phase 2 — cost per unit from a saved recipe, matched to a product (id → exact name → prefix).
 function anRecipeCostPerUnit(r){
@@ -1885,6 +1906,8 @@ async function anLoadWeb(){
     window.anLastWeb = d;
     anCitiesRender(d.cities);
     anRevSourceRender(d.revBySource);
+    anHoursRender(d.hours);
+    anWeekdayWebRender(d.weekdays);
     const note=document.getElementById('anWebNote');
     if(note) note.textContent='נאסף אנונימית, בלי עוגיות ובלי שמירת זהות.';
   } catch(e){ anWebUnavailable('לא הצלחתי לטעון נתוני צפיות כרגע.'); }
