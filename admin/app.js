@@ -1700,7 +1700,7 @@ function renderAnalytics(){
 }
 function anWebUnavailable(msg){
   const k=document.getElementById('anWebKpis'); if(k) k.innerHTML='';
-  ['anTopViewed','anTopDwell','anReferrers','anFunnel','anInterest','anCities','anRevSource','anHours','anWeekdayWeb'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML='<div class="an-empty">—</div>'; });
+  ['anTopViewed','anTopDwell','anReferrers','anFunnel','anInterest','anCities','anRevSource','anHours','anWeekdayWeb','anHeatmap'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML='<div class="an-empty">—</div>'; });
   const note=document.getElementById('anWebNote'); if(note) note.textContent=msg||'';
 }
 function anRefLabel(h){
@@ -1799,6 +1799,31 @@ function anWeekdayWebRender(weekdays){
   const arr=new Array(7).fill(0);
   (weekdays||[]).forEach(w=>{ const i=+w.dow; if(i>=0&&i<7) arr[i]=w.count||0; });
   el.innerHTML = arr.some(v=>v>0) ? anBars(arr.map((v,i)=>({label:DOWN[i], value:v})), {}) : '<div class="an-empty">אין נתוני ימים בטווח</div>';
+}
+// Phase 3+ — weekday × hour heatmap: the exact best window to publish.
+function anHeatmapRender(heatmap, peakSlot){
+  const el=document.getElementById('anHeatmap'); if(!el) return;
+  const SH=['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'], FULL=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const m=heatmap||[]; let max=0;
+  m.forEach(row=>(row||[]).forEach(v=>{ if(v>max) max=v; }));
+  if(!max){ el.innerHTML='<div class="an-empty">אין נתוני יום×שעה בטווח — נאסף מהיום קדימה</div>'; return; }
+  const pad=n=>(n<10?'0':'')+n;
+  const color=v=>{ if(!v) return '#f4ede1'; const a=(0.16+0.84*(v/max)).toFixed(2); return 'rgba(202,162,74,'+a+')'; };
+  let head='<tr><th></th>';
+  for(let h=0;h<24;h++){ head+='<th class="hd">'+(h%3===0?pad(h):'')+'</th>'; }
+  head+='</tr>';
+  let body='';
+  for(let d=0;d<7;d++){
+    body+='<tr><td class="rl">'+SH[d]+'</td>';
+    for(let h=0;h<24;h++){
+      const v=(m[d]&&m[d][h])||0;
+      const pk=peakSlot&&peakSlot.dow===d&&peakSlot.hour===h;
+      body+='<td><div class="cell'+(pk?' pk':'')+'" title="'+SH[d]+' '+pad(h)+':00 — '+v+'" style="background:'+color(v)+'"></div></td>';
+    }
+    body+='</tr>';
+  }
+  const callout=peakSlot?'<div style="font-size:13px;color:var(--ink2);margin-bottom:4px">החלון הכי חזק: <strong>'+FULL[peakSlot.dow]+' '+pad(peakSlot.hour)+':00</strong> — הזמן האידיאלי לפרסם</div>':'';
+  el.innerHTML=callout+'<div class="an-heat"><table>'+head+body+'</table></div>';
 }
 // Phase 2 — cost per unit from a saved recipe, matched to a product (id → exact name → prefix).
 function anRecipeCostPerUnit(r){
@@ -1908,6 +1933,7 @@ async function anLoadWeb(){
     anRevSourceRender(d.revBySource);
     anHoursRender(d.hours);
     anWeekdayWebRender(d.weekdays);
+    anHeatmapRender(d.heatmap, d.peakSlot);
     const note=document.getElementById('anWebNote');
     if(note) note.textContent='נאסף אנונימית, בלי עוגיות ובלי שמירת זהות.';
   } catch(e){ anWebUnavailable('לא הצלחתי לטעון נתוני צפיות כרגע.'); }

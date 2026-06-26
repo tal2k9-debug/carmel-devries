@@ -496,6 +496,13 @@ th,td{padding:8px}
     #page-analytics .an-hbar{flex:1;background:#f0e2cf;border-radius:3px 3px 0 0;min-height:3px;transition:height .3s}
     #page-analytics .an-hbar.peak{background:linear-gradient(180deg,#caa24a,#e8c97a)}
     #page-analytics .an-hours-ax{display:flex;justify-content:space-between;font-size:10px;color:var(--mute);margin-top:3px;font-variant-numeric:lining-nums tabular-nums}
+    #page-analytics .an-heat{overflow-x:auto;margin-top:2px}
+    #page-analytics .an-heat table{border-collapse:collapse}
+    #page-analytics .an-heat td,#page-analytics .an-heat th{padding:1px;text-align:center}
+    #page-analytics .an-heat .hd{font-size:9px;color:var(--mute);font-variant-numeric:lining-nums tabular-nums}
+    #page-analytics .an-heat .rl{font-size:11px;color:var(--ink2);padding-inline-end:6px;white-space:nowrap;text-align:start}
+    #page-analytics .an-heat .cell{width:13px;height:13px;border-radius:2px}
+    #page-analytics .an-heat .cell.pk{outline:2px solid #5fa463;outline-offset:-1px}
   </style>
   <div class="page-h"><h2>📈 אנליטיקס</h2>
     <div class="actions">
@@ -531,6 +538,7 @@ th,td{padding:8px}
       <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">💰 הכנסה לפי מקור</h3><div id="anRevSource"><div class="an-empty">טוען…</div></div></div>
       <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">🕐 מתי הכי גולשים (שעות)</h3><div id="anHours"><div class="an-empty">טוען…</div></div></div>
       <div class="card" style="box-shadow:none;border:1px solid #f0e2cf"><h3 style="margin-bottom:10px;font-size:15px">📆 ימים חזקים (תנועה)</h3><div id="anWeekdayWeb"><div class="an-empty">טוען…</div></div></div>
+      <div class="card" style="box-shadow:none;border:1px solid #f0e2cf;grid-column:1/-1"><h3 style="margin-bottom:10px;font-size:15px">🗓️ מתי בדיוק הכי חזק (יום × שעה)</h3><div id="anHeatmap"><div class="an-empty">טוען…</div></div></div>
     </div>
     <div id="anWebNote" style="font-size:12.5px;color:var(--mute);margin-top:10px"></div>
   </div>
@@ -684,6 +692,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=58"></script>
+<script src="app.js?v=59"></script>
 </body>
 </html>
