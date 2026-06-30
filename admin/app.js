@@ -138,6 +138,7 @@ async function showApp() {
   try {
     await loadGapi();
     await ensureTabs();
+    await ensureProductColumns();
     await syncAll();
     setSync('ok', 'מסונכרן');
   } catch (e) {
@@ -197,10 +198,10 @@ async function ensureTabs() {
     }
     if (!existing.includes('Products')) {
       // Header + seed initial 6 products so the site keeps working immediately
-      const header = ['id','name','desc','price','unit','qty','kosher','img','published','sortOrder','minOrder','minNote','flavors','updatedAt'];
+      const header = ['id','name','desc','price','unit','qty','kosher','img','published','sortOrder','minOrder','minNote','flavors','updatedAt','salePrice'];
       const rows = [header, ...PRODUCTS_SEED.map(p => prodToRow(Object.assign({updatedAt:new Date().toISOString()}, p)))];
       await gapi.client.sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID, range: 'Products!A1:N' + rows.length, valueInputOption: 'RAW',
+        spreadsheetId: SHEET_ID, range: 'Products!A1:O' + rows.length, valueInputOption: 'RAW',
         resource: {values: rows}
       });
     }
@@ -209,6 +210,24 @@ async function ensureTabs() {
       await writeSettings(DEFAULT_SETTINGS);
     }
   } catch(e){ console.warn('ensureTabs', e); }
+}
+
+// מוסיף עמודות מוצר חדשות לגיליון *קיים* בלי לגעת בנתונים (יצירה בלבד).
+// כך "מחיר מבצע" (salePrice, עמודה O) נוצר אוטומטית בפעם הראשונה שהדשבורד נטען —
+// קרן לא צריכה להוסיף עמודה ידנית, והאתר/הבוט יכולים לקרוא ולכתוב אותה.
+// בלי זה הערך נכתב לעמודה בלי כותרת, והאתר (שקורא לפי שם-כותרת) מתעלם ממנו — וזה
+// בדיוק מה שגרם ל"נשמר בדשבורד אבל לא הסתנכרן לאתר".
+async function ensureProductColumns() {
+  try {
+    const hdr = (await readRange('Products!1:1'))[0] || [];
+    if (hdr.indexOf('salePrice') === -1) {
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID, range: 'Products!O1', valueInputOption: 'RAW',
+        resource: {values: [['salePrice']]}
+      });
+      console.log('[Carmel] added salePrice column (O) to Products');
+    }
+  } catch(e){ console.warn('ensureProductColumns', e); }
 }
 
 async function readRange(range) {
@@ -245,7 +264,7 @@ async function syncAll() {
       readRange('Orders!A2:N'),
       readRange('Expenses!A2:F').catch(()=>[]),
       readRange('Recipes!A2:H').catch(()=>[]),
-      readRange('Products!A2:N').catch(()=>[]),
+      readRange('Products!A2:O').catch(()=>[]),
       readRange('Settings!A2:B').catch(()=>[])
     ]);
     db.customers = cust.map(r => rowToCust(r));
@@ -1339,7 +1358,7 @@ function showProductModal() {
   editingProdId = null;
   document.getElementById('pmTitle').textContent = 'מוצר חדש';
   document.getElementById('pmDelBtn').style.display = 'none';
-  ['pName','pPrice','pUnit','pDesc','pImg'].forEach(i => document.getElementById(i).value = '');
+  ['pName','pPrice','pSalePrice','pUnit','pDesc','pImg'].forEach(i => document.getElementById(i).value = '');
   document.getElementById('pQty').value = 0;
   document.getElementById('pSort').value = 100;
   document.getElementById('pMinOrder').value = '';
@@ -1553,6 +1572,8 @@ async function saveProduct() {
   const price = parseFloat(document.getElementById('pPrice').value);
   if (!name) { toast('שם חובה','err'); return; }
   if (!(price>0)) { toast('מחיר לא תקין','err'); return; }
+  const _sp = parseFloat(document.getElementById('pSalePrice').value)||0;
+  if (_sp>0 && _sp>=price) { toast('מחיר המבצע צריך להיות נמוך מהמחיר הרגיל','err'); return; }
   const flavors = readFlavorsFromForm();
   const p = editingProdId
     ? db.products.find(x => x.id === editingProdId)
@@ -2557,6 +2578,12 @@ async function applyAsstProduct(a){
   if (!p) throw new Error('לא מצאתי את המוצר "'+(a.productName||a.productId||'')+'"');
   const set=a.set||{};
   if (set.price!=null){ const v=parseFloat(set.price); if(v>0) p.price=v; }
+  if (set.salePrice!=null){
+    const v=parseFloat(set.salePrice);
+    if(!(v>0)) p.salePrice=0;                       // 0/ריק = ביטול מבצע
+    else if(v>=p.price) asstAddSys('מחיר המבצע ('+v+') לא נמוך מהמחיר הרגיל ('+p.price+') — לא הפעלתי מבצע. בקשי מבצע נמוך מהמחיר.');
+    else p.salePrice=v;
+  }
   if (set.unit!=null) p.unit=String(set.unit);
   if (set.desc!=null) p.desc=String(set.desc);
   if (set.kosher!=null) p.kosher=String(set.kosher);
