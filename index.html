@@ -459,7 +459,11 @@ function render(){
       : (p.kosher === 'פרווה' ? '<span class="kbadge parve">פרווה</span>'
       : (p.kosher === 'חלבי ופרווה' ? '<span class="kbadge mixed">חלבי ופרווה</span>' : ''));
     const stockBadge = (typeof p.qty === 'number' && p.qty > 0 && p.qty <= 3) ? '<span class="soldout">נותרו <bdi>'+p.qty+'</bdi> במלאי</span>' : '';
-    return '<article class="product" data-id="'+p.id+'"><div class="pi has"><img src="'+p.img+'" alt="'+p.name+'" oncontextmenu="return false" draggable="false"><span class="copyr">© Carmel De-vries · כל הזכויות שמורות</span></div><div class="pb"><div class="pn">'+p.name+kbadge+stockBadge+'</div><div class="pd">'+p.desc+'</div><div class="pr"><div class="pp"><span class="cu">₪</span>'+p.price+'</div><div class="pu">'+formatUnit(p)+'</div></div>'+qtyHtml+(p.minNote?'<div class="mn">'+p.minNote+'</div>':'')+'</div></article>';
+    const salePriceFinal = p.salePrice && p.salePrice > 0 && p.salePrice < p.price ? p.salePrice : 0;
+    const priceHtml = salePriceFinal
+      ? '<div class="pp"><span style="text-decoration:line-through;color:#aaa;font-size:20px;font-weight:400"><span class="cu">₪</span>'+p.price+'</span> <span style="background:#fce4d6;color:#c0392b;border-radius:8px;padding:2px 10px;font-size:26px;font-weight:700"><span class="cu" style="font-size:16px">₪</span>'+salePriceFinal+'</span></div><div style="font-size:12px;color:#c0392b;font-weight:600;margin-top:2px">✨ מחיר הכרות לזמן מוגבל</div>'
+      : '<div class="pp"><span class="cu">₪</span>'+p.price+'</div>';
+    return '<article class="product" data-id="'+p.id+'"><div class="pi has"><img src="'+p.img+'" alt="'+p.name+'" oncontextmenu="return false" draggable="false"><span class="copyr">© Carmel De-vries · כל הזכויות שמורות</span></div><div class="pb"><div class="pn">'+p.name+kbadge+stockBadge+'</div><div class="pd">'+p.desc+'</div><div class="pr">'+priceHtml+'<div class="pu">'+formatUnit(p)+'</div></div>'+qtyHtml+(p.minNote?'<div class="mn">'+p.minNote+'</div>':'')+'</div></article>';
   }).join('');
 
   $$('.qb').forEach(b=>{
@@ -721,6 +725,7 @@ function shapeProduct(get){
     sortOrder:Number(get('sortOrder'))||100,
     minOrder:Number(get('minOrder'))||0,
     minNote:String(get('minNote')||''),
+    salePrice:Number(get('salePrice'))||0,
     flavors:(()=>{
       const f=String(get('flavors')||'').trim();
       if(!f)return undefined;

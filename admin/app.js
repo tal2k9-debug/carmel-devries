@@ -326,7 +326,8 @@ function rowToProd(r){
     minOrder:  parseInt(r[10])||0,
     minNote:   r[11]||'',
     flavors:   r[12]||'',
-    updatedAt: r[13]||''
+    updatedAt: r[13]||'',
+    salePrice: parseFloat(r[14])||0
   };
 }
 function prodToRow(p){
@@ -337,7 +338,8 @@ function prodToRow(p){
     p.img||'', String(p.published?1:0),
     String(p.sortOrder||100),
     String(p.minOrder||0), p.minNote||'',
-    p.flavors||'', p.updatedAt||''
+    p.flavors||'', p.updatedAt||'',
+    String(p.salePrice||'')
   ];
 }
 // === FLAVORS HELPERS ===
@@ -1367,6 +1369,7 @@ function editProduct(id) {
   updateImagePreview(p.img);
   setFlavorRows(parseFlavors(p.flavors, p.qty));
   document.getElementById('pMinOrder').value = p.minOrder || '';
+  document.getElementById('pSalePrice').value = p.salePrice || '';
   document.getElementById('pPublished').checked = !!p.published;
   document.getElementById('prodModal').classList.add('show');
 }
@@ -1565,6 +1568,7 @@ async function saveProduct() {
   p.minOrder = parseInt(document.getElementById('pMinOrder').value)||0;
   // Auto-derive the note from minOrder so the user only has to fill one field.
   p.minNote = p.minOrder > 0 ? `* מינימום להזמנה ${p.minOrder} יח׳` : '';
+  p.salePrice = parseFloat(document.getElementById('pSalePrice').value)||0;
   p.published = document.getElementById('pPublished').checked ? 1 : 0;
   // When flavors exist, total qty = sum of per-flavor qty (auto). Otherwise read from pQty input.
   p.qty = flavors.length
