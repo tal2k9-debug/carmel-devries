@@ -147,6 +147,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 .dc-closed{text-align:center;padding:18px 10px;color:#8a5a2b;font-size:15px;line-height:1.7;white-space:pre-line}
 </style></head>
 <body>
+<a class="cad-skip" href="#a11y-main">דלג לתוכן הראשי</a>
 <header class="hero">
 <div class="bl">Carmel</div>
 <div class="bs">DE-VRIES</div>
@@ -154,7 +155,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="tag"><span class="dt">❤</span><span>אפייה ביתית באהבה</span><span class="dt">❤</span></div>
 <div class="hph-row"><a class="hph" href="tel:+972524809393" dir="ltr" aria-label="התקשרו אל העסק">052-4809393</a></div>
 </header>
-<section><div class="cont">
+<section id="a11y-main" tabindex="-1"><div class="cont">
 <div class="st"><h2>Carmel De Vries Sweets</h2><div class="or"><span class="ln"></span><span class="ht">❤</span><span class="ln"></span></div></div>
 <div class="products" id="products"></div>
 </div></section>
@@ -213,6 +214,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="bs">DE-VRIES</div>
 <a class="cn" href="tel:+972524809393"><span class="ic">☎</span><span dir="ltr">052-4809393</span></a>
 <div style="margin-top:14px"><a href="policy.html" style="color:var(--gl);font-size:14px;text-decoration:underline">תקנון ומדיניות</a></div>
+<div style="margin-top:8px"><a href="accessibility.html" style="color:var(--gl);font-size:14px;text-decoration:underline">הצהרת נגישות</a></div>
 <div class="cr">© Carmel De-vries · Homemade Baked Goods · <a href="admin/" style="color:#5a5040;text-decoration:none;opacity:.55;font-size:13px;margin-inline-start:4px;cursor:pointer" title="ניהול">🔐</a></div>
 </footer>
 <script>
@@ -815,4 +817,93 @@ document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ loadPr
 </script>
 <!-- מעקב אנונימי (אנליטיקס) — קובץ נפרד, fail-silent, לא משפיע על האתר -->
 <script src="track.js?v=4" defer></script>
+<!-- ♿ נגישות — ווידג'ט עצמאי, ללא תלות חיצונית (נוסף 09.09.2026). חי על <html> כדי
+     ש-zoom/filter על ה-body לא ישפיעו עליו. כל המחלקות בקידומת cad- למניעת התנגשות. -->
+<style>
+.cad-skip{position:fixed;top:-60px;right:12px;z-index:100001;background:#1a1612;color:#fff;padding:10px 16px;border-radius:0 0 10px 10px;text-decoration:none;font:600 15px/1 Heebo,Arial,sans-serif;transition:top .2s}
+.cad-skip:focus{top:0;outline:3px solid #f0c67a}
+.cad-a11y-btn{position:fixed;bottom:90px;right:20px;z-index:100000;width:56px;height:56px;border-radius:50%;border:none;background:#1a1612;color:#fff;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1}
+.cad-a11y-btn:focus-visible{outline:3px solid #f0c67a;outline-offset:3px}
+.cad-a11y-panel{position:fixed;bottom:158px;right:20px;z-index:100000;width:272px;max-width:calc(100vw - 40px);background:#fff;color:#1a1612;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.3);padding:14px;font-family:Heebo,Arial,sans-serif;display:none}
+.cad-a11y-panel[data-open="1"]{display:block}
+.cad-a11y-panel h2{font-size:16px;margin:0 0 10px;text-align:center;color:#1a1612}
+.cad-a11y-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cad-a11y-grid button{font:500 13px/1.3 Heebo,Arial,sans-serif;background:#f4ede0;border:1px solid #e3d6bf;border-radius:10px;padding:10px 6px;cursor:pointer;color:#1a1612}
+.cad-a11y-grid button[aria-pressed="true"]{background:#1a1612;color:#fff;border-color:#1a1612}
+.cad-a11y-grid button:focus-visible{outline:2px solid #b8860b;outline-offset:1px}
+.cad-a11y-reset{grid-column:1/-1;background:#8a2b2b!important;color:#fff!important;border:none!important}
+.cad-a11y-foot{margin-top:10px;text-align:center;font-size:12px}
+.cad-a11y-foot a{color:#8a5a2b}
+body.cad-invert{filter:invert(1) hue-rotate(180deg)!important;background:#fff!important}
+body.cad-invert img,body.cad-invert video,body.cad-invert [style*="background-image"]{filter:invert(1) hue-rotate(180deg)!important}
+body.cad-gray{filter:grayscale(1)!important}
+body.cad-invert.cad-gray{filter:invert(1) grayscale(1) hue-rotate(180deg)!important}
+body.cad-links a{text-decoration:underline!important;outline:2px dashed currentColor!important;outline-offset:2px}
+body.cad-font,body.cad-font *{font-family:Arial,"Segoe UI",sans-serif!important}
+body.cad-noanim,body.cad-noanim *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+</style>
+<script>
+(function(){
+  var KEY='cad-a11y', S={};
+  try{S=JSON.parse(localStorage.getItem(KEY)||'{}')||{};}catch(e){S={};}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+  var panel;
+  function apply(){
+    var b=document.body; if(!b)return;
+    b.classList.toggle('cad-invert',!!S.invert);
+    b.classList.toggle('cad-gray',!!S.gray);
+    b.classList.toggle('cad-links',!!S.links);
+    b.classList.toggle('cad-font',!!S.font);
+    b.classList.toggle('cad-noanim',!!S.noanim);
+    b.style.zoom=S.zoom?String(S.zoom):'';
+  }
+  function sync(){
+    if(!panel)return;
+    panel.querySelectorAll('button[data-k]').forEach(function(btn){
+      var k=btn.getAttribute('data-k');
+      if(k==='zoomin'||k==='zoomout'||k==='reset')return;
+      btn.setAttribute('aria-pressed', S[k]?'true':'false');
+    });
+  }
+  function build(){
+    var btn=document.createElement('button');
+    btn.className='cad-a11y-btn'; btn.type='button';
+    btn.setAttribute('aria-label','אפשרויות נגישות'); btn.setAttribute('aria-expanded','false');
+    btn.textContent='♿';
+    panel=document.createElement('div');
+    panel.className='cad-a11y-panel'; panel.setAttribute('role','dialog'); panel.setAttribute('aria-label','תפריט נגישות');
+    panel.innerHTML='<h2>נגישות</h2><div class="cad-a11y-grid">'
+      +'<button type="button" data-k="zoomin">➕ הגדל טקסט</button>'
+      +'<button type="button" data-k="zoomout">➖ הקטן טקסט</button>'
+      +'<button type="button" data-k="invert">🌓 ניגודיות</button>'
+      +'<button type="button" data-k="gray">⚫ גווני אפור</button>'
+      +'<button type="button" data-k="links">🔗 הדגש קישורים</button>'
+      +'<button type="button" data-k="font">🔤 פונט קריא</button>'
+      +'<button type="button" data-k="noanim">⏸️ עצור אנימציות</button>'
+      +'<button type="button" data-k="reset" class="cad-a11y-reset">↺ איפוס</button>'
+      +'</div><div class="cad-a11y-foot"><a href="accessibility.html">הצהרת נגישות</a></div>';
+    document.documentElement.appendChild(btn);
+    document.documentElement.appendChild(panel);
+    function toggle(open){
+      var o = open==null ? panel.getAttribute('data-open')!=='1' : open;
+      panel.setAttribute('data-open', o?'1':'0');
+      btn.setAttribute('aria-expanded', o?'true':'false');
+    }
+    btn.addEventListener('click',function(){toggle();});
+    panel.addEventListener('click',function(e){
+      var t=e.target.closest?e.target.closest('button[data-k]'):null; if(!t)return;
+      var k=t.getAttribute('data-k');
+      if(k==='reset'){S={};}
+      else if(k==='zoomin'){S.zoom=Math.min(1.5,Math.round(((S.zoom||1)+0.1)*10)/10);}
+      else if(k==='zoomout'){S.zoom=Math.max(1,Math.round(((S.zoom||1)-0.1)*10)/10); if(S.zoom<=1)delete S.zoom;}
+      else {S[k]=!S[k]; if(!S[k])delete S[k];}
+      save();apply();sync();
+    });
+    document.addEventListener('keydown',function(e){if(e.key==='Escape')toggle(false);});
+    sync();
+  }
+  function init(){build();apply();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
+</script>
 </body></html>
