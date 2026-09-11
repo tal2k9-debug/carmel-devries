@@ -560,6 +560,7 @@ function renderAll() {
   if (document.getElementById('page-pnl').classList.contains('active')) renderPL();
   if (document.getElementById('page-expenses').classList.contains('active')) renderExpenses();
   if (document.getElementById('page-settings').classList.contains('active')) renderSettings();
+  queueReceiptStatus();
 }
 
 /* ============ TODAY ============ */
@@ -650,7 +651,7 @@ function kanbanCard(o) {
     <div class="d">📅 ${esc(o.date)} · ${o.fulfillment==='delivery'?'🚚 משלוח':'🏠 איסוף'}</div>
     <div class="it">${esc(o.items.slice(0,80))}${o.items.length>80?'...':''}</div>
     <div class="ph">📞 ${esc(o.phone)}</div>
-    <div style="margin-top:6px">${payBadge}</div>
+    <div style="margin-top:6px">${payBadge}${o.receiptUrl?` <span data-rcpt="${o.id}" title="קבלה ללקוח" style="font-size:11px">${rcptBadge(_rcpt[o.id])}</span>`:''}</div>
   </div>`;
 }
 
@@ -716,12 +717,20 @@ function showOrder(id) {
       </div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
-      ${o.receiptUrl ? `<a class="btn btn-p" href="${o.receiptUrl}" target="_blank">📄 קבלה</a>
-      <a class="btn btn-s" href="https://wa.me/${waPhone(o.phone)}?text=${encodeURIComponent('שלום! מצורפת הקבלה על ההזמנה שלך מ-Carmel De-vries 🍪\n'+o.receiptUrl)}" target="_blank">📤 שלח קבלה ללקוח</a>` : ''}
+      ${o.receiptUrl ? `<div style="flex-basis:100%;background:#f3f9f3;border:1px solid #cfe8cf;padding:10px 12px;border-radius:10px;margin-bottom:4px">
+        <div style="font-weight:600;color:var(--ink2);font-size:13px;margin-bottom:8px">🧾 קבלה מס׳ ${esc(rcptNumber(o.receiptUrl))} · <span id="rcpt-${o.id}">${rcptLabel(_rcpt[o.id])}</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <a class="btn btn-p" href="${esc(o.receiptUrl)}" target="_blank" rel="noopener">📄 פתיחה</a>
+          <a class="btn btn-s" href="${esc(o.receiptUrl)}" download="kabala-${esc(rcptNumber(o.receiptUrl))}.pdf" target="_blank" rel="noopener">⬇️ הורדה</a>
+          <button class="btn btn-s" onclick="resendReceipt('${o.id}')">📤 שלח שוב ללקוח</button>
+          <a class="btn btn-s" href="https://wa.me/${waPhone(o.phone)}?text=${encodeURIComponent('שלום! מצורפת הקבלה על ההזמנה שלך מ-Carmel De-vries 🍪\n'+o.receiptUrl)}" target="_blank" rel="noopener">📱 שליחה ידנית</a>
+        </div>
+      </div>` : ''}
       <a class="btn btn-s" href="https://wa.me/${waPhone(o.phone)}" target="_blank">📱 WhatsApp</a>
       <button class="btn btn-d" onclick="deleteOrder('${o.id}')">🗑 מחק</button>
     </div>`;
   document.getElementById('orderModal').classList.add('show');
+  if (o.receiptUrl) loadReceiptStatus([o.id]);
 }
 
 async function setOrderPaid(id, val) {
@@ -2678,3 +2687,71 @@ function addDaysStr(s,n){const d=new Date(s);d.setDate(d.getDate()+n);return d.t
 function isoDate(d){return d.toISOString().slice(0,10);}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function stLabel(id){const s=STATUSES.find(x=>x.id===id);return s?s.label:id;}
+
+/* ============ קבלה ללקוח: סטטוס שליחה + "שלח שוב" (API של הבוט בשרת) ============ */
+// הבוט (carmel-twilio) שולח את הקבלה בוואטסאפ ומאמת מסירה. כאן רק שואלים אותו מה קרה, ומבקשים לשלוח שוב.
+// אימות: אותו טוקן גוגל של הדשבורד (Bearer) — רק המיילים המורשים.
+const RECEIPT_API = 'https://chelek.online/carmel-receipt';
+const _rcpt = {}; // orderId -> {state,status,at,by,err}
+let _rcptQueueTimer = null;
+function rcptNumber(url){ const m = /_(\d+)$/.exec(String(url||'')); return m ? String(parseInt(m[1],10)) : ''; }
+function rcptWhen(at){ if(!at) return ''; try { return ' · ' + new Date(at).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); } catch(e){ return ''; } }
+function rcptLabel(s){
+  if (!s) return '⏳ בודק אם נשלחה…';
+  const by = (s.by && s.by !== 'bot' && s.by !== 'history') ? ' (נשלח שוב)' : '';
+  const okText = s.status==='read' ? '✅ נשלחה ונקראה' : s.status==='delivered' ? '✅ נמסרה ללקוח' : null;
+  if (s.state === 'pending') return (okText || '⏳ בדרך ללקוח…') + by + rcptWhen(s.at);
+  if (s.state === 'sent') return (okText || '✅ נשלחה ללקוח') + by + rcptWhen(s.at);
+  if (s.state === 'failed') return '❌ השליחה נכשלה' + (s.err ? ' (' + s.err + ')' : '') + rcptWhen(s.at);
+  if (s.state === 'unknown') return 'ℹ️ הופקה (לפני המעקב — אין פירוט שליחה)';
+  if (s.state === 'error') return '⚠️ לא ניתן לבדוק כרגע';
+  return '⚠️ עוד לא נשלחה ללקוח';
+}
+function rcptBadge(s){
+  if (!s) return '🧾';
+  if (s.state==='pending') return '🧾⏳';
+  if (s.state==='sent') return s.status==='read' ? '🧾✅✅' : '🧾✅';
+  if (s.state==='failed') return '🧾❌';
+  if (s.state==='none') return '🧾⚠️';
+  return '🧾';
+}
+function rcptPaint(id){
+  const el = document.getElementById('rcpt-'+id); if (el) el.textContent = rcptLabel(_rcpt[id]);
+  document.querySelectorAll('[data-rcpt="'+id+'"]').forEach(b => { b.textContent = rcptBadge(_rcpt[id]); });
+}
+async function loadReceiptStatus(ids){
+  ids = (ids||[]).filter(Boolean); if (!ids.length) return;
+  if (!accessToken) { ids.forEach(rcptPaint); return; }
+  try {
+    const r = await fetch(RECEIPT_API + '/status?ids=' + encodeURIComponent(ids.join(',')), { headers: { Authorization: 'Bearer ' + accessToken } });
+    if (!r.ok) throw new Error('http ' + r.status);
+    const d = await r.json(); Object.assign(_rcpt, d.status || {});
+  } catch (e) { console.warn('receipt status', e); ids.forEach(id => { if (!_rcpt[id]) _rcpt[id] = { state: 'error' }; }); }
+  ids.forEach(rcptPaint);
+}
+// אחרי כל רינדור: משלימים סטטוס להזמנות עם קבלה שעדיין לא נבדקו (בקשה אחת מרוכזת)
+function queueReceiptStatus(){
+  clearTimeout(_rcptQueueTimer);
+  _rcptQueueTimer = setTimeout(() => {
+    if (!db || !db.orders || !accessToken) return;
+    const ids = db.orders.filter(o => o.receiptUrl && !_rcpt[o.id]).map(o => o.id).slice(0, 60);
+    if (ids.length) loadReceiptStatus(ids);
+  }, 800);
+}
+async function resendReceipt(id){
+  if (!accessToken) { alert('צריך להתחבר עם גוגל כדי לשלוח'); return; }
+  const o = db.orders.find(x => x.id === id); if (!o || !o.receiptUrl) return;
+  if (!confirm('לשלוח שוב את הקבלה ל-' + o.name + ' בוואטסאפ (' + o.phone + ')?')) return;
+  const el = document.getElementById('rcpt-'+id); if (el) el.textContent = '⏳ שולח…';
+  try {
+    const r = await fetch(RECEIPT_API + '/resend', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken }, body: JSON.stringify({ orderId: id }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) {
+      const why = { already_pending: 'כבר בדרך ללקוח', cooldown: 'נשלחה ממש עכשיו — לחכות 2 דקות', no_receipt: 'אין קבלה להזמנה הזו', no_phone: 'אין טלפון בהזמנה', no_template: 'תבנית הקבלה לא מאושרת בוואטסאפ', order_not_found: 'ההזמנה לא נמצאה בגיליון', unauthorized: 'אין הרשאה' }[d.error] || d.error || ('שגיאה ' + r.status);
+      toast('לא נשלח: ' + why, 'err'); await loadReceiptStatus([id]); return;
+    }
+    toast('הקבלה נשלחה ללקוח 📤', 'ok');
+    _rcpt[id] = { state: 'pending', status: 'queued', at: Date.now(), by: 'dashboard' }; rcptPaint(id);
+    [8000, 30000, 150000].forEach(ms => setTimeout(() => loadReceiptStatus([id]), ms));
+  } catch (e) { toast('השליחה נכשלה (רשת)', 'err'); await loadReceiptStatus([id]); }
+}
