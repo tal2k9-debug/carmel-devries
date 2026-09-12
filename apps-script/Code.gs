@@ -97,6 +97,9 @@ function doPost(e) {
   if (payload && payload.action === 'waitlist_mark') {
     return waitlistMark_(payload);
   }
+  if (payload && payload.action === 'waitlist_delete') {
+    return waitlistDelete_(payload);
+  }
 
   // --- הגנות בסיסיות על קליטת הזמנה (ספאם/זבל) ---
   // Honeypot: שדה נסתר שאדם אמיתי לא רואה ולא ממלא. בוט שמילא אותו מקבל
@@ -697,6 +700,24 @@ function waitlistMark_(payload) {
     }
   }
   return json({ ok: true, marked: marked });
+}
+
+
+// מחיקת שורות מרשימת ההמתנה (תחזוקה/ניקוי בדיקות). payload: {action:'waitlist_delete', secret, ids:[...]}
+function waitlistDelete_(payload) {
+  if (!botSecretOk_(payload.secret)) return json({ ok: false, error: 'unauthorized' });
+  var ids = payload.ids || [];
+  if (!ids.length) return json({ ok: true, deleted: 0 });
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(WAITLIST_SHEET);
+  if (!sh) return json({ ok: false, error: 'no_sheet' });
+  var data = sh.getDataRange().getDisplayValues();
+  var idC = data[0].map(function (h) { return String(h).trim(); }).indexOf('id');
+  if (idC === -1) return json({ ok: false, error: 'bad_header' });
+  var want = {}; ids.forEach(function (x) { want[String(x)] = true; });
+  var rows = [];
+  for (var r = 1; r < data.length; r++) if (want[String(data[r][idC])]) rows.push(r + 1);
+  rows.sort(function (a, b) { return b - a; }).forEach(function (n) { sh.deleteRow(n); });
+  return json({ ok: true, deleted: rows.length });
 }
 
 // "name:qty|name:qty"  (legacy "name|name" → each flavor inherits productQty)
