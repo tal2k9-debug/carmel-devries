@@ -122,6 +122,13 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .bitem .bq{font-family:'Heebo',sans-serif;font-size:11px;color:#c9a978;white-space:nowrap;font-variant-numeric:lining-nums tabular-nums}
 .bitem .bx{background:none;border:none;color:#9e8f7e;font-size:15px;line-height:1;cursor:pointer;padding:0 2px;flex:0 0 auto}
 .bitem .bx:hover{color:#fff}
+@media (max-width:700px){
+  .bstrip{flex-direction:column;flex-wrap:nowrap;gap:6px;max-height:142px;overflow-y:auto;overflow-x:hidden;padding-inline-end:2px}
+  .bitem{max-width:none;width:100%;justify-content:space-between;padding:5px 10px 5px 6px}
+  .bitem>div{flex:1;min-width:0}
+  .bitem .bn{max-width:none;white-space:normal;overflow:visible;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+  .bmore{align-self:flex-start}
+}
 .bmore{flex:0 0 auto;align-self:center;font-family:'Heebo',sans-serif;font-size:12px;color:#c9a978;padding:0 4px;white-space:nowrap}
 .bar.vis{transform:translateY(0)}
 .bi{display:flex;flex-direction:column;gap:2px}
@@ -705,6 +712,17 @@ function render(){
 }
 
 // שורת הפריטים שנבחרו בסרגל התחתון — תמונה, שם, כמות × מחיר = סכום, והסרה מהירה
+// מרווח הכפתורים הצפים = גובה סרגל הסל בפועל (משתנה לפי כמות הפריטים ברשימה)
+function syncFabOffset(open){
+  const root=document.documentElement;
+  if(!open){ root.style.removeProperty('--fab-b'); return; }
+  requestAnimationFrame(function(){
+    const bar=$('#bar'); if(!bar) return;
+    const h=Math.round(bar.getBoundingClientRect().height);
+    if(h>0) root.style.setProperty('--fab-b', (h+14)+'px');
+  });
+}
+
 function renderCartStrip(lines){
   const el=$('#bstrip'); if(!el) return;
   if(!lines.length){ el.innerHTML=''; return; }
@@ -718,6 +736,7 @@ function renderCartStrip(lines){
       +'</div>';
   }).join('')
     +(lines.length>shown.length?'<span class="bmore">+'+(lines.length-shown.length)+' נוספים</span>':'');
+  if(document.documentElement.classList.contains('cart-open')) syncFabOffset(true);
   el.querySelectorAll('.bx').forEach(function(b){
     b.onclick=function(){
       const id=b.dataset.rid, flav=b.dataset.rflav||'';
@@ -746,6 +765,7 @@ function upd(){
   try{window.caCartSub=sub;}catch(e){}
   $('#bar').classList.toggle('vis',sub>0);
   document.documentElement.classList.toggle('cart-open',sub>0);
+  syncFabOffset(sub>0);
   $('#sc').textContent=cnt+' פריטים';$('#st').textContent=fmt(tot);
   renderCartStrip(lines);
   const lst=$('#ol-lines');
