@@ -694,6 +694,8 @@ async function updateOrderRow(o) {
 function showOrder(id) {
   const o = db.orders.find(x => x.id === id); if (!o) return;
   document.getElementById('omTitle').textContent = 'הזמנה: ' + o.name;
+  const payOpts = ['<option value="">— בחרי —</option>']
+    .concat(PAYMENT_METHODS.map(m => `<option value="${esc(m)}" ${o.paymentMethod===m?'selected':''}>${m}</option>`)).join('');
   const methodOpts = ['<option value="">— לא צוין —</option>']
     .concat(PAYMENT_METHODS.map(m => `<option value="${esc(m)}" ${o.paymentMethod===m?'selected':''}>${m}</option>`)).join('');
   document.getElementById('omBody').innerHTML = `
@@ -716,14 +718,20 @@ function showOrder(id) {
     </div>
     <div style="background:#FAF1E8;padding:14px;border-radius:10px;margin-bottom:14px">
       <div style="font-weight:600;color:var(--ink2);font-size:13px;margin-bottom:8px">תשלום</div>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px;font-size:14px">
-        <input type="checkbox" id="omPaid" ${o.paid?'checked':''} onchange="setOrderPaid('${o.id}', this.checked)" style="width:20px;height:20px;cursor:pointer">
-        <strong style="${o.paid?'color:var(--ok)':'color:var(--err)'}">${o.paid?'שולם ✓':'לא שולם — חוב פתוח'}</strong>
-      </label>
-      <div style="display:flex;align-items:center;gap:8px;font-size:13px">
-        <span style="color:var(--mute)">אופן תשלום:</span>
-        <select onchange="setOrderPaymentMethod('${o.id}', this.value)" style="padding:6px 10px;border:1px solid var(--bd);border-radius:6px;background:#fff;font-size:13px">${methodOpts}</select>
+      ${o.paid ? `
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="pay-ok">✓ שולם${o.paymentMethod?' ב'+esc(o.paymentMethod):''}</span>
+        ${o.receiptUrl ? '' : (o.paymentMethod ? '<span style="font-size:13px;color:var(--ink2)">הקבלה תישלח ללקוח תוך 2 דקות</span>' : '<span style="font-size:13px;color:var(--err)">בחרי אמצעי תשלום כדי שתצא קבלה:</span>')}
+        ${o.paymentMethod ? '' : `<select onchange="onPayMethodChange('${o.id}', this.value)" style="padding:6px 10px;border:1px solid var(--bd);border-radius:6px;background:#fff;font-size:13px">${payOpts}</select>`}
+        <button class="pay-cancel" onclick="unmarkPaid('${o.id}')">ביטול (טעות)</button>
+      </div>` : `
+      <div class="pay-open">לא שולם — חוב פתוח</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px">
+        <span style="color:var(--mute)">איך שולם?</span>
+        <select onchange="onPayMethodChange('${o.id}', this.value)" style="padding:6px 10px;border:1px solid var(--bd);border-radius:6px;background:#fff;font-size:13px">${payOpts}</select>
+        <button class="btn ${o.paymentMethod?'btn-p':'btn-dis'}" ${o.paymentMethod?'':'disabled'} onclick="markPaid('${o.id}')">✓ סמן כשולם</button>
       </div>
+      <div class="pay-hint">${o.paymentMethod ? 'לחיצה אחת: ההזמנה תסומן שולם, ותוך 2 דקות הלקוח יקבל קבלה בוואטסאפ.' : 'בחרי אמצעי תשלום קודם. אחרי הסימון תישלח ללקוח קבלה בוואטסאפ אוטומטית.'}</div>`}
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
       ${o.receiptUrl ? `<div style="flex-basis:100%;background:#f3f9f3;border:1px solid #cfe8cf;padding:10px 12px;border-radius:10px;margin-bottom:4px">
@@ -2763,4 +2771,23 @@ async function resendReceipt(id){
     _rcpt[id] = { state: 'pending', status: 'queued', at: Date.now(), by: 'dashboard' }; rcptPaint(id);
     [8000, 30000, 150000].forEach(ms => setTimeout(() => loadReceiptStatus([id]), ms));
   } catch (e) { toast('השליחה נכשלה (רשת)', 'err'); await loadReceiptStatus([id]); }
+}
+
+/* ============ תשלום: כפתור אחד במקום תיבת סימון ============ */
+// "סמן כשולם" פעיל רק אחרי בחירת אמצעי תשלום. הסימון עצמו = אותן שתי עמודות בגיליון כמו קודם (paid + paymentMethod);
+// הבוט מזהה תוך 2 דקות ומפיק+שולח קבלה. "ביטול" מחזיר ל"לא שולם" (קבלה שכבר יצאה לא מתבטלת).
+async function onPayMethodChange(id, method){
+  await setOrderPaymentMethod(id, method);
+  showOrder(id);
+}
+async function markPaid(id){
+  const o = db.orders.find(x => x.id === id); if (!o) return;
+  if (!o.paymentMethod) { toast('בחרי אמצעי תשלום קודם', 'err'); return; }
+  await setOrderPaid(id, true);
+  toast('סומן כשולם · הקבלה תישלח ללקוח תוך 2 דקות', 'ok');
+}
+async function unmarkPaid(id){
+  const o = db.orders.find(x => x.id === id); if (!o) return;
+  if (!confirm('לבטל את סימון התשלום? ההזמנה תחזור ל"לא שולם".' + (o.receiptUrl ? '\n(קבלה שכבר הופקה נשארת ברווחית.)' : ''))) return;
+  await setOrderPaid(id, false);
 }
