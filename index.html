@@ -73,8 +73,10 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .form-err ul{margin:0;padding-inline-start:18px}
 .notify-link{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:0;border:none;background:none;color:#8a6d3b;font-family:'Heebo',sans-serif;font-size:12.5px;font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px;opacity:.85}
 .notify-link:hover{opacity:1;color:#6d5530}
-#notify-modal{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;background:rgba(26,22,18,.55);padding:20px}
-#notify-modal.show{display:flex}
+#notify-modal,#install-modal{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;background:rgba(26,22,18,.55);padding:20px}
+#notify-modal.show,#install-modal.show{display:flex}
+#install-steps{text-align:start}
+#install-steps ol{margin:6px 0 0;padding-inline-start:20px;line-height:1.9}
 .nm-box{background:#fff;border-radius:16px;max-width:340px;width:100%;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.3);font-family:'Heebo',sans-serif;text-align:center;position:relative}
 .nm-x{position:absolute;top:10px;left:12px;background:none;border:none;font-size:20px;color:#b0a396;cursor:pointer;line-height:1}
 .nm-t{font-size:16px;font-weight:600;color:#1a1612;margin-bottom:4px}
@@ -283,6 +285,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="bs">DE-VRIES</div>
 <a class="cn" href="tel:+972524809393"><span class="ic">☎</span><span dir="ltr">052-4809393</span></a>
 <div style="margin-top:14px"><a href="policy.html" style="color:var(--gl);font-size:14px;text-decoration:underline">תקנון ומדיניות</a></div>
+<div style="margin-top:8px"><a href="#" id="install-link" style="color:var(--gl);font-size:14px;text-decoration:underline">📲 הוספה למסך הבית</a></div>
 <div style="margin-top:8px"><a href="accessibility.html" style="color:var(--gl);font-size:14px;text-decoration:underline">הצהרת נגישות</a></div>
 <div class="cr">© Carmel De-vries · Homemade Baked Goods · <a href="admin/" style="color:#5a5040;text-decoration:none;opacity:.55;font-size:13px;margin-inline-start:4px;cursor:pointer" title="ניהול">🔐</a></div>
 </footer>
@@ -469,7 +472,7 @@ function bindNotifyButtons(){
   // אנדרואיד/כרום — הדפדפן מציע התקנה אמיתית
   var deferred=null;
   window.addEventListener('beforeinstallprompt', function(e){
-    e.preventDefault(); deferred=e;
+    e.preventDefault(); deferred=e; window.__carmelInstall=e;
     if(standalone()||dismissedRecently()) return;
     setTimeout(function(){
       show('רוצים את קרן על מסך הבית?', function(){
@@ -488,6 +491,8 @@ function bindNotifyButtons(){
     if(safari && !standalone() && !dismissedRecently()){
       setTimeout(function(){ show('להוספה למסך הבית: <b>שיתוף</b> ⬆️ ואז <b>הוספה למסך הבית</b>'); }, 14000);
     }
+    var il=document.getElementById('install-link');
+    if(il) il.onclick=function(ev){ ev.preventDefault(); openInstall(); };
     if('serviceWorker' in navigator){
       navigator.serviceWorker.register('sw.js').catch(function(){});
     }
@@ -514,6 +519,35 @@ function showFormError(missing){
   box.hidden=false;
 }
 function clearFormError(){ const box=$('#form-err'); if(box) box.hidden=true; }
+
+// הוספה למסך הבית — עובד בכל מקרה: אם הדפדפן תומך מציעים התקנה, אחרת מסבירים בדיוק מה לעשות
+function openInstall(){
+  const steps=$('#install-steps'), go=$('#install-go');
+  const ua=navigator.userAgent;
+  const iOS=/iphone|ipad|ipod/i.test(ua);
+  const android=/android/i.test(ua);
+  const standalone=window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
+  go.hidden=true;
+  if(standalone){
+    steps.innerHTML='כבר הוספתם 💛 האתר פתוח אצלכם כאפליקציה.';
+  } else if(window.__carmelInstall){
+    steps.innerHTML='לחיצה אחת והאייקון של קרן יתווסף למסך הבית.';
+    go.hidden=false; go.textContent='הוספה עכשיו';
+    go.onclick=function(){
+      const p=window.__carmelInstall; window.__carmelInstall=null; closeInstall();
+      p.prompt();
+    };
+  } else if(iOS){
+    steps.innerHTML='<b>באייפון (בספארי):</b><ol><li>לוחצים על כפתור <b>שיתוף</b> ⬆️ בתחתית המסך</li><li>גוללים ובוחרים <b>הוספה למסך הבית</b></li><li>לוחצים <b>הוספה</b></li></ol>';
+  } else if(android){
+    steps.innerHTML='<b>באנדרואיד (כרום):</b><ol><li>לוחצים על ⋮ בפינה העליונה</li><li>בוחרים <b>הוספה למסך הבית</b> (או "התקנת אפליקציה")</li><li>מאשרים <b>הוספה</b></li></ol>';
+  } else {
+    steps.innerHTML='<b>במחשב (כרום/אדג\u0027):</b><ol><li>בשורת הכתובת לוחצים על סמל ההתקנה ⊕</li><li>או: תפריט ⋮ ואז <b>התקנה</b></li></ol>';
+  }
+  $('#install-modal').classList.add('show');
+  document.body.style.overflow='hidden';
+}
+function closeInstall(){ $('#install-modal').classList.remove('show'); document.body.style.overflow=''; }
 
 function calcD(s){if(ful()==='pickup')return 0;if(s<=0||s>=FREE)return 0;return FEE;}
 function leadDaysVal(){return Math.max(0,parseInt(orderSettings.leadDays,10)||0);}
@@ -1169,6 +1203,14 @@ body.cad-noanim,body.cad-noanim *{animation:none!important;transition:none!impor
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
 </script>
+<div id="install-modal" role="dialog" aria-modal="true" aria-label="הוספה למסך הבית">
+  <div class="nm-box">
+    <button type="button" class="nm-x" onclick="closeInstall()" aria-label="סגירה">✕</button>
+    <div class="nm-t">📲 הוספה למסך הבית</div>
+    <div class="nm-p" id="install-steps"></div>
+    <button type="button" id="install-go" class="nm-send" hidden>הוספה עכשיו</button>
+  </div>
+</div>
 <div id="notify-modal" role="dialog" aria-modal="true" aria-label="עדכון כשהמוצר חוזר למלאי">
   <div class="nm-box">
     <button type="button" class="nm-x" onclick="closeNotify()" aria-label="סגירה">✕</button>
