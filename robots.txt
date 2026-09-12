@@ -1,0 +1,88 @@
+# carmeldevries.co.il — פתוח לכל הזוחלים וסוכני ה-AI. הדשבורד הפנימי (/admin/) לא מיועד לאינדוקס.
+# מידע מובנה לסוכנים: /llms.txt · /products.json · JSON-LD בתוך העמוד הראשי.
+
+User-agent: *
+Allow: /
+Disallow: /admin/
+
+User-agent: GPTBot
+Allow: /
+Disallow: /admin/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /admin/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /admin/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /admin/
+
+User-agent: Claude-User
+Allow: /
+Disallow: /admin/
+
+User-agent: Claude-SearchBot
+Allow: /
+Disallow: /admin/
+
+User-agent: anthropic-ai
+Allow: /
+Disallow: /admin/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /admin/
+
+User-agent: Perplexity-User
+Allow: /
+Disallow: /admin/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /admin/
+
+User-agent: Googlebot
+Allow: /
+Disallow: /admin/
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin/
+
+User-agent: Applebot
+Allow: /
+Disallow: /admin/
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /admin/
+
+User-agent: Meta-ExternalAgent
+Allow: /
+Disallow: /admin/
+
+User-agent: Amazonbot
+Allow: /
+Disallow: /admin/
+
+User-agent: DuckAssistBot
+Allow: /
+Disallow: /admin/
+
+User-agent: YouBot
+Allow: /
+Disallow: /admin/
+
+User-agent: cohere-ai
+Allow: /
+Disallow: /admin/
+
+User-agent: MistralAI-User
+Allow: /
+Disallow: /admin/
+
+Sitemap: https://carmeldevries.co.il/sitemap.xml

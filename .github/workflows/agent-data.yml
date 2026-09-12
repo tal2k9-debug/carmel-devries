@@ -1,0 +1,50 @@
+# רענון אוטומטי של שכבת הסוכנים/זוחלים באתר של קרן:
+# JSON-LD + כרטיסי מוצרים סטטיים בתוך index.html, products.json, llms.txt, sitemap.xml.
+# רץ פעם בשעה (ואפשר ידנית מלשונית Actions). מתחייב (commit) רק אם משהו השתנה — ואז
+# GitHub Pages מפרסם לבד. הסקריפט לא כותב כלום אם המקור לא זמין (הגנה מנתונים חסרים).
+name: agent-data
+
+on:
+  schedule:
+    - cron: '23 * * * *'   # כל שעה בדקה 23 (UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agent-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: build agent data
+        run: node scripts/build-agent-data.mjs
+
+      - name: commit & push if changed
+        run: |
+          git config user.name  "carmel agent-data bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html products.json llms.txt sitemap.xml
+          if git diff --cached --quiet; then
+            echo "no changes — nothing to commit"
+            exit 0
+          fi
+          git commit -m "נתוני סוכנים: רענון אוטומטי (מוצרים, מלאי, JSON-LD, llms.txt, sitemap)"
+          # יש כותבים נוספים לריפו (העוזר של קרן) — מנסים rebase+push עד 3 פעמים
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            echo "push attempt $i failed, retrying…"; sleep 8
+          done
+          exit 1
