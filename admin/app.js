@@ -617,6 +617,9 @@ function matchProductLine(line) {
   return null;
 }
 function orderTotal(o) {
+  // הסכום המדויק מהגיליון (עמודת total — כולל שורת משלוח כשיש). נפילה לפרסור הטקסט רק להזמנות ישנות בלי סכום.
+  const sheetTotal = parseFloat(o.total);
+  if (sheetTotal > 0) return sheetTotal;
   let total = 0;
   if (!o.items) return 0;
   o.items.split(/[,\n]/).forEach(line => {

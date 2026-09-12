@@ -39,6 +39,26 @@ var MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 // העלאת תמונות דורשת טוקן גוגל של אחת המנהלות (נבדק מול tokeninfo).
 var ALLOWED_UPLOADERS = ['tal2k9@gmail.com', 'kerencarmel8@gmail.com'];
 
+// --- דמי משלוח ---
+// אותו כלל כמו באתר (index.html: FEE=10, FREE=150): משלוח באופקים 10 ₪, חינם מ-150 ₪.
+// האתר מציג ללקוח סכום כולל משלוח; כאן מוסיפים את השורה להזמנה עצמה, כך שהגיליון, הדשבורד,
+// ההתראה, האישור ללקוח והקבלה — כולם מראים בדיוק מה שהלקוח ראה ושילם.
+var DELIVERY_FEE = 10;
+var DELIVERY_FREE_FROM = 150;
+var DELIVERY_ITEM_NAME = 'משלוח באופקים';
+
+// מחזיר עותק של הפריטים עם שורת משלוח כשרלוונטי (משלוח, סכום מוצרים בין 0 ל-150, ואין כבר שורה כזו).
+function withDeliveryLine_(order) {
+  var items = (order.items || []).slice();
+  if (String(order.fulfillment || '') !== 'delivery') return items;
+  var sum = 0;
+  items.forEach(function (it) { sum += (parseFloat(it.price) || 0) * (parseInt(it.qty, 10) || 0); });
+  if (!(sum > 0) || sum >= DELIVERY_FREE_FROM) return items;
+  for (var i = 0; i < items.length; i++) { if (String(items[i].name || '').indexOf('משלוח') !== -1) return items; }
+  items.push({ id: 'delivery', name: DELIVERY_ITEM_NAME, flavor: '', qty: 1, price: DELIVERY_FEE });
+  return items;
+}
+
 function doPost(e) {
   var payload;
   try { payload = JSON.parse(e.postData.contents); }
@@ -72,6 +92,13 @@ function doPost(e) {
     if (c0[f]) c0[f] = String(c0[f]).slice(0, 300);
   });
   if (payload.date) payload.date = String(payload.date).slice(0, 20);
+
+  // בדיקה יבשה: מחזיר את הפריטים והסכום כפי שהיו נרשמים (כולל שורת משלוח) — בלי לכתוב ובלי לגעת במלאי.
+  if (payload.dryRun) {
+    var dItems = withDeliveryLine_(payload), dTotal = 0;
+    dItems.forEach(function (it) { dTotal += (parseFloat(it.price) || 0) * (parseInt(it.qty, 10) || 0); });
+    return json({ ok: true, dryRun: true, fulfillment: payload.fulfillment || 'pickup', items: dItems, total: dTotal });
+  }
 
   var lock = LockService.getScriptLock();
   try {
@@ -310,16 +337,17 @@ function appendOrder(ss, order, now) {
   var sheet = ss.getSheetByName('Orders');
   if (!sheet) return;
   var c = order.customer || {};
-  var itemsText = (order.items || []).map(function (it) {
+  var lineItems = withDeliveryLine_(order); // כולל שורת משלוח כשרלוונטי
+  var itemsText = lineItems.map(function (it) {
     return it.name + (it.flavor ? ' (' + it.flavor + ')' : '') + ' × ' + it.qty;
   }).join(', ');
   // Exact total + full item detail, captured now while we still have accurate prices.
   // The receipt bot reads these instead of guessing from the text (names there can be ambiguous).
   var total = 0;
-  (order.items || []).forEach(function (it) {
+  lineItems.forEach(function (it) {
     total += (parseFloat(it.price) || 0) * (parseInt(it.qty, 10) || 0);
   });
-  var itemsJSON = JSON.stringify(order.items || []);
+  var itemsJSON = JSON.stringify(lineItems);
 
   // Link this order to a customer card (create or update by phone). Enables the
   // customer history view in the dashboard.
