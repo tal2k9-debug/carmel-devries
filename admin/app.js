@@ -750,7 +750,7 @@ function showOrder(id) {
           <a class="btn btn-s" href="https://wa.me/${waPhone(o.phone)}?text=${encodeURIComponent('שלום! מצורפת הקבלה על ההזמנה שלך מ-Carmel De-vries 🍪\n'+o.receiptUrl)}" target="_blank" rel="noopener">📱 שליחה ידנית</a>
         </div>
       </div>` : ''}
-      <a class="btn btn-s" href="https://wa.me/${waPhone(o.phone)}" target="_blank">📱 WhatsApp</a>
+      <a class="btn btn-s" href="https://wa.me/${waPhone(o.phone)}" target="_blank">📱 לשיחת וואטסאפ עם הלקוח/ה</a>
       <button class="btn btn-d" onclick="deleteOrder('${o.id}')">🗑 מחק</button>
     </div>`;
   document.getElementById('orderModal').classList.add('show');
