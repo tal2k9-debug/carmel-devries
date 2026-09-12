@@ -670,6 +670,7 @@ async function submitOrder(){
     }
     const data=await resp.json();
     if(data.ok){
+      try{fetch('https://carmel-agent.vercel.app/api/catalog-push?reason=site-order',{method:'POST',keepalive:true}).catch(()=>{});}catch(e){} // המלאי ירד → קטלוג וואטסאפ מתעדכן תוך דקה
       const paidTotal=computeTotal();const pm=payMethod;
       Object.keys(cart).forEach(k=>delete cart[k]);
       loadProductsFromSheet();

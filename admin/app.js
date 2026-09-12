@@ -335,6 +335,8 @@ function normalizeIlMobile(p){
 }
 // טלפון לתצוגה: 052-644-6814 (נייד), 03-123-4567 (קווי); אחרת כמו שהוא
 function fmtPhone(p){ const m=normalizeIlMobile(p); if(m) return m.slice(0,3)+'-'+m.slice(3,6)+'-'+m.slice(6); let d=String(p||'').replace(/D/g,''); if(d.indexOf('972')===0) d='0'+d.slice(3); if(d.length===9 && /^0[2-489]/.test(d)) return d.slice(0,2)+'-'+d.slice(2,5)+'-'+d.slice(5); return String(p||''); }
+// המלאי השתנה → מבקשים מ-Meta למשוך את הקטלוג עכשיו (במקום לחכות לשעה). fire-and-forget, לא חוסם.
+function pingCatalogSync(reason){ try { const base=AGENT_URL.endsWith('/')?AGENT_URL.slice(0,-1):AGENT_URL; fetch(base+'/api/catalog-push?reason='+encodeURIComponent(reason||'dashboard'), {method:'POST', keepalive:true}).catch(()=>{}); } catch(e){} }
 function waPhone(p){ let d=String(p||'').replace(/\D/g,''); if(d.startsWith('972'))return d; if(d.startsWith('0'))return '972'+d.slice(1); if(d.length===9)return '972'+d; return d; }
 const PAYMENT_METHODS = ['מזומן','ביט','העברה בנקאית','אשראי','צ׳ק','אחר'];
 function rowToExp(r){ return {id:r[0]||'', date:r[1]||'', category:r[2]||'', description:r[3]||'', amount:parseFloat(r[4])||0, vendor:r[5]||''}; }
@@ -506,8 +508,10 @@ async function writeSettingsProductRow(s){
   const idx = (db.products||[]).findIndex(p=>p.id==='__settings__');
   if (idx >= 0) {
     await updateRow('Products', idx+2, row);
+    pingCatalogSync('manual-order');
   } else {
     await appendRow('Products', row);
+    pingCatalogSync('manual-order');
     db.products = db.products || [];
     db.products.push(rowToProd(row)); // keep a local copy so the next save updates instead of appending again
   }
@@ -1630,11 +1634,11 @@ async function saveProduct() {
   if (editingProdId) {
     const idx = db.products.findIndex(x => x.id === editingProdId);
     saveCache(); closeModal('prodModal'); renderProducts();
-    if (accessToken) { setSync('syncing','שומר...'); try { await updateRow('Products', idx+2, prodToRow(p)); setSync('ok','מסונכרן'); toast('עודכן','ok'); } catch(e){ console.error('saveProduct update failed:', e); setSync('err','שגיאה'); toast('שגיאת שמירה: '+(e.result&&e.result.error&&e.result.error.message||e.message||'unknown'),'err'); } }
+    if (accessToken) { setSync('syncing','שומר...'); try { await updateRow('Products', idx+2, prodToRow(p)); pingCatalogSync('product-edit'); setSync('ok','מסונכרן'); toast('עודכן','ok'); } catch(e){ console.error('saveProduct update failed:', e); setSync('err','שגיאה'); toast('שגיאת שמירה: '+(e.result&&e.result.error&&e.result.error.message||e.message||'unknown'),'err'); } }
   } else {
     db.products.push(p);
     saveCache(); closeModal('prodModal'); renderProducts();
-    if (accessToken) { setSync('syncing','שומר...'); try { await appendRow('Products', prodToRow(p)); setSync('ok','מסונכרן'); toast('נשמר','ok'); } catch(e){ console.error('saveProduct append failed:', e); setSync('err','שגיאה'); toast('שגיאת שמירה: '+(e.result&&e.result.error&&e.result.error.message||e.message||'unknown'),'err'); } }
+    if (accessToken) { setSync('syncing','שומר...'); try { await appendRow('Products', prodToRow(p)); pingCatalogSync('product-new'); setSync('ok','מסונכרן'); toast('נשמר','ok'); } catch(e){ console.error('saveProduct append failed:', e); setSync('err','שגיאה'); toast('שגיאת שמירה: '+(e.result&&e.result.error&&e.result.error.message||e.message||'unknown'),'err'); } }
   }
 }
 
@@ -1709,7 +1713,7 @@ async function persistProductRow(p) {
     return;
   }
   setSync('syncing','שומר...');
-  try { await updateRow('Products', idx+2, prodToRow(p)); setSync('ok','מסונכרן'); }
+  try { await updateRow('Products', idx+2, prodToRow(p)); pingCatalogSync('product-quick'); setSync('ok','מסונכרן'); }
   catch(e){ console.error(e); setSync('err','שגיאת שמירה'); toast('⚠️ השמירה לגיליון נכשלה — רענני והתחברי מחדש, ואז עדכני שוב.','err'); }
 }
 
