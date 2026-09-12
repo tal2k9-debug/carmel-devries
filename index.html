@@ -126,8 +126,8 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .bt{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--gl);font-weight:600}
 .btw{display:inline-flex;align-items:center;gap:8px;background:#25D366;color:#fff;padding:12px 22px;border-radius:30px;font-weight:600;font-size:15px;border:none;cursor:pointer;font-family:'Heebo',sans-serif}
 .btw svg{width:20px;height:20px;fill:currentColor}
-body{--fab-b:22px}
-body.cart-open{--fab-b:94px}
+:root{--fab-b:22px}
+:root.cart-open{--fab-b:94px}
 .fwa{position:fixed;bottom:var(--fab-b);left:16px;z-index:80;width:56px;height:56px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(37,211,102,.45);animation:p 2.5s infinite}
 .fwa svg{width:30px;height:30px;fill:#fff}
 @keyframes p{0%{box-shadow:0 0 0 0 rgba(37,211,102,.55)}70%{box-shadow:0 0 0 18px rgba(37,211,102,0)}100%{box-shadow:0 0 0 0 rgba(37,211,102,0)}}
@@ -166,7 +166,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 .cn:hover{color:#fff}
 .cn .ic{width:36px;height:36px;border-radius:50%;background:var(--gold);color:var(--bk);display:flex;align-items:center;justify-content:center;font-size:16px}
 .cr{font-size:12px;color:#7a6a52;margin-top:18px;opacity:.8}
-@media (max-width:600px){.bl{font-size:56px}.fr{grid-template-columns:1fr}.oc{padding:22px}section{padding:36px 16px}.hero{padding:44px 16px 32px}.st h2{font-size:28px}.fwa{left:14px;width:52px;height:52px}.cad-a11y-btn{right:14px;width:52px;height:52px}body{--fab-b:18px}body.cart-open{--fab-b:88px}}
+@media (max-width:600px){.bl{font-size:56px}.fr{grid-template-columns:1fr}.oc{padding:22px}section{padding:36px 16px}.hero{padding:44px 16px 32px}.st h2{font-size:28px}.fwa{left:14px;width:52px;height:52px}.cad-a11y-btn{right:14px;width:52px;height:52px}:root{--fab-b:18px}:root.cart-open{--fab-b:88px}}
 /* ===== custom availability calendar ===== */
 .date-display{width:100%;text-align:right;padding:12px 14px;border:1px solid #e0c9a6;border-radius:10px;background:#fff;font-size:15px;color:#3a2f1f;cursor:pointer;font-family:inherit}
 .date-display.has{font-weight:600}
@@ -691,7 +691,16 @@ function renderCartStrip(lines){
       +'</div>';
   }).join('')
     +(lines.length>shown.length?'<span class="bmore">+'+(lines.length-shown.length)+' נוספים</span>':'');
-  el.querySelectorAll('.bx').forEach(function(b){ b.onclick=function(){ setQty(b.dataset.rid, b.dataset.rflav, 0); }; });
+  el.querySelectorAll('.bx').forEach(function(b){
+    b.onclick=function(){
+      const id=b.dataset.rid, flav=b.dataset.rflav||'';
+      setQty(id, flav, 0);
+      // מרעננים מיד: גם שדה הכמות בכרטיס המוצר וגם הסרגל/הסיכום (setQty רק משנה את הסל)
+      const inp=document.querySelector('.qi[data-id="'+id+'"][data-flav="'+flav+'"]');
+      if(inp) inp.value=0;
+      upd();
+    };
+  });
 }
 
 function upd(){
@@ -709,7 +718,7 @@ function upd(){
   const dl=calcD(sub),tot=sub+dl;
   try{window.caCartSub=sub;}catch(e){}
   $('#bar').classList.toggle('vis',sub>0);
-  document.body.classList.toggle('cart-open',sub>0);
+  document.documentElement.classList.toggle('cart-open',sub>0);
   $('#sc').textContent=cnt+' פריטים';$('#st').textContent=fmt(tot);
   renderCartStrip(lines);
   const lst=$('#ol-lines');
