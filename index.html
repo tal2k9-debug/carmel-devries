@@ -68,6 +68,9 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .a2hs-t b{color:#e0c893}
 .a2hs-go{background:#b08d57;color:#fff;border:none;border-radius:9px;padding:9px 14px;font-family:'Heebo',sans-serif;font-size:14px;font-weight:600;cursor:pointer;flex:0 0 auto}
 .a2hs-x{background:none;border:none;color:#9db09f;font-size:17px;cursor:pointer;padding:0 2px;flex:0 0 auto;line-height:1}
+.form-err{background:#fdecea;border:1px solid #f5c6c0;color:#a4322b;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-family:'Heebo',sans-serif;font-size:14px;line-height:1.6}
+.form-err b{display:block;margin-bottom:4px}
+.form-err ul{margin:0;padding-inline-start:18px}
 .notify-link{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:0;border:none;background:none;color:#8a6d3b;font-family:'Heebo',sans-serif;font-size:12.5px;font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px;opacity:.85}
 .notify-link:hover{opacity:1;color:#6d5530}
 #notify-modal{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;background:rgba(26,22,18,.55);padding:20px}
@@ -128,6 +131,8 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .btw svg{width:20px;height:20px;fill:currentColor}
 :root{--fab-b:22px}
 :root.cart-open{--fab-b:94px}
+.fwa,.cad-a11y-btn{transition:transform .25s ease,opacity .25s ease}
+:root.fabs-off .fwa,:root.fabs-off .cad-a11y-btn{transform:translateY(150%);opacity:0;pointer-events:none}
 .fwa{position:fixed;bottom:var(--fab-b);left:16px;z-index:80;width:56px;height:56px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(37,211,102,.45);animation:p 2.5s infinite}
 .fwa svg{width:30px;height:30px;fill:#fff}
 @keyframes p{0%{box-shadow:0 0 0 0 rgba(37,211,102,.55)}70%{box-shadow:0 0 0 18px rgba(37,211,102,0)}100%{box-shadow:0 0 0 0 rgba(37,211,102,0)}}
@@ -225,6 +230,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <section class="os"><div class="cont">
 <div class="st"><h2>הזמנה</h2><div class="or"><span class="ln"></span><span class="ht">❤</span><span class="ln"></span></div></div>
 <div class="oc">
+<div class="form-err" id="form-err" role="alert" hidden></div>
 <div id="closed-banner" style="display:none;white-space:pre-line;background:#fff3e0;border:1px solid #e8cfa6;border-radius:14px;padding:16px 18px;margin-bottom:18px;text-align:center;color:#8a5a2b;font-size:15px;line-height:1.7;font-weight:500"></div>
 <div class="fr">
 <div class="ff"><label for="cust-name">שם מלא</label><input id="cust-name" type="text" placeholder="הכניסו שם" autocomplete="name"></div>
@@ -480,6 +486,27 @@ function bindNotifyButtons(){
     }
   });
 })();
+
+// הכפתורים הצפים מתחבאים כשגוללים למטה (לא מסתירים את בחירת הכמויות) וחוזרים בגלילה למעלה או אחרי עצירה
+(function(){
+  var lastY=window.scrollY||0, idle=null;
+  function show(){ document.documentElement.classList.remove("fabs-off"); }
+  function hide(){ document.documentElement.classList.add("fabs-off"); }
+  window.addEventListener("scroll", function(){
+    var y=window.scrollY||0;
+    if(y>220 && y>lastY+6) hide(); else if(y<lastY-6 || y<=220) show();
+    lastY=y;
+    clearTimeout(idle); idle=setTimeout(show, 1400);
+  }, {passive:true});
+})();
+
+// חסרים פרטים → גוללים ישר לטופס ומסמנים, בלי חלון קופץ
+function showFormError(missing){
+  const box=$('#form-err'); if(!box) return;
+  box.innerHTML='<b>כדי לשלוח את ההזמנה צריך למלא:</b><ul>'+missing.map(function(m){return '<li>'+m+'</li>';}).join('')+'</ul>';
+  box.hidden=false;
+}
+function clearFormError(){ const box=$('#form-err'); if(box) box.hidden=true; }
 
 function calcD(s){if(ful()==='pickup')return 0;if(s<=0||s>=FREE)return 0;return FEE;}
 function leadDaysVal(){return Math.max(0,parseInt(orderSettings.leadDays,10)||0);}
@@ -814,10 +841,14 @@ function send(){
   $$('.inv').forEach(e=>e.classList.remove('inv'));
   if(need.length){
     need.forEach(([s])=>{const el=$(s);if(el)el.classList.add('inv');});
-    const el=$(need[0][0]);if(el){el.focus();el.scrollIntoView({block:'center',behavior:'smooth'});}
-    alert('נא למלא את כל הפרטים לפני שליחת ההזמנה:\n• '+need.map(n=>n[1]).join('\n• '));
+    showFormError(need.map(n=>n[1]));
+    const box=$('#form-err');
+    if(box) box.scrollIntoView({block:'center',behavior:'smooth'});
+    const el=$(need[0][0]);
+    if(el) setTimeout(function(){ try{ el.focus({preventScroll:true}); }catch(e){ el.focus(); } }, 420);
     return;
   }
+  clearFormError();
   if(_phone.replace(/\D/g,'').length<9){
     const el=$('#cust-phone');el.classList.add('inv');el.focus();
     alert('נא להזין מספר טלפון תקין (לפחות 9 ספרות)');
@@ -918,7 +949,7 @@ function showOrderSuccess(pm,total){
 }
 $('#sb').onclick=send;$('#bsb').onclick=send;
 $$('#paym .pm').forEach(b=>b.onclick=()=>{payMethod=b.dataset.m;$$('#paym .pm').forEach(x=>x.classList.toggle('sel',x===b));});
-$$('#cust-name,#cust-phone,#cust-date,#cust-address').forEach(el=>el.addEventListener('input',()=>el.classList.remove('inv')));
+$$('#cust-name,#cust-phone,#cust-date,#cust-address').forEach(el=>el.addEventListener('input',()=>{el.classList.remove('inv');clearFormError();}));
 function computeTotal(){let sub=0;products.forEach(p=>{if(cart[p.id])Object.values(cart[p.id]).forEach(q=>sub+=q*p.price);});return sub+calcD(sub);}
 $('#cust-fulfill').onchange=()=>{updAddr();upd();};
 setupDate();updAddr();render();upd();loadSettings();
