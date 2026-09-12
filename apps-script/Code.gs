@@ -226,6 +226,7 @@ function doGet(e) {
   if (p.action === 'orders') return getOrders_(p);
   if (p.action === 'settings') return getSettings_();
   if (p.action === 'waitlist') return getWaitlist_(p);
+  if (p.action === 'backup') return getBackup_(p);
   if (p.action === 'set_secret') return setSecret_(p);
   return json({ ok: true, service: 'carmel-order-intake' });
 }
@@ -718,6 +719,22 @@ function waitlistDelete_(payload) {
   for (var r = 1; r < data.length; r++) if (want[String(data[r][idC])]) rows.push(r + 1);
   rows.sort(function (a, b) { return b - a; }).forEach(function (n) { sh.deleteRow(n); });
   return json({ ok: true, deleted: rows.length });
+}
+
+
+// גיבוי מלא: כל הלשוניות כ-JSON (לשרת/לארכיון). ?action=backup&secret=...
+// כולל את מה שלא חשוף בנתיבים הרגילים (לקוחות, מתכונים, הוצאות) — כדי שגיבוי יומי יכסה הכל.
+function getBackup_(p) {
+  if (!botSecretOk_(p.secret)) return json({ ok: false, error: 'unauthorized' });
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var out = {}, names = [];
+  ss.getSheets().forEach(function (sh) {
+    var name = sh.getName();
+    if (/^Customers_bak_/.test(name)) return; // לשוניות גיבוי ישנות — לא מכפילים
+    names.push(name);
+    try { out[name] = sh.getDataRange().getDisplayValues(); } catch (e) { out[name] = null; }
+  });
+  return json({ ok: true, takenAt: new Date().toISOString(), sheets: names, data: out });
 }
 
 // "name:qty|name:qty"  (legacy "name|name" → each flavor inherits productQty)
