@@ -107,7 +107,19 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .flav-qc{display:flex;align-items:center;gap:6px}
 .flav-qc .qb{width:34px;height:34px;font-size:16px}
 .flav-qc .qi{width:36px;font-size:14px}
-.bar{position:fixed;bottom:0;left:0;right:0;z-index:90;background:rgba(26,22,18,.97);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:14px;transition:transform .3s ease;transform:translateY(100%)}
+.bar{position:fixed;bottom:0;left:0;right:0;z-index:90;background:rgba(26,22,18,.97);color:#fff;padding:10px 16px 12px;display:block;transition:transform .3s ease;transform:translateY(100%)}
+.brow{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.bstrip{display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;padding:2px 0 9px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,.10);scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) transparent}
+.bstrip:empty{display:none}
+.bstrip::-webkit-scrollbar{height:4px}
+.bstrip::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:4px}
+.bitem{flex:0 0 auto;display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.10);border-radius:11px;padding:5px 10px 5px 5px;max-width:215px}
+.bitem img{width:34px;height:34px;border-radius:8px;object-fit:cover;flex:0 0 auto;background:#3a2f24}
+.bitem .bn{font-family:'Heebo',sans-serif;font-size:12px;line-height:1.25;color:#f0e6d6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:115px}
+.bitem .bq{font-family:'Heebo',sans-serif;font-size:11px;color:#c9a978;white-space:nowrap;font-variant-numeric:lining-nums tabular-nums}
+.bitem .bx{background:none;border:none;color:#9e8f7e;font-size:15px;line-height:1;cursor:pointer;padding:0 2px;flex:0 0 auto}
+.bitem .bx:hover{color:#fff}
+.bmore{flex:0 0 auto;align-self:center;font-family:'Heebo',sans-serif;font-size:12px;color:#c9a978;padding:0 4px;white-space:nowrap}
 .bar.vis{transform:translateY(0)}
 .bi{display:flex;flex-direction:column;gap:2px}
 .bc{font-size:13px;opacity:.8}
@@ -246,8 +258,11 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 </div>
 </div></section>
 <div class="bar" id="bar">
+<div class="bstrip" id="bstrip"></div>
+<div class="brow">
 <div class="bi"><span class="bc" id="sc">0 פריטים</span><span class="bt"><span>₪</span><span id="st">0</span></span></div>
 <button class="btw" id="bsb" type="button"><svg viewBox="0 0 24 24"><path d="M20.5 3.5A11.9 11.9 0 0 0 12 0C5.4 0 .1 5.3.1 12c0 2.1.5 4.2 1.6 6L0 24l6.3-1.6c1.7 1 3.7 1.5 5.7 1.5C18.6 24 24 18.6 24 12c0-3.2-1.2-6.2-3.5-8.5z"/></svg>הזמנה</button>
+</div>
 </div>
 <a class="fwa" href="https://wa.me/972524809393" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M20.5 3.5A11.9 11.9 0 0 0 12 0C5.4 0 .1 5.3.1 12c0 2.1.5 4.2 1.6 6L0 24l6.3-1.6c1.7 1 3.7 1.5 5.7 1.5C18.6 24 24 18.6 24 12c0-3.2-1.2-6.2-3.5-8.5z"/></svg></a>
 <footer>
@@ -662,6 +677,23 @@ function render(){
   });
 }
 
+// שורת הפריטים שנבחרו בסרגל התחתון — תמונה, שם, כמות × מחיר = סכום, והסרה מהירה
+function renderCartStrip(lines){
+  const el=$('#bstrip'); if(!el) return;
+  if(!lines.length){ el.innerHTML=''; return; }
+  const shown=lines.slice(0,12);
+  el.innerHTML=shown.map(function(l){
+    return '<div class="bitem">'
+      +(l.img?'<img src="'+l.img+'" alt="" loading="lazy">':'')
+      +'<div><div class="bn">'+l.n+(l.flav?' · '+l.flav:'')+'</div>'
+      +'<div class="bq">'+l.q+' × ₪'+fmt(l.s/l.q)+' = ₪'+fmt(l.s)+'</div></div>'
+      +'<button type="button" class="bx" data-rid="'+l.id+'" data-rflav="'+(l.flav||'')+'" aria-label="הסרת הפריט">✕</button>'
+      +'</div>';
+  }).join('')
+    +(lines.length>shown.length?'<span class="bmore">+'+(lines.length-shown.length)+' נוספים</span>':'');
+  el.querySelectorAll('.bx').forEach(function(b){ b.onclick=function(){ setQty(b.dataset.rid, b.dataset.rflav, 0); }; });
+}
+
 function upd(){
   const lines=[];let sub=0,cnt=0;
   products.forEach(p=>{
@@ -670,7 +702,7 @@ function upd(){
       if(q>0){
         const s=q*p.price;
         sub+=s;cnt+=q;
-        lines.push({n:p.name,flav:flav,q:q,s:s});
+        lines.push({n:p.name,flav:flav,q:q,s:s,id:p.id,img:p.img});
       }
     });
   });
@@ -679,6 +711,7 @@ function upd(){
   $('#bar').classList.toggle('vis',sub>0);
   document.body.classList.toggle('cart-open',sub>0);
   $('#sc').textContent=cnt+' פריטים';$('#st').textContent=fmt(tot);
+  renderCartStrip(lines);
   const lst=$('#ol-lines');
   if(!lines.length){lst.innerHTML='<div class="oli em">עדיין לא נבחרו פריטים</div>';$('#osl').style.display='none';$('#odl').style.display='none';}
   else{
