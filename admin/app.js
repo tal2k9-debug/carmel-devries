@@ -785,6 +785,31 @@ async function deleteOrder(id) {
   if (!confirm('למחוק את ההזמנה?')) return;
   const idx = db.orders.findIndex(x => x.id === id);
   if (idx < 0) return;
+  const o = db.orders[idx];
+  // הזמנה שלא נמסרה: הסקריפט מוחק ומחזיר את הפריטים למלאי (כולל לפי טעם). נמסרה: מחיקה בלבד.
+  let viaScript = null;
+  try {
+    const ok = await ensureToken();
+    if (ok && accessToken) {
+      const resp = await fetch(WEBAPP_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'delete_order', id, token: accessToken }) });
+      viaScript = await resp.json().catch(()=>null);
+    }
+  } catch(e) { console.error(e); viaScript = null; }
+  if (viaScript && (viaScript.ok || viaScript.error === 'not_found')) {
+    db.orders.splice(idx,1);
+    const rs = (viaScript.restocked || []);
+    for (const r of rs) {
+      const p = (db.products || []).find(x => String(x.id) === String(r.id));
+      if (!p) continue;
+      if (r.flavors !== undefined) p.flavors = r.flavors;
+      if (r.productQty !== undefined) p.qty = r.productQty;
+    }
+    saveCache(); closeModal('orderModal'); renderAll();
+    if (rs.length) { pingCatalogSync('order-deleted'); toast('נמחק · הוחזרו למלאי: ' + rs.map(r => (r.name || r.id) + (r.flavor ? ' (' + r.flavor + ')' : '') + ' ×' + r.qty).join(', '), 'ok'); }
+    else toast(viaScript.status === 'delivered' ? 'נמחק (הזמנה שנמסרה — המלאי לא משתנה)' : 'נמחק', 'ok');
+    return;
+  }
+  // הסקריפט לא זמין / גרסה ישנה — מחיקה ישירה של השורה כמו קודם, בלי החזרת מלאי
   db.orders.splice(idx,1);
   saveCache(); closeModal('orderModal'); renderAll();
   if (accessToken) {
@@ -793,7 +818,7 @@ async function deleteOrder(id) {
         spreadsheetId: SHEET_ID,
         resource:{requests:[{deleteDimension:{range:{sheetId:await getSheetId('Orders'),dimension:'ROWS',startIndex:idx+1,endIndex:idx+2}}}]}
       });
-      toast('נמחק', 'ok');
+      toast(o.status === 'delivered' ? 'נמחק' : 'נמחק — המלאי לא הוחזר (הסקריפט עוד לא עודכן), לעדכן ידנית', 'ok');
     } catch(e){ console.error(e); toast('שגיאת מחיקה','err'); }
   }
 }

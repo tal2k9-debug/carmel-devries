@@ -100,6 +100,10 @@ function doPost(e) {
   if (payload && payload.action === 'waitlist_delete') {
     return waitlistDelete_(payload);
   }
+  // מחיקת הזמנה מהדשבורד: הזמנה שעוד לא נמסרה — הפריטים חוזרים למלאי (כולל לפי טעם). נמסרה — מחיקה בלבד.
+  if (payload && payload.action === 'delete_order') {
+    return deleteOrder_(payload);
+  }
 
   // --- הגנות בסיסיות על קליטת הזמנה (ספאם/זבל) ---
   // Honeypot: שדה נסתר שאדם אמיתי לא רואה ולא ממלא. בוט שמילא אותו מקבל
@@ -747,6 +751,107 @@ function parseFlavors(str, productQty) {
     }
     return { name: p, qty: parseInt(productQty, 10) || 0 };
   });
+}
+
+// ── מחיקת הזמנה + החזרת מלאי ─────────────────────────────────────────────────
+// payload: {action:'delete_order', id, token (מנהלת) | secret (הבוט)}
+// הזמנה שלא נמסרה (status != delivered): הפריטים חוזרים למלאי — לפי טעם אם יש, אחרת לכמות המוצר;
+// מוצר ללא הגבלת מלאי (qty ריק) — אין מה להחזיר. שורת המשלוח מדולגת. ואז השורה נמחקת.
+function deleteOrder_(payload) {
+  if (!uploaderOk_(payload.token) && !botSecretOk_(payload.secret)) return json({ ok: false, error: 'unauthorized' });
+  var id = String(payload.id || '').trim();
+  if (!id) return json({ ok: false, error: 'no_id' });
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return json({ ok: false, error: 'busy' }); }
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sh = ss.getSheetByName('Orders');
+    if (!sh) return json({ ok: false, error: 'no_orders_sheet' });
+    var data = sh.getDataRange().getDisplayValues();
+    var hdr = data[0].map(function (h) { return String(h).trim(); });
+    var col = function (name, fallback) { var i = hdr.indexOf(name); return i === -1 ? fallback : i; };
+    var idC = col('id', 0), statusC = col('status', 9), itemsC = col('items', 7), itemsJsonC = col('itemsJSON', 15);
+    var r = -1;
+    for (var i = 1; i < data.length; i++) { if (String(data[i][idC]) === id) { r = i; break; } }
+    if (r < 0) return json({ ok: false, error: 'not_found' });
+    var status = String(data[r][statusC] || '');
+    var restocked = [];
+    if (status !== 'delivered' && payload.restock !== false) {
+      restocked = restockItems_(ss, parseOrderItems_(data[r][itemsJsonC], data[r][itemsC]));
+    }
+    sh.deleteRow(r + 1);
+    return json({ ok: true, deleted: id, status: status, restocked: restocked });
+  } catch (err) {
+    return json({ ok: false, error: 'exception', message: String(err) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// פריטי ההזמנה: מ-itemsJSON (מדויק), ובהזמנות ישנות — מהטקסט "שם (טעם) × כמות" לפי שם המוצר.
+function parseOrderItems_(itemsJson, itemsText) {
+  try {
+    var arr = JSON.parse(String(itemsJson || ''));
+    if (Array.isArray(arr) && arr.length) return arr;
+  } catch (e) {}
+  var out = [];
+  String(itemsText || '').split(',').forEach(function (part) {
+    var m = String(part).trim().match(/^(.*?)(?:\s*\((.*?)\))?\s*×\s*(\d+)\s*$/);
+    if (m) out.push({ id: '', name: m[1].trim(), flavor: (m[2] || '').trim(), qty: parseInt(m[3], 10) || 0 });
+  });
+  return out;
+}
+
+// מחזיר כמויות למוצרים. מחזיר רשימה של מה שהוחזר בפועל [{id, name, flavor, qty, productQty, flavors}].
+function restockItems_(ss, items) {
+  var prod = ss.getSheetByName('Products');
+  if (!prod) return [];
+  var data = prod.getDataRange().getValues();
+  var headers = data[0];
+  var ci = {};
+  headers.forEach(function (h, i) { ci[String(h).trim()] = i; });
+  if (ci.id === undefined || ci.qty === undefined) return [];
+  var now = new Date().toISOString();
+  var changed = {}, out = [];
+  (items || []).forEach(function (it) {
+    if (!it) return;
+    var qty = parseInt(it.qty, 10) || 0;
+    if (qty <= 0) return;
+    if (String(it.id || '') === 'delivery' || String(it.name || '').indexOf('משלוח') === 0) return;
+    var row = -1;
+    for (var r = 1; r < data.length; r++) {
+      if (it.id && String(data[r][ci.id]) === String(it.id)) { row = r; break; }
+    }
+    if (row < 0 && it.name && ci.name !== undefined) {
+      for (var r2 = 1; r2 < data.length; r2++) { if (String(data[r2][ci.name]).trim() === String(it.name).trim()) { row = r2; break; } }
+    }
+    if (row < 0) return;
+    var flavorsStr = ci.flavors !== undefined ? String(data[row][ci.flavors] || '') : '';
+    if (flavorsStr && it.flavor) {
+      var flavs = parseFlavors(flavorsStr, data[row][ci.qty]);
+      var f = null;
+      for (var k = 0; k < flavs.length; k++) { if (flavs[k].name === it.flavor) { f = flavs[k]; break; } }
+      if (!f) return;
+      f.qty += qty;
+      data[row][ci.flavors] = flavs.map(function (x) { return x.name + ':' + x.qty; }).join('|');
+      data[row][ci.qty] = flavs.reduce(function (s, x) { return s + x.qty; }, 0);
+      changed[row] = true;
+      out.push({ id: String(data[row][ci.id]), name: String(data[row][ci.name] || it.name || ''), flavor: it.flavor, qty: qty, productQty: data[row][ci.qty], flavors: data[row][ci.flavors] });
+    } else {
+      var raw = data[row][ci.qty];
+      if (raw === '' || raw === null || raw === undefined || isNaN(parseInt(raw, 10))) return; // ללא הגבלת מלאי — אין מה להחזיר
+      data[row][ci.qty] = (parseInt(raw, 10) || 0) + qty;
+      changed[row] = true;
+      out.push({ id: String(data[row][ci.id]), name: String(data[row][ci.name] || it.name || ''), flavor: '', qty: qty, productQty: data[row][ci.qty] });
+    }
+  });
+  Object.keys(changed).forEach(function (rs) {
+    var r = parseInt(rs, 10);
+    prod.getRange(r + 1, ci.qty + 1).setValue(data[r][ci.qty]);
+    if (ci.flavors !== undefined) prod.getRange(r + 1, ci.flavors + 1).setValue(data[r][ci.flavors]);
+    if (ci.updatedAt !== undefined) prod.getRange(r + 1, ci.updatedAt + 1).setValue(now);
+  });
+  return out;
 }
 
 function json(obj) {
