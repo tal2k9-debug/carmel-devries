@@ -261,7 +261,7 @@ async function syncAll() {
   try {
     const [cust, ord, exp, rec, prod, setg] = await Promise.all([
       readRange('Customers!A2:H'),
-      readRange('Orders!A2:N'),
+      readRange('Orders!A2:Q'), // עד Q: כולל total (O), itemsJSON (P), receiptUrl (Q) — לפני כן נטענו רק 14 עמודות והקבלות לא הוצגו
       readRange('Expenses!A2:F').catch(()=>[]),
       readRange('Recipes!A2:H').catch(()=>[]),
       readRange('Products!A2:O').catch(()=>[]),
