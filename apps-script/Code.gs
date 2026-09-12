@@ -76,6 +76,10 @@ function doPost(e) {
   if (payload && payload.action === 'rebuild_customers') {
     return rebuildCustomers_(payload);
   }
+  // תחזוקה: מיזוג לקוחות כפולים (זוגות from→into). דורש את סוד הבוט. תומך dryRun.
+  if (payload && payload.action === 'merge_customers') {
+    return mergeCustomers_(payload);
+  }
 
   // --- הגנות בסיסיות על קליטת הזמנה (ספאם/זבל) ---
   // Honeypot: שדה נסתר שאדם אמיתי לא רואה ולא ממלא. בוט שמילא אותו מקבל
@@ -498,6 +502,74 @@ function rebuildCustomers_(payload) {
   });
   summary.orderUpdates = updated; summary.backup = bakName;
   return json(Object.assign({ ok: true }, summary));
+}
+
+
+// --- מיזוג לקוחות כפולים (למשל טלפון עם טעות הקלדה יצר לקוח שני) ---
+// payload: { action:'merge_customers', secret, dryRun?, pairs:[{from:<id של הכפול>, into:<id של הלקוח הנכון>}] }
+// לכל זוג: ההזמנות של "from" (לפי customerId או לפי הטלפון שלו) עוברות ל-"into" ומקבלות את הטלפון הנכון,
+// אלרגיות/הערות/כתובת שחסרות ב-into מושלמות מ-from, ושורת from נמחקת. לפני כתיבה — גיבוי הלשונית.
+function planMerge_(pairs, customers, orders) {
+  function key(p) { var d = String(p || '').replace(/\D/g, ''); return d ? d.slice(-9) : ''; }
+  var byId = {}; customers.forEach(function (c) { if (c.id) byId[String(c.id)] = c; });
+  var plan = [], errors = [];
+  (pairs || []).forEach(function (pr) {
+    var from = byId[String(pr.from || '')], into = byId[String(pr.into || '')];
+    if (!from || !into) { errors.push('לא נמצא: ' + (from ? '' : pr.from) + ' ' + (into ? '' : pr.into)); return; }
+    if (from.id === into.id) { errors.push('אותו לקוח: ' + from.id); return; }
+    var fk = key(from.phone), ik = key(into.phone);
+    var moved = orders.filter(function (o) { return String(o.customerId || '') === from.id || (fk && key(o.phone) === fk); })
+      .map(function (o) { return { id: o.id, name: o.name, oldPhone: o.phone, oldCid: o.customerId }; });
+    var fill = {};
+    ['address', 'allergies', 'notes'].forEach(function (f) { if (!String(into[f] || '').trim() && String(from[f] || '').trim()) fill[f] = from[f]; });
+    plan.push({ from: { id: from.id, name: from.name, phone: from.phone }, into: { id: into.id, name: into.name, phone: into.phone }, orders: moved, fill: fill });
+  });
+  return { plan: plan, errors: errors };
+}
+
+function mergeCustomers_(payload) {
+  if (!botSecretOk_(payload.secret)) return json({ ok: false, error: 'unauthorized' });
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var os = ss.getSheetByName('Orders'), cs = ss.getSheetByName('Customers');
+  if (!os || !cs) return json({ ok: false, error: 'no_sheet' });
+  var res = planMerge_(payload.pairs || [], sheetObjects_(cs, false), sheetObjects_(os, true));
+  if (payload.dryRun) return json({ ok: true, dryRun: true, plan: res.plan, errors: res.errors });
+  if (res.errors.length || !res.plan.length) return json({ ok: false, error: 'bad_pairs', errors: res.errors });
+  var bakName = 'Customers_bak_' + Utilities.formatDate(new Date(), 'Asia/Jerusalem', 'yyyyMMdd_HHmm') + 'm';
+  cs.copyTo(ss).setName(bakName);
+  // הזמנות: customerId + טלפון
+  var od = os.getDataRange().getValues();
+  var oh = od[0].map(function (h) { return String(h).trim(); });
+  var idC = oh.indexOf('id'); if (idC === -1) idC = 0;
+  var cidC = oh.indexOf('customerId'); if (cidC === -1) cidC = 1;
+  var phC = oh.indexOf('phone'); if (phC === -1) phC = 3;
+  var movedTotal = 0;
+  res.plan.forEach(function (p) {
+    var ids = {}; p.orders.forEach(function (o) { ids[String(o.id)] = true; });
+    for (var r = 1; r < od.length; r++) {
+      if (ids[String(od[r][idC])]) {
+        os.getRange(r + 1, cidC + 1).setValue(p.into.id);
+        os.getRange(r + 1, phC + 1).setValue(p.into.phone);
+        movedTotal++;
+      }
+    }
+  });
+  // לקוחות: השלמת שדות ב-into, מחיקת from (מהשורה האחרונה למעלה, כדי שהאינדקסים לא יזוזו)
+  var cd = cs.getDataRange().getValues();
+  var ch = cd[0].map(function (h) { return String(h).trim(); });
+  var cIdC = ch.indexOf('id'); if (cIdC === -1) cIdC = 0;
+  var rowsToDelete = [];
+  res.plan.forEach(function (p) {
+    for (var r = 1; r < cd.length; r++) {
+      var rid = String(cd[r][cIdC]);
+      if (rid === p.into.id) {
+        Object.keys(p.fill).forEach(function (f) { var c = ch.indexOf(f); if (c !== -1) cs.getRange(r + 1, c + 1).setValue(p.fill[f]); });
+      }
+      if (rid === p.from.id) rowsToDelete.push(r + 1);
+    }
+  });
+  rowsToDelete.sort(function (a, b) { return b - a; }).forEach(function (rowNum) { cs.deleteRow(rowNum); });
+  return json({ ok: true, merged: res.plan.length, ordersMoved: movedTotal, customersDeleted: rowsToDelete.length, backup: bakName });
 }
 
 // "name:qty|name:qty"  (legacy "name|name" → each flavor inherits productQty)
