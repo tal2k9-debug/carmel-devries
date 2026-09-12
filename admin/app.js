@@ -552,6 +552,7 @@ function bindUI() {
 function switchTab(page) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.page===page));
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id==='page-'+page));
+  if (page==='history') renderHistory();
   if (page==='calendar') renderCalendar();
   if (page==='pnl') renderPL();
   if (page==='expenses') renderExpenses();
@@ -565,6 +566,7 @@ function switchTab(page) {
 
 function renderAll() {
   renderToday(); renderKanban(); renderCustomers(); renderProducts();
+  if (document.getElementById('page-history').classList.contains('active')) renderHistory();
   if (document.getElementById('page-calendar').classList.contains('active')) renderCalendar();
   if (document.getElementById('page-pnl').classList.contains('active')) renderPL();
   if (document.getElementById('page-expenses').classList.contains('active')) renderExpenses();
@@ -639,16 +641,7 @@ function orderTotal(o) {
 }
 
 /* ============ KANBAN ============ */
-function renderKanban() {
-  const k = document.getElementById('kanban');
-  k.innerHTML = STATUSES.map(s => {
-    const ords = db.orders.filter(o => o.status === s.id);
-    return `<div class="kcol" data-status="${s.id}" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dropOrder(event,'${s.id}')">
-      <h3>${s.label} <span class="count">${ords.length}</span></h3>
-      ${ords.map(o => kanbanCard(o)).join('')}
-    </div>`;
-  }).join('');
-}
+// renderKanban — הועבר לסוף הקובץ (מיון לפי מועד, נמסר 3 ימים + היסטוריה)
 
 function kanbanCard(o) {
   const today = todayStr();
@@ -660,7 +653,7 @@ function kanbanCard(o) {
     : `<span style="background:#ffebee;color:var(--err);font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px">₪ חוב פתוח</span>`;
   return `<div class="kcard ${cls}" draggable="true" ondragstart="event.dataTransfer.setData('id','${o.id}');this.classList.add('dragging')" ondragend="this.classList.remove('dragging')" onclick="showOrder('${o.id}')">
     <div class="n">${esc(o.name)}</div>
-    <div class="d">📅 ${esc(o.date)} · ${o.fulfillment==='delivery'?'🚚 משלוח':'🏠 איסוף'}</div>
+    <div class="d">📅 ${esc(o.date)} · ${o.fulfillment==='delivery'?'🚚 משלוח':'🏠 איסוף'} ${dayTag(o)}</div>
     <div class="it">${esc(o.items.slice(0,80))}${o.items.length>80?'...':''}</div>
     <div class="ph">📞 ${esc(o.phone)}</div>
     <div style="margin-top:6px">${payBadge}${o.receiptUrl?` <span data-rcpt="${o.id}" title="קבלה ללקוח" style="font-size:11px">${rcptBadge(_rcpt[o.id])}</span>`:''}</div>
@@ -810,7 +803,7 @@ function renderCustomers() {
   document.getElementById('custList').innerHTML = `<table><thead><tr><th>שם</th><th>טלפון</th><th>כתובת</th><th>אלרגיות</th><th>הזמנות</th><th>פעולות</th></tr></thead><tbody>
     ${list.map(c=>{
       const ord = db.orders.filter(o=>o.customerId===c.id).length;
-      return `<tr><td><strong>${esc(c.name)}</strong></td><td><a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></td><td>${esc(c.address||'-')}</td><td>${esc(c.allergies||'-')}</td><td>${ord}</td><td class="row-actions"><button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="editCust('${c.id}')">ערוך</button><a class="btn btn-s" style="padding:4px 10px;font-size:12px" href="https://wa.me/${c.phone.replace(/\D/g,'')}" target="_blank">📱</a></td></tr>`;
+      return `<tr><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p)"><strong>${esc(c.name)}</strong></a></td><td><a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></td><td>${esc(c.address||'-')}</td><td>${esc(c.allergies||'-')}</td><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p);font-weight:600">${ord} 👁️</a></td><td class="row-actions"><button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="editCust('${c.id}')">ערוך</button><a class="btn btn-s" style="padding:4px 10px;font-size:12px" href="https://wa.me/${c.phone.replace(/\D/g,'')}" target="_blank">📱</a></td></tr>`;
     }).join('')}</tbody></table>`;
 }
 
@@ -2800,4 +2793,105 @@ async function unmarkPaid(id){
   const o = db.orders.find(x => x.id === id); if (!o) return;
   if (!confirm('לבטל את סימון התשלום? ההזמנה תחזור ל"לא שולם".' + (o.receiptUrl ? '\n(קבלה שכבר הופקה נשארת ברווחית.)' : ''))) return;
   await setOrderPaid(id, false);
+}
+
+/* ============ לוח הזמנות: מיון לפי מועד, תגי יום, "נמסר" רק 3 ימים + היסטוריה ============ */
+const DELIVERED_DAYS_ON_BOARD = 3; // כמה ימים אחורה "נמסר" נשאר על הלוח; השאר בהיסטוריה
+function dayTag(o){
+  const today = todayStr();
+  if (!o.date) return '';
+  if (o.status === 'delivered') return '';
+  if (o.date < today) return '<span class="tagday late">באיחור</span>';
+  if (o.date === today) return '<span class="tagday today">היום</span>';
+  if (o.date === addDaysStr(today, 1)) return '<span class="tagday tomorrow">מחר</span>';
+  return '';
+}
+// מיון לעבודה: קודם לפי תאריך מבוקש (הקרוב למעלה; בלי תאריך בסוף), ואז לפי זמן ההזמנה
+function sortByDue(a, b){
+  const da = a.date || '9999-99-99', dbb = b.date || '9999-99-99';
+  if (da !== dbb) return da < dbb ? -1 : 1;
+  return String(a.createdAt||'').localeCompare(String(b.createdAt||''));
+}
+// "נמסר" שנשאר על הלוח: נמסר/מועד ב-3 הימים האחרונים (או עתידי)
+function recentDelivered(o){
+  const cut = addDaysStr(todayStr(), -DELIVERED_DAYS_ON_BOARD);
+  const upd = String(o.updatedAt||'').slice(0,10);
+  return (o.date && o.date >= cut) || (upd && upd >= cut);
+}
+function renderKanban() {
+  const k = document.getElementById('kanban');
+  k.innerHTML = STATUSES.map(s => {
+    let ords = db.orders.filter(o => o.status === s.id).slice().sort(sortByDue);
+    let hidden = 0;
+    if (s.id === 'delivered') {
+      const all = ords;
+      ords = all.filter(recentDelivered).sort((a,b)=>sortByDue(b,a)); // האחרונים למעלה
+      hidden = all.length - ords.length;
+    }
+    const sum = ords.reduce((t,o)=>t+orderTotal(o),0);
+    return `<div class="kcol" data-status="${s.id}" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dropOrder(event,'${s.id}')">
+      <h3>${s.label} <span><span class="count">${ords.length}</span> <span class="sum">₪${Math.round(sum)}</span></span></h3>
+      ${ords.map(o => kanbanCard(o)).join('')}
+      ${s.id==='delivered' ? `<button class="kfoot" onclick="switchTab('history')">🗂️ היסטוריה מלאה (${hidden + ords.length})</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* ============ היסטוריית הזמנות: טבלה + חיפוש + סינון ============ */
+function renderHistory(){
+  const el = document.getElementById('histList'); if (!el) return;
+  const q = (document.getElementById('histSearch')?.value||'').trim().toLowerCase();
+  const pf = document.getElementById('histPaid')?.value || '';
+  let list = db.orders.filter(o => o.status === 'delivered');
+  if (pf === 'paid') list = list.filter(o => o.paid);
+  if (pf === 'unpaid') list = list.filter(o => !o.paid);
+  if (q) list = list.filter(o => (o.name||'').toLowerCase().includes(q) || (o.phone||'').includes(q) || (o.items||'').toLowerCase().includes(q));
+  list.sort((a,b)=>sortByDue(b,a));
+  const total = list.reduce((t,o)=>t+orderTotal(o),0);
+  const unpaid = list.filter(o=>!o.paid).length;
+  if (!list.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--mute)">אין הזמנות שנמסרו</div>'; return; }
+  el.innerHTML = `<div class="hist-sum">${list.length} הזמנות · ₪${Math.round(total)}${unpaid?` · <span style="color:var(--err)">${unpaid} חוב פתוח</span>`:''}</div>
+  <div style="overflow-x:auto"><table><thead><tr><th>תאריך</th><th>לקוח</th><th>טלפון</th><th>פריטים</th><th>מסירה</th><th>סה״כ</th><th>תשלום</th><th>קבלה</th></tr></thead><tbody>
+  ${list.map(o=>`<tr class="hist-row" onclick="showOrder('${o.id}')">
+    <td>${esc(o.date||'—')}</td><td><strong>${esc(o.name)}</strong></td><td>${esc(o.phone)}</td>
+    <td style="max-width:320px">${esc((o.items||'').slice(0,70))}${(o.items||'').length>70?'…':''}</td>
+    <td>${o.fulfillment==='delivery'?'🚚':'🏠'}</td><td>₪${Math.round(orderTotal(o))}</td>
+    <td>${o.paid?`<span style="color:var(--ok);font-weight:600">שולם${o.paymentMethod?' · '+esc(o.paymentMethod):''}</span>`:'<span style="color:var(--err);font-weight:600">חוב פתוח</span>'}</td>
+    <td>${o.receiptUrl?`<a href="${esc(o.receiptUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📄 ${esc(rcptNumber(o.receiptUrl))}</a>`:'—'}</td>
+  </tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ============ כרטיס לקוח: פרטים + כל ההזמנות שלו ============ */
+function showCustCard(id){
+  const c = db.customers.find(x => x.id === id); if (!c) return;
+  const ords = db.orders.filter(o => o.customerId === c.id).sort((a,b)=>sortByDue(b,a));
+  const total = ords.reduce((t,o)=>t+orderTotal(o),0);
+  const unpaid = ords.filter(o=>!o.paid);
+  const first = ords.length ? ords.reduce((m,o)=> (o.createdAt && o.createdAt < m) ? o.createdAt : m, ords[0].createdAt||'') : '';
+  document.getElementById('ccTitle').textContent = c.name;
+  document.getElementById('ccBody').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-bottom:14px;font-size:14px">
+      <div><strong>טלפון:</strong> <a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></div>
+      <div><strong>כתובת:</strong> ${esc(c.address||'—')}</div>
+      <div><strong>אלרגיות:</strong> ${esc(c.allergies||'—')}</div>
+      <div><strong>לקוח/ה מאז:</strong> ${first ? fmtDateTime(first).split(',')[0] : '—'}</div>
+      ${c.notes?`<div style="grid-column:span 2;background:#fff3e0;padding:8px 10px;border-radius:8px"><strong>הערות:</strong> ${esc(c.notes)}</div>`:''}
+    </div>
+    <div class="ccstats">
+      <div class="ccstat"><div class="v">${ords.length}</div><div class="l">הזמנות</div></div>
+      <div class="ccstat"><div class="v">₪${Math.round(total)}</div><div class="l">סה״כ קנה/תה</div></div>
+      <div class="ccstat ${unpaid.length?'bad':''}"><div class="v">${unpaid.length}</div><div class="l">חוב פתוח</div></div>
+    </div>
+    ${ords.length ? `<div style="overflow-x:auto"><table><thead><tr><th>תאריך</th><th>פריטים</th><th>מסירה</th><th>סה״כ</th><th>תשלום</th><th>קבלה</th></tr></thead><tbody>
+    ${ords.map(o=>`<tr class="hist-row" onclick="closeModal('custCardModal');showOrder('${o.id}')">
+      <td>${esc(o.date||'—')}</td><td style="max-width:300px">${esc((o.items||'').slice(0,60))}${(o.items||'').length>60?'…':''}</td>
+      <td>${o.fulfillment==='delivery'?'🚚':'🏠'}</td><td>₪${Math.round(orderTotal(o))}</td>
+      <td>${o.paid?`<span style="color:var(--ok);font-weight:600">שולם</span>`:'<span style="color:var(--err);font-weight:600">חוב</span>'}</td>
+      <td>${o.receiptUrl?`<a href="${esc(o.receiptUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📄 ${esc(rcptNumber(o.receiptUrl))}</a>`:'—'}</td>
+    </tr>`).join('')}</tbody></table></div>` : '<div style="text-align:center;padding:24px;color:var(--mute)">עדיין אין הזמנות ללקוח/ה</div>'}
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px">
+      <button class="btn btn-s" onclick="closeModal('custCardModal');editCust('${c.id}')">✏️ עריכת פרטים</button>
+      <a class="btn btn-s" href="https://wa.me/${waPhone(c.phone)}" target="_blank" rel="noopener">📱 לשיחת וואטסאפ עם הלקוח/ה</a>
+    </div>`;
+  document.getElementById('custCardModal').classList.add('show');
 }

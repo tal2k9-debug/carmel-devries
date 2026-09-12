@@ -109,6 +109,21 @@ main{padding:20px;max-width:1400px;margin:0 auto}
 .kcard .ph{font-size:12px;color:var(--p);margin-top:4px}
 .kcard.urgent{border-right:4px solid var(--err)}
 .kcard.today{border-right:4px solid var(--warn)}
+.kcol .sum{color:var(--mute);font-size:12px;font-weight:500;margin-right:4px}
+.kfoot{width:100%;margin-top:4px;padding:9px;border-radius:8px;background:#fff;border:1px dashed var(--bd);color:var(--p);font-weight:600;font-size:13px;cursor:pointer}
+.kfoot:hover{background:#fdf3e8}
+.tagday{font-size:11px;font-weight:700;padding:1px 7px;border-radius:8px;margin-right:4px}
+.tagday.today{background:#fff3e0;color:var(--warn)}
+.tagday.tomorrow{background:#e3f2fd;color:var(--info)}
+.tagday.late{background:#ffebee;color:var(--err)}
+.hist-sum{font-size:14px;color:var(--ink2);margin-bottom:10px;font-weight:600}
+.hist-row{cursor:pointer}
+.hist-row:hover td{background:#fdf3e8}
+.ccstats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.ccstat{background:#FAF1E8;border-radius:10px;padding:10px;text-align:center}
+.ccstat .v{font-size:20px;font-weight:700;color:var(--p)}
+.ccstat .l{font-size:12px;color:var(--mute)}
+.ccstat.bad .v{color:var(--err)}
 .kcol.drag-over{background:#F5E4D0;border:2px dashed var(--p)}
 
 /* TABLE */
@@ -261,6 +276,7 @@ th,td{padding:8px}
   <button class="tab active" data-page="today">🏠 היום</button>
   <button class="tab" data-page="assistant">🤖 עוזר חכם</button>
   <button class="tab" data-page="orders">📦 הזמנות</button>
+  <button class="tab" data-page="history">🗂️ היסטוריה</button>
   <button class="tab" data-page="products">🍪 מוצרים</button>
   <button class="tab" data-page="customers">👥 לקוחות</button>
   <button class="tab" data-page="calendar">📅 לוח שנה</button>
@@ -316,6 +332,12 @@ th,td{padding:8px}
 <section class="page" id="page-orders">
   <div class="page-h"><h2>הזמנות פתוחות</h2><div class="actions"><button class="btn btn-s" onclick="syncAll()">🔄 סנכרון</button></div></div>
   <div class="kanban" id="kanban"></div>
+</section>
+
+<!-- HISTORY -->
+<section class="page" id="page-history">
+  <div class="page-h"><h2>היסטוריית הזמנות</h2><div class="actions"><input id="histSearch" oninput="renderHistory()" placeholder="חיפוש: שם, טלפון, פריט..." style="padding:8px 12px;border:1px solid var(--bd);border-radius:8px;min-width:220px"><select id="histPaid" onchange="renderHistory()" style="padding:8px 10px;border:1px solid var(--bd);border-radius:8px;background:#fff"><option value="">הכל</option><option value="paid">שולם</option><option value="unpaid">חוב פתוח</option></select></div></div>
+  <div id="histList">טוען...</div>
 </section>
 
 <!-- PRODUCTS -->
@@ -694,6 +716,8 @@ th,td{padding:8px}
 
 <!-- ORDER DETAIL MODAL -->
 <div class="modal" id="orderModal"><div class="modal-content"><div class="modal-h"><h3 id="omTitle">הזמנה</h3><button class="modal-close" onclick="closeModal('orderModal')">✕</button></div><div id="omBody"></div></div></div>
+<!-- CUSTOMER CARD -->
+<div class="modal" id="custCardModal"><div class="modal-content"><div class="modal-h"><h3 id="ccTitle">לקוח</h3><button class="modal-close" onclick="closeModal('custCardModal')">✕</button></div><div id="ccBody"></div></div></div>
 <!-- CUSTOMER MODAL -->
 <div class="modal" id="custModal"><div class="modal-content"><div class="modal-h"><h3 id="cmTitle">לקוח חדש</h3><button class="modal-close" onclick="closeModal('custModal')">✕</button></div>
 <div class="form-grid"><div class="field"><label>שם*</label><input id="cName"></div><div class="field"><label>טלפון*</label><input id="cPhone"></div><div class="field full"><label>כתובת</label><input id="cAddr"></div><div class="field full"><label>אלרגיות / מזהים</label><input id="cAllergy"></div><div class="field full"><label>הערות</label><textarea id="cNotes"></textarea></div></div>
@@ -709,6 +733,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=68"></script>
+<script src="app.js?v=69"></script>
 </body>
 </html>
