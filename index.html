@@ -55,15 +55,21 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .kbadge.parve{background:#eef5ec;color:#4a7a4e}
 .kbadge.dairy{background:#eaf1fa;color:#3f72b0}
 .kbadge.mixed{background:#f1ecf7;color:#6b54a8}
-.notify-wrap{margin-top:10px}
-.notify-btn{width:100%;padding:11px;border-radius:10px;border:1px dashed rgba(176,141,87,.7);background:#fff;color:#8a6d3b;font-family:'Heebo',sans-serif;font-size:14px;font-weight:600;cursor:pointer}
-.notify-btn:hover{background:#fdf6ec}
-.notify-form{display:flex;gap:6px;margin-top:6px}
-.notify-form input{flex:1;min-width:0;padding:10px;border:1px solid rgba(176,141,87,.4);border-radius:9px;font-family:'Heebo',sans-serif;font-size:14px;text-align:start}
-.notify-send{padding:10px 14px;border:none;border-radius:9px;background:#b08d57;color:#fff;font-family:'Heebo',sans-serif;font-size:14px;font-weight:600;cursor:pointer}
-.notify-msg{margin-top:6px;font-size:13px;font-family:'Heebo',sans-serif;line-height:1.5}
-.notify-msg.ok{color:#2e7d32}
-.notify-msg.err{color:#c0392b}
+.notify-link{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:0;border:none;background:none;color:#8a6d3b;font-family:'Heebo',sans-serif;font-size:12.5px;font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px;opacity:.85}
+.notify-link:hover{opacity:1;color:#6d5530}
+#notify-modal{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;background:rgba(26,22,18,.55);padding:20px}
+#notify-modal.show{display:flex}
+.nm-box{background:#fff;border-radius:16px;max-width:340px;width:100%;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.3);font-family:'Heebo',sans-serif;text-align:center;position:relative}
+.nm-x{position:absolute;top:10px;left:12px;background:none;border:none;font-size:20px;color:#b0a396;cursor:pointer;line-height:1}
+.nm-t{font-size:16px;font-weight:600;color:#1a1612;margin-bottom:4px}
+.nm-p{font-size:14px;color:#8a7d70;margin-bottom:16px;line-height:1.5}
+.nm-inp{width:100%;padding:13px;border:1px solid rgba(176,141,87,.45);border-radius:11px;font-family:'Heebo',sans-serif;font-size:17px;text-align:center;letter-spacing:.5px;direction:ltr;font-variant-numeric:lining-nums tabular-nums}
+.nm-inp:focus{outline:none;border-color:#b08d57}
+.nm-send{width:100%;margin-top:10px;padding:13px;border:none;border-radius:11px;background:#b08d57;color:#fff;font-family:'Heebo',sans-serif;font-size:15px;font-weight:600;cursor:pointer}
+.nm-send:disabled{opacity:.6;cursor:default}
+.nm-msg{margin-top:12px;font-size:14px;line-height:1.5;min-height:1px}
+.nm-msg.ok{color:#2e7d32}
+.nm-msg.err{color:#c0392b}
 .soldout{display:inline-block;background:#fbe9e7;color:#bf360c;font-family:'Heebo',sans-serif;font-size:10px;font-weight:600;padding:3px 10px;border-radius:9px;margin-inline-start:6px;white-space:nowrap;unicode-bidi:isolate;border:1px solid #ef9a9a;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1}
 .soldout bdi{font-family:'Heebo',sans-serif;font-size:12px;font-weight:700;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1;display:inline-block;margin:0 2px;color:#b71c1c}
 @media (max-width:600px){.pi{height:220px}}
@@ -330,7 +336,7 @@ function totalQty(id){if(!cart[id])return 0;return Object.values(cart[id]).reduc
 
 function ful(){return $('#cust-fulfill').value;}
 
-/* ===== "עדכני אותי כשחוזר" — מוצר שאזל ===== */
+/* ===== "עדכני אותי כשחוזר" — מוצר שאזל (קישור עדין + מודאל קטן) ===== */
 // הלקוח משאיר טלפון, נרשם בגיליון (לשונית Waitlist), והבוט שולח הודעה ברגע שהמוצר חוזר למלאי.
 function isSoldOutProduct(p){
   if(p.flavors&&p.flavors.length){
@@ -341,54 +347,55 @@ function isSoldOutProduct(p){
 }
 function notifyBlock(p){
   if(!isSoldOutProduct(p)) return '';
-  return '<div class="notify-wrap" data-nid="'+p.id+'">'
-    + '<button type="button" class="notify-btn" data-nact="open" data-id="'+p.id+'">🔔 עדכני אותי כשחוזר</button>'
-    + '<div class="notify-form" hidden>'
-    +   '<input type="tel" class="notify-phone" inputmode="tel" placeholder="050-0000000" aria-label="טלפון לעדכון">'
-    +   '<button type="button" class="notify-send" data-nact="send" data-id="'+p.id+'">שלחו לי</button>'
-    + '</div>'
-    + '<div class="notify-msg" hidden></div>'
-    + '</div>';
+  return '<button type="button" class="notify-link" data-nid="'+p.id+'">🔔 עדכני אותי כשחוזר</button>';
+}
+let _notifyProd=null;
+function openNotify(id){
+  const p=products.find(x=>x.id===id); if(!p) return;
+  _notifyProd=p;
+  $('#nm-prod').textContent=p.name;
+  const inp=$('#nm-phone');
+  const known=(($('#cust-phone')||{}).value||'').replace(/\D/g,'');
+  inp.value=/^0?5\d{8}$/.test(known)?(known.length===9?'0'+known:known):'';
+  $('#nm-msg').textContent=''; $('#nm-msg').className='nm-msg';
+  const btn=$('#nm-send'); btn.disabled=false; btn.textContent='שלחו לי הודעה';
+  $('#nm-form').hidden=false;
+  $('#notify-modal').classList.add('show');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>inp.focus(),50);
+}
+function closeNotify(){
+  $('#notify-modal').classList.remove('show');
+  document.body.style.overflow='';
+  _notifyProd=null;
+}
+async function sendNotify(){
+  if(!_notifyProd) return;
+  const inp=$('#nm-phone'), msg=$('#nm-msg'), btn=$('#nm-send');
+  const phone=normalizeIlMobile(inp.value);
+  if(!phone){ msg.className='nm-msg err'; msg.textContent='נא להזין מספר נייד ישראלי תקין (10 ספרות, מתחיל ב-05)'; inp.focus(); return; }
+  btn.disabled=true; btn.textContent='רושם...';
+  try{
+    const resp=await fetch(WEBAPP_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'waitlist_add',productId:_notifyProd.id,phone:phone,name:(($('#cust-name')||{}).value||'')})});
+    const data=await resp.json();
+    if(data.ok){
+      $('#nm-form').hidden=true;
+      msg.className='nm-msg ok';
+      msg.textContent=data.already?'כבר רשומים 💛 נעדכן בוואטסאפ ברגע שיחזור.':'רשמנו! נעדכן אתכם בוואטסאפ ברגע שיחזור למלאי 💛';
+      setTimeout(closeNotify,2600);
+    }else{
+      msg.className='nm-msg err';
+      msg.textContent=data.error==='bad_phone'?'מספר לא תקין — 10 ספרות שמתחילות ב-05':'לא הצלחנו לרשום כרגע. נסו שוב או כתבו לנו בוואטסאפ.';
+      btn.disabled=false; btn.textContent='שלחו לי הודעה';
+    }
+  }catch(e){
+    msg.className='nm-msg err'; msg.textContent='תקלת רשת, נסו שוב';
+    btn.disabled=false; btn.textContent='שלחו לי הודעה';
+  }
 }
 function bindNotifyButtons(){
-  document.querySelectorAll('[data-nact="open"]').forEach(b=>{
-    b.onclick=()=>{
-      const wrap=b.closest('.notify-wrap');
-      const form=wrap.querySelector('.notify-form');
-      form.hidden=false; b.hidden=true;
-      const inp=form.querySelector('.notify-phone');
-      const known=(document.getElementById('cust-phone')||{}).value||'';
-      if(known&&normalizeIlMobile(known)) inp.value=known;
-      inp.focus();
-    };
-  });
-  document.querySelectorAll('[data-nact="send"]').forEach(b=>{
-    b.onclick=async()=>{
-      const wrap=b.closest('.notify-wrap');
-      const inp=wrap.querySelector('.notify-phone');
-      const msg=wrap.querySelector('.notify-msg');
-      const phone=normalizeIlMobile(inp.value.trim());
-      if(!phone){ msg.hidden=false; msg.className='notify-msg err'; msg.textContent='נא להזין מספר נייד ישראלי תקין (05X-XXXXXXX)'; inp.focus(); return; }
-      b.disabled=true; b.textContent='שולח...';
-      try{
-        const resp=await fetch(WEBAPP_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-          body:JSON.stringify({action:'waitlist_add',productId:b.dataset.id,phone:phone,name:(document.getElementById('cust-name')||{}).value||''})});
-        const data=await resp.json();
-        if(data.ok){
-          wrap.querySelector('.notify-form').hidden=true;
-          msg.hidden=false; msg.className='notify-msg ok';
-          msg.textContent=data.already?'כבר רשומים! נעדכן בוואטסאפ ברגע שיחזור 💛':'רשמנו! נעדכן אתכם בוואטסאפ ברגע שיחזור למלאי 💛';
-        }else{
-          msg.hidden=false; msg.className='notify-msg err';
-          msg.textContent=data.error==='bad_phone'?'מספר לא תקין (05X-XXXXXXX)':'לא הצלחנו לרשום כרגע, נסו שוב או כתבו לנו בוואטסאפ';
-          b.disabled=false; b.textContent='שלחו לי';
-        }
-      }catch(e){
-        msg.hidden=false; msg.className='notify-msg err'; msg.textContent='תקלת רשת, נסו שוב';
-        b.disabled=false; b.textContent='שלחו לי';
-      }
-    };
-  });
+  $$('.notify-link').forEach(b=>{ b.onclick=()=>openNotify(b.dataset.nid); });
 }
 
 function calcD(s){if(ful()==='pickup')return 0;if(s<=0||s>=FREE)return 0;return FEE;}
@@ -1000,4 +1007,17 @@ body.cad-noanim,body.cad-noanim *{animation:none!important;transition:none!impor
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
 </script>
+<div id="notify-modal" role="dialog" aria-modal="true" aria-label="עדכון כשהמוצר חוזר למלאי">
+  <div class="nm-box">
+    <button type="button" class="nm-x" onclick="closeNotify()" aria-label="סגירה">✕</button>
+    <div class="nm-t">🔔 נעדכן אתכם כשיחזור</div>
+    <div class="nm-p"><span id="nm-prod"></span><br>נשלח הודעה בוואטסאפ ברגע שהמוצר חוזר למלאי.</div>
+    <div id="nm-form">
+      <input id="nm-phone" class="nm-inp" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="0500000000" aria-label="מספר טלפון נייד"
+        oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" onkeydown="if(event.key==='Enter')sendNotify()">
+      <button type="button" id="nm-send" class="nm-send" onclick="sendNotify()">שלחו לי הודעה</button>
+    </div>
+    <div id="nm-msg" class="nm-msg"></div>
+  </div>
+</div>
 </body></html>
