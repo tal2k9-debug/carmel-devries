@@ -26,7 +26,7 @@ const PRODUCTS_SEED = [
 ];
 
 let tokenClient, accessToken=null, user=null, _tokenRefreshResolve=null;
-let db = {customers:[], orders:[], expenses:[], recipes:[], products:[], settings:{}};
+let db = {customers:[], orders:[], expenses:[], recipes:[], products:[], settings:{}, waitlist:[]};
 let calCursor = new Date();
 let editingCustId=null, editingExpId=null, editingProdId=null;
 let pendingWrites = []; // queue for offline
@@ -259,13 +259,14 @@ async function updateRow(sheetName, rowNum, row) {
 async function syncAll() {
   setSync('syncing', 'מסנכרן...');
   try {
-    const [cust, ord, exp, rec, prod, setg] = await Promise.all([
+    const [cust, ord, exp, rec, prod, setg, wl] = await Promise.all([
       readRange('Customers!A2:H'),
       readRange('Orders!A2:Q'), // עד Q: כולל total (O), itemsJSON (P), receiptUrl (Q) — לפני כן נטענו רק 14 עמודות והקבלות לא הוצגו
       readRange('Expenses!A2:F').catch(()=>[]),
       readRange('Recipes!A2:H').catch(()=>[]),
       readRange('Products!A2:O').catch(()=>[]),
-      readRange('Settings!A2:B').catch(()=>[])
+      readRange('Settings!A2:B').catch(()=>[]),
+      readRange('Waitlist!A2:H').catch(()=>[]) // "עדכני אותי כשחוזר" — הלשונית נוצרת בפעם הראשונה שלקוח נרשם
     ]);
     db.customers = cust.map(r => rowToCust(r));
     db.orders = ord.map(r => rowToOrder(r));
@@ -273,6 +274,7 @@ async function syncAll() {
     db.recipes = rec.map(r => rowToRecipe(r));
     db.products = prod.map(r => rowToProd(r));
     db.settings = settingsRowsToObj(setg);
+    db.waitlist = (wl||[]).map(r => rowToWait(r));
     // Make sure the public-facing "__settings__" row exists so the live site reads
     // the open hours/days with NO Apps Script deploy. Only writes when missing —
     // afterwards saveOrderSettings keeps it in sync. This auto-publishes whatever
@@ -319,6 +321,7 @@ function loadCache() {
 }
 function saveCache(){ localStorage.setItem(CACHE_KEY, JSON.stringify(db)); }
 
+function rowToWait(r){ return {id:r[0]||'', productId:r[1]||'', productName:r[2]||'', phone:r[3]||'', name:r[4]||'', createdAt:r[5]||'', notifiedAt:r[6]||'', status:r[7]||''}; }
 function rowToCust(r){ return {id:r[0]||'', name:r[1]||'', phone:r[2]||'', address:r[3]||'', allergies:r[4]||'', notes:r[5]||'', createdAt:r[6]||'', lastOrder:r[7]||''}; }
 function custToRow(c){ return [c.id, c.name, c.phone, c.address, c.allergies, c.notes, c.createdAt, c.lastOrder]; }
 function rowToOrder(r){ return {id:r[0]||'', customerId:r[1]||'', name:r[2]||'', phone:r[3]||'', address:r[4]||'', fulfillment:r[5]||'pickup', date:r[6]||'', items:r[7]||'', notes:r[8]||'', status:r[9]||'new', createdAt:r[10]||'', updatedAt:r[11]||'', paid:(r[12]==='1'||r[12]===1||r[12]===true||String(r[12]).toLowerCase()==='true'), paymentMethod:r[13]||'', total:r[14]||'', receiptUrl:r[16]||''}; }
@@ -1377,7 +1380,7 @@ function renderProducts() {
             <input type="checkbox" ${p.published?'checked':''} onchange="togglePublish('${esc(p.id)}', this.checked)" style="width:20px;height:20px;cursor:pointer">
           </label></td>
           <td>${imgCell}</td>
-          <td><div style="font-weight:600">${esc(p.name)}</div><div style="font-size:11px;color:var(--mute)">${subtitle}</div></td>
+          <td><div style="font-weight:600">${esc(p.name)}${waitBadge(p.id)}</div><div style="font-size:11px;color:var(--mute)">${subtitle}</div></td>
           <td><strong>₪${p.price}</strong></td>
           <td>${qtyCell}</td>
           <td>${kosherTag}</td>
@@ -2900,4 +2903,35 @@ function showCustCard(id){
       <a class="btn btn-s" href="https://wa.me/${waPhone(c.phone)}" target="_blank" rel="noopener">📱 לשיחת וואטסאפ עם הלקוח/ה</a>
     </div>`;
   document.getElementById('custCardModal').classList.add('show');
+}
+
+/* ============ "עדכני אותי כשחוזר" — מי מחכה למה ============ */
+// הלקוחות נרשמים באתר (לשונית Waitlist בגיליון). הבוט שולח להם ברגע שהמוצר חוזר למלאי.
+function waitersFor(productId){
+  return (db.waitlist||[]).filter(w => String(w.productId)===String(productId) && !String(w.notifiedAt||'').trim());
+}
+function waitBadge(productId){
+  const n = waitersFor(productId).length;
+  if (!n) return '';
+  return ` <button class="wait-badge" onclick="event.stopPropagation();showWaiters('${productId}')" title="לקוחות שממתינים שהמוצר יחזור">🔔 ${n} ממתינים</button>`;
+}
+function showWaiters(productId){
+  const p = (db.products||[]).find(x=>String(x.id)===String(productId));
+  const waiting = waitersFor(productId);
+  const notified = (db.waitlist||[]).filter(w => String(w.productId)===String(productId) && String(w.notifiedAt||'').trim());
+  document.getElementById('wlTitle').textContent = 'ממתינים: ' + ((p&&p.name)||productId);
+  const rows = (list, done) => list.map(w=>`<tr>
+      <td>${esc(fmtPhone(w.phone))}</td>
+      <td>${esc(w.name||'—')}</td>
+      <td>${esc(String(w.createdAt||'').slice(0,10))}</td>
+      <td>${done?`<span style="color:var(--ok)">✅ עודכן ${esc(String(w.notifiedAt||'').slice(0,10))}</span>`:'<span style="color:var(--warn)">⏳ ממתין</span>'}</td>
+      <td><a class="btn btn-s" style="padding:4px 10px;font-size:12px" href="https://wa.me/${waPhone(w.phone)}" target="_blank" rel="noopener">📱</a></td>
+    </tr>`).join('');
+  document.getElementById('wlBody').innerHTML = (waiting.length||notified.length)
+    ? `<div style="font-size:14px;color:var(--ink2);margin-bottom:10px">${waiting.length} ממתינים · ${notified.length} כבר עודכנו</div>
+       <div style="overflow-x:auto"><table><thead><tr><th>טלפון</th><th>שם</th><th>נרשמ/ה</th><th>סטטוס</th><th></th></tr></thead>
+       <tbody>${rows(waiting,false)}${rows(notified,true)}</tbody></table></div>
+       <div style="margin-top:12px;font-size:13px;color:var(--mute)">ההודעה נשלחת אוטומטית ברגע שהכמות תעודכן מעל 0 והמוצר מפורסם.</div>`
+    : '<div style="text-align:center;padding:30px;color:var(--mute)">אין ממתינים למוצר הזה</div>';
+  document.getElementById('waitModal').classList.add('show');
 }

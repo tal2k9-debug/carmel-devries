@@ -90,6 +90,13 @@ function doPost(e) {
   if (payload && payload.action === 'merge_customers') {
     return mergeCustomers_(payload);
   }
+  // רשימת המתנה למוצר שאזל (האתר כותב בלי סוד; הבוט מסמן עם סוד)
+  if (payload && payload.action === 'waitlist_add') {
+    return waitlistAdd_(payload);
+  }
+  if (payload && payload.action === 'waitlist_mark') {
+    return waitlistMark_(payload);
+  }
 
   // --- הגנות בסיסיות על קליטת הזמנה (ספאם/זבל) ---
   // Honeypot: שדה נסתר שאדם אמיתי לא רואה ולא ממלא. בוט שמילא אותו מקבל
@@ -215,6 +222,7 @@ function doGet(e) {
   if (p.action === 'products') return getProducts_(p);
   if (p.action === 'orders') return getOrders_(p);
   if (p.action === 'settings') return getSettings_();
+  if (p.action === 'waitlist') return getWaitlist_(p);
   if (p.action === 'set_secret') return setSecret_(p);
   return json({ ok: true, service: 'carmel-order-intake' });
 }
@@ -587,6 +595,108 @@ function mergeCustomers_(payload) {
   });
   rowsToDelete.sort(function (a, b) { return b - a; }).forEach(function (rowNum) { cs.deleteRow(rowNum); });
   return json({ ok: true, merged: res.plan.length, ordersMoved: movedTotal, customersDeleted: rowsToDelete.length, backup: bakName });
+}
+
+
+// --- "עדכני אותי כשחוזר" (רשימת המתנה למוצר שאזל) ---
+// לשונית Waitlist: id | productId | productName | phone | name | createdAt | notifiedAt | status
+// האתר כותב בלי סוד (כמו הזמנה): רק נייד ישראלי תקין, רק מוצר שקיים, בלי כפילות (אותו מוצר+טלפון שטרם עודכן).
+// הבוט קורא עם הסוד ומסמן מי עודכן.
+var WAITLIST_SHEET = 'Waitlist';
+var WAITLIST_HEADERS = ['id', 'productId', 'productName', 'phone', 'name', 'createdAt', 'notifiedAt', 'status'];
+
+function waitlistSheet_(ss) {
+  var sh = ss.getSheetByName(WAITLIST_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(WAITLIST_SHEET);
+    sh.getRange(1, 1, 1, WAITLIST_HEADERS.length).setValues([WAITLIST_HEADERS]);
+    sh.getRange(1, 4).setNumberFormat('@'); // טלפון כטקסט (0 מוביל)
+  }
+  return sh;
+}
+
+// מוסיף ממתין. payload: {productId, productName?, phone, name?}
+function waitlistAdd_(payload) {
+  try {
+    var phone = normalizeIlMobile_(payload.phone);
+    if (!phone) return json({ ok: false, error: 'bad_phone' });
+    var pid = String(payload.productId || '').trim().slice(0, 60);
+    if (!pid) return json({ ok: false, error: 'bad_product' });
+
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    // המוצר חייב להיות קיים בגיליון (מונע זבל), ושמו נלקח משם
+    var prod = ss.getSheetByName('Products');
+    var pname = '';
+    if (prod) {
+      var pd = prod.getDataRange().getDisplayValues();
+      var ph = pd[0].map(function (h) { return String(h).trim(); });
+      var pi = ph.indexOf('id'), pn = ph.indexOf('name');
+      for (var r = 1; r < pd.length; r++) {
+        if (String(pd[r][pi]) === pid) { pname = String(pd[r][pn] || ''); break; }
+      }
+    }
+    if (!pname) return json({ ok: false, error: 'product_not_found' });
+
+    var lock = LockService.getScriptLock();
+    try { lock.waitLock(15000); } catch (e) { return json({ ok: false, error: 'busy' }); }
+    try {
+      var sh = waitlistSheet_(ss);
+      var data = sh.getDataRange().getDisplayValues();
+      var hdr = data[0].map(function (h) { return String(h).trim(); });
+      var ci = {}; hdr.forEach(function (h, i) { ci[h] = i; });
+      // כבר רשום וטרם עודכן? מחזירים already (בלי שורה נוספת)
+      for (var i = 1; i < data.length; i++) {
+        if (String(data[i][ci.productId]) === pid &&
+            normalizeIlMobile_(data[i][ci.phone]) === phone &&
+            !String(data[i][ci.notifiedAt] || '').trim()) {
+          return json({ ok: true, already: true, product: pname });
+        }
+      }
+      if (data.length > 3000) return json({ ok: false, error: 'full' });
+      var now = new Date().toISOString();
+      var id = 'w-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+      sh.appendRow([id, pid, pname, phone, String(payload.name || '').slice(0, 60), now, '', 'waiting']);
+      sh.getRange(sh.getLastRow(), 4).setNumberFormat('@').setValue(phone);
+      return json({ ok: true, added: true, product: pname });
+    } finally { lock.releaseLock(); }
+  } catch (err) {
+    return json({ ok: false, error: 'exception', message: String(err) });
+  }
+}
+
+// קריאה לבוט/דשבורד: ?action=waitlist&secret=...  (רק ממתינים שטרם עודכנו, אלא אם all=1)
+function getWaitlist_(p) {
+  if (!botSecretOk_(p.secret)) return json({ ok: false, error: 'unauthorized' });
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(WAITLIST_SHEET);
+  if (!sh) return json({ ok: true, waitlist: [] });
+  var rows = sheetObjects_(sh, false);
+  if (String(p.all || '') !== '1') rows = rows.filter(function (r) { return !String(r.notifiedAt || '').trim(); });
+  return json({ ok: true, waitlist: rows });
+}
+
+// סימון שנשלח. payload: {action:'waitlist_mark', secret, ids:[...], status?}
+function waitlistMark_(payload) {
+  if (!botSecretOk_(payload.secret)) return json({ ok: false, error: 'unauthorized' });
+  var ids = payload.ids || [];
+  if (!ids.length) return json({ ok: true, marked: 0 });
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(WAITLIST_SHEET);
+  if (!sh) return json({ ok: false, error: 'no_sheet' });
+  var data = sh.getDataRange().getDisplayValues();
+  var hdr = data[0].map(function (h) { return String(h).trim(); });
+  var idC = hdr.indexOf('id'), nC = hdr.indexOf('notifiedAt'), sC = hdr.indexOf('status');
+  if (idC === -1 || nC === -1) return json({ ok: false, error: 'bad_header' });
+  var want = {}; ids.forEach(function (x) { want[String(x)] = true; });
+  var now = new Date().toISOString(), marked = 0;
+  for (var r = 1; r < data.length; r++) {
+    if (want[String(data[r][idC])] && !String(data[r][nC] || '').trim()) {
+      sh.getRange(r + 1, nC + 1).setValue(now);
+      if (sC !== -1) sh.getRange(r + 1, sC + 1).setValue(String(payload.status || 'notified'));
+      marked++;
+    }
+  }
+  return json({ ok: true, marked: marked });
 }
 
 // "name:qty|name:qty"  (legacy "name|name" → each flavor inherits productQty)

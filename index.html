@@ -55,6 +55,15 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .kbadge.parve{background:#eef5ec;color:#4a7a4e}
 .kbadge.dairy{background:#eaf1fa;color:#3f72b0}
 .kbadge.mixed{background:#f1ecf7;color:#6b54a8}
+.notify-wrap{margin-top:10px}
+.notify-btn{width:100%;padding:11px;border-radius:10px;border:1px dashed rgba(176,141,87,.7);background:#fff;color:#8a6d3b;font-family:'Heebo',sans-serif;font-size:14px;font-weight:600;cursor:pointer}
+.notify-btn:hover{background:#fdf6ec}
+.notify-form{display:flex;gap:6px;margin-top:6px}
+.notify-form input{flex:1;min-width:0;padding:10px;border:1px solid rgba(176,141,87,.4);border-radius:9px;font-family:'Heebo',sans-serif;font-size:14px;text-align:start}
+.notify-send{padding:10px 14px;border:none;border-radius:9px;background:#b08d57;color:#fff;font-family:'Heebo',sans-serif;font-size:14px;font-weight:600;cursor:pointer}
+.notify-msg{margin-top:6px;font-size:13px;font-family:'Heebo',sans-serif;line-height:1.5}
+.notify-msg.ok{color:#2e7d32}
+.notify-msg.err{color:#c0392b}
 .soldout{display:inline-block;background:#fbe9e7;color:#bf360c;font-family:'Heebo',sans-serif;font-size:10px;font-weight:600;padding:3px 10px;border-radius:9px;margin-inline-start:6px;white-space:nowrap;unicode-bidi:isolate;border:1px solid #ef9a9a;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1}
 .soldout bdi{font-family:'Heebo',sans-serif;font-size:12px;font-weight:700;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1;display:inline-block;margin:0 2px;color:#b71c1c}
 @media (max-width:600px){.pi{height:220px}}
@@ -320,6 +329,68 @@ function setQty(id,flav,qty){
 function totalQty(id){if(!cart[id])return 0;return Object.values(cart[id]).reduce((a,b)=>a+b,0);}
 
 function ful(){return $('#cust-fulfill').value;}
+
+/* ===== "עדכני אותי כשחוזר" — מוצר שאזל ===== */
+// הלקוח משאיר טלפון, נרשם בגיליון (לשונית Waitlist), והבוט שולח הודעה ברגע שהמוצר חוזר למלאי.
+function isSoldOutProduct(p){
+  if(p.flavors&&p.flavors.length){
+    return p.flavors.every(f=>{const q=(typeof f==='string')?Infinity:(f.qty||0);return q<=0;});
+  }
+  const avail=(typeof p.qty==='number')?p.qty:Infinity;
+  return avail<=0;
+}
+function notifyBlock(p){
+  if(!isSoldOutProduct(p)) return '';
+  return '<div class="notify-wrap" data-nid="'+p.id+'">'
+    + '<button type="button" class="notify-btn" data-nact="open" data-id="'+p.id+'">🔔 עדכני אותי כשחוזר</button>'
+    + '<div class="notify-form" hidden>'
+    +   '<input type="tel" class="notify-phone" inputmode="tel" placeholder="050-0000000" aria-label="טלפון לעדכון">'
+    +   '<button type="button" class="notify-send" data-nact="send" data-id="'+p.id+'">שלחו לי</button>'
+    + '</div>'
+    + '<div class="notify-msg" hidden></div>'
+    + '</div>';
+}
+function bindNotifyButtons(){
+  document.querySelectorAll('[data-nact="open"]').forEach(b=>{
+    b.onclick=()=>{
+      const wrap=b.closest('.notify-wrap');
+      const form=wrap.querySelector('.notify-form');
+      form.hidden=false; b.hidden=true;
+      const inp=form.querySelector('.notify-phone');
+      const known=(document.getElementById('cust-phone')||{}).value||'';
+      if(known&&normalizeIlMobile(known)) inp.value=known;
+      inp.focus();
+    };
+  });
+  document.querySelectorAll('[data-nact="send"]').forEach(b=>{
+    b.onclick=async()=>{
+      const wrap=b.closest('.notify-wrap');
+      const inp=wrap.querySelector('.notify-phone');
+      const msg=wrap.querySelector('.notify-msg');
+      const phone=normalizeIlMobile(inp.value.trim());
+      if(!phone){ msg.hidden=false; msg.className='notify-msg err'; msg.textContent='נא להזין מספר נייד ישראלי תקין (05X-XXXXXXX)'; inp.focus(); return; }
+      b.disabled=true; b.textContent='שולח...';
+      try{
+        const resp=await fetch(WEBAPP_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({action:'waitlist_add',productId:b.dataset.id,phone:phone,name:(document.getElementById('cust-name')||{}).value||''})});
+        const data=await resp.json();
+        if(data.ok){
+          wrap.querySelector('.notify-form').hidden=true;
+          msg.hidden=false; msg.className='notify-msg ok';
+          msg.textContent=data.already?'כבר רשומים! נעדכן בוואטסאפ ברגע שיחזור 💛':'רשמנו! נעדכן אתכם בוואטסאפ ברגע שיחזור למלאי 💛';
+        }else{
+          msg.hidden=false; msg.className='notify-msg err';
+          msg.textContent=data.error==='bad_phone'?'מספר לא תקין (05X-XXXXXXX)':'לא הצלחנו לרשום כרגע, נסו שוב או כתבו לנו בוואטסאפ';
+          b.disabled=false; b.textContent='שלחו לי';
+        }
+      }catch(e){
+        msg.hidden=false; msg.className='notify-msg err'; msg.textContent='תקלת רשת, נסו שוב';
+        b.disabled=false; b.textContent='שלחו לי';
+      }
+    };
+  });
+}
+
 function calcD(s){if(ful()==='pickup')return 0;if(s<=0||s>=FREE)return 0;return FEE;}
 function leadDaysVal(){return Math.max(0,parseInt(orderSettings.leadDays,10)||0);}
 // ===== Custom availability calendar =====
@@ -477,6 +548,7 @@ function render(){
       const sold=avail<=0;
       qtyHtml='<div class="qty"'+(sold?' style="opacity:.45"':'')+'><span class="ql">כמות'+(sold?' · אזל':'')+'</span>'+(sold?'':buildQtyRow(p.id,''))+'</div>';
     }
+    if(isSoldOutProduct(p)) qtyHtml+=notifyBlock(p);
     const kbadge = p.kosher === 'חלבי' ? '<span class="kbadge dairy">חלבי</span>'
       : (p.kosher === 'פרווה' ? '<span class="kbadge parve">פרווה</span>'
       : (p.kosher === 'חלבי ופרווה' ? '<span class="kbadge mixed">חלבי ופרווה</span>' : ''));
@@ -489,6 +561,7 @@ function render(){
     return '<article class="product" data-id="'+p.id+'"><div class="pi has"><img src="'+p.img+'" alt="'+p.name+'" oncontextmenu="return false" draggable="false"><span class="copyr">© Carmel De-vries · כל הזכויות שמורות</span></div><div class="pb"><div class="pn">'+p.name+kbadge+stockBadge+'</div><div class="pd">'+p.desc+'</div><div class="pr">'+priceHtml+'<div class="pu">'+formatUnit(p)+'</div></div>'+qtyHtml+(p.minNote?'<div class="mn">'+p.minNote+'</div>':'')+'</div></article>';
   }).join('');
 
+  bindNotifyButtons();
   $$('.qb').forEach(b=>{
     b.onclick=()=>{
       const id=b.dataset.id,flav=b.dataset.flav||'',act=b.dataset.act;
