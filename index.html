@@ -286,6 +286,14 @@ const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
 const fmt=n=>Math.round(n).toLocaleString('he-IL');
 const FEE=10,FREE=150;
+// טלפון נייד ישראלי תקין -> "05XXXXXXXX"; אחרת "" . מקבל 050-1234567 / +972 50 123 4567 / 972501234567 / 501234567 (בלי 0 מוביל).
+function normalizeIlMobile(p){
+  var d=String(p||'').replace(/\D/g,'');
+  if(d.indexOf('972')===0) d='0'+d.slice(3);
+  if(d.length===9 && d.charAt(0)==='5') d='0'+d;
+  return /^05\d{8}$/.test(d) ? d : '';
+}
+
 
 // Auto-format unit text so admin can enter just a number ("12") and it shows
 // as "מארז של 12 יח׳". Empty + minOrder → "ליחידה". Otherwise show whatever
@@ -573,7 +581,7 @@ function buildOrderObj(){
   return {
     customer:{
       name:$('#cust-name').value.trim(),
-      phone:$('#cust-phone').value.trim(),
+      phone:normalizeIlMobile($('#cust-phone').value.trim())||$('#cust-phone').value.trim(),
       address:$('#cust-address').value.trim(),
       notes:$('#cust-notes').value.trim()
     },
@@ -609,6 +617,7 @@ function send(){
   const need=[];
   if(!_name)need.push(['#cust-name','שם מלא']);
   if(!_phone)need.push(['#cust-phone','טלפון']);
+  else if(!normalizeIlMobile(_phone))need.push(['#cust-phone','טלפון נייד ישראלי תקין (05X-XXXXXXX)']);
   if(!_date)need.push(['#date-display','תאריך מבוקש']);
   if(_del&&!_addr)need.push(['#cust-address','כתובת למשלוח']);
   $$('.inv').forEach(e=>e.classList.remove('inv'));

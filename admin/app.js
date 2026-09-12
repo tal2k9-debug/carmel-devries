@@ -326,6 +326,13 @@ function orderToRow(o){ return [o.id, o.customerId, o.name, o.phone, o.address, 
 // Israeli phone -> wa.me format (972XXXXXXXXX): handles leading 0 and 9-digit (no-0) forms.
 // תאריך+שעה בשעון ישראל מתוך ISO (למשל 2026-09-11T05:57:04.696Z -> 11.09.2026 08:57)
 function fmtDateTime(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN(d)) return esc(String(iso)); try{ return d.toLocaleString('he-IL',{timeZone:'Asia/Jerusalem',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }catch(e){ return esc(String(iso)); } }
+// טלפון נייד ישראלי תקין -> "05XXXXXXXX"; אחרת "" . מקבל 050-1234567 / +972 50 123 4567 / 972501234567 / 501234567 (בלי 0 מוביל).
+function normalizeIlMobile(p){
+  var d=String(p||'').replace(/\D/g,'');
+  if(d.indexOf('972')===0) d='0'+d.slice(3);
+  if(d.length===9 && d.charAt(0)==='5') d='0'+d;
+  return /^05\d{8}$/.test(d) ? d : '';
+}
 function waPhone(p){ let d=String(p||'').replace(/\D/g,''); if(d.startsWith('972'))return d; if(d.startsWith('0'))return '972'+d.slice(1); if(d.length===9)return '972'+d; return d; }
 const PAYMENT_METHODS = ['מזומן','ביט','העברה בנקאית','אשראי','צ׳ק','אחר'];
 function rowToExp(r){ return {id:r[0]||'', date:r[1]||'', category:r[2]||'', description:r[3]||'', amount:parseFloat(r[4])||0, vendor:r[5]||''}; }
@@ -813,8 +820,9 @@ async function saveCust() {
   const name=document.getElementById('cName').value.trim();
   const phone=document.getElementById('cPhone').value.trim();
   if(!name||!phone){toast('שם וטלפון חובה','err');return;}
+  const phoneN=normalizeIlMobile(phone); if(!phoneN){toast('טלפון נייד ישראלי לא תקין (05X-XXXXXXX)','err');return;}
   const c = editingCustId ? db.customers.find(x=>x.id===editingCustId) : {id:uid('c'),createdAt:new Date().toISOString(),lastOrder:''};
-  c.name=name; c.phone=phone;
+  c.name=name; c.phone=phoneN;
   c.address=document.getElementById('cAddr').value.trim();
   c.allergies=document.getElementById('cAllergy').value.trim();
   c.notes=document.getElementById('cNotes').value.trim();
@@ -851,7 +859,9 @@ function renderCalendar() {
 /* ============ NEW ORDER ============ */
 async function saveNewOrder() {
   const name=document.getElementById('oName').value.trim();
-  const phone=document.getElementById('oPhone').value.trim();
+  const phoneRaw=document.getElementById('oPhone').value.trim();
+  const phone=normalizeIlMobile(phoneRaw)||phoneRaw;
+  if(phoneRaw&&!normalizeIlMobile(phoneRaw)){toast('טלפון נייד ישראלי לא תקין (05X-XXXXXXX)','err');return;}
   // structured picked items — snapshot now (the form is cleared before the async save/decrement)
   const picked=pickedItems.filter(it=>(parseInt(it.qty)||0)>0).map(x=>({...x}));
   const items=pickedItemsText();

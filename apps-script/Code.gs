@@ -47,6 +47,16 @@ var DELIVERY_FEE = 10;
 var DELIVERY_FREE_FROM = 150;
 var DELIVERY_ITEM_NAME = 'משלוח באופקים';
 
+// טלפון נייד ישראלי תקין -> "05XXXXXXXX"; אחרת "". מקבל 050-1234567 / +972 50 123 4567 / 501234567 (בלי 0 מוביל).
+// זהות הלקוח = הטלפון, לכן טעות הקלדה = "לקוח" נוסף; מכאן ההקשחה (החלטת טל 12.09).
+function normalizeIlMobile_(p) {
+  var d = String(p || '').replace(/\D/g, '');
+  if (d.indexOf('972') === 0) d = '0' + d.slice(3);
+  if (d.length === 9 && d.charAt(0) === '5') d = '0' + d;
+  return /^05\d{8}$/.test(d) ? d : '';
+}
+
+
 // מחזיר עותק של הפריטים עם שורת משלוח כשרלוונטי (משלוח, סכום מוצרים בין 0 ל-150, ואין כבר שורה כזו).
 function withDeliveryLine_(order) {
   var items = (order.items || []).slice();
@@ -90,6 +100,10 @@ function doPost(e) {
   if (!String(c0.name || '').trim() || String(c0.phone || '').replace(/\D/g, '').length < 9) {
     return json({ ok: false, error: 'bad_order' });
   }
+  // רק נייד ישראלי תקין; נשמר מנורמל (05XXXXXXXX) כדי שטלפון = זהות לקוח אחת
+  var ph0 = normalizeIlMobile_(c0.phone);
+  if (!ph0) return json({ ok: false, error: 'bad_phone' });
+  c0.phone = ph0;
   if (!its0.length || its0.length > 40) return json({ ok: false, error: 'bad_order' });
   for (var v0 = 0; v0 < its0.length; v0++) {
     var q0 = parseInt(its0[v0].qty, 10) || 0;
@@ -380,6 +394,8 @@ function appendOrder(ss, order, now) {
     '0', '', // paid=false, paymentMethod=blank — set later by Keren in dashboard
     total, itemsJSON, '' // receiptUrl — filled by the bot once the receipt is issued
   ]);
+  // הטלפון כטקסט, כדי שה-0 המוביל לא ייעלם (הגיליון הופך "0526…" למספר)
+  try { sheet.getRange(sheet.getLastRow(), 4).setNumberFormat('@').setValue(String(c.phone || '')); } catch (e) {}
 }
 
 // Create or update a customer card by phone. Returns the customer id (or '').
@@ -405,6 +421,7 @@ function upsertCustomer(ss, order, now) {
     var cid = 'c-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
     // Customers cols: id,name,phone,address,allergies,notes,createdAt,lastOrder
     sheet.appendRow([cid, c.name || '', c.phone || '', c.address || '', '', c.notes || '', now, now]);
+    try { sheet.getRange(sheet.getLastRow(), 3).setNumberFormat('@').setValue(String(c.phone || '')); } catch (e) {}
     return cid;
   } catch (err) { return ''; }
 }
