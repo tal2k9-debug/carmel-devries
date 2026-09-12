@@ -72,6 +72,10 @@ function doPost(e) {
   if (payload && payload.action === 'save_receipt') {
     return saveReceipt(payload);
   }
+  // תחזוקה: בנייה מחדש של מאגר הלקוחות מההזמנות (טלפון = זהות). דורש את סוד הבוט. תומך dryRun.
+  if (payload && payload.action === 'rebuild_customers') {
+    return rebuildCustomers_(payload);
+  }
 
   // --- הגנות בסיסיות על קליטת הזמנה (ספאם/זבל) ---
   // Honeypot: שדה נסתר שאדם אמיתי לא רואה ולא ממלא. בוט שמילא אותו מקבל
@@ -422,6 +426,78 @@ function saveReceipt(payload) {
     }
     return json({ ok: false, error: 'order_not_found' });
   } catch (err) { return json({ ok: false, error: 'exception', message: String(err) }); }
+}
+
+
+// --- מאגר לקוחות: טלפון = זהות ---
+// בונה מחדש את לשונית Customers מתוך ההזמנות: לקוח אחד לכל מספר טלפון (9 ספרות אחרונות),
+// שומר לקוחות קיימים אמיתיים (עם אלרגיות/הערות), זורק שורות זבל (בלי טלפון ובלי מזהה),
+// ומיישר את customerId בכל הזמנה. לפני שכתוב — גיבוי הלשונית הנוכחית ללשונית Customers_bak_<תאריך>.
+// חישוב טהור (ניתן לבדיקה): מחזיר {list, junk, kept, orderUpdates}
+function computeCustomers_(orders, custRows) {
+  function key(p) { var d = String(p || '').replace(/\D/g, ''); return d ? d.slice(-9) : ''; }
+  var byKey = {}, junk = 0, kept = 0;
+  (custRows || []).forEach(function (c) {
+    var k = key(c.phone);
+    var realId = /^c-\d+/.test(String(c.id || ''));
+    if (!k && !realId) { junk++; return; }
+    var kk = k || ('id:' + c.id);
+    if (byKey[kk]) { junk++; return; } // כפילות של אותו טלפון — שומרים את הראשון
+    byKey[kk] = { id: c.id || '', name: c.name || '', phone: c.phone || '', address: c.address || '', allergies: c.allergies || '', notes: c.notes || '', createdAt: c.createdAt || '', lastOrder: c.lastOrder || '' };
+    kept++;
+  });
+  var sorted = (orders || []).slice().sort(function (a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
+  var usedIds = {}; Object.keys(byKey).forEach(function (k) { if (byKey[k].id) usedIds[byKey[k].id] = true; });
+  var orderUpdates = [];
+  sorted.forEach(function (o) {
+    var k = key(o.phone); if (!k) return;
+    var c = byKey[k];
+    if (!c) {
+      var oid = String(o.customerId || '');
+      var id = (/^c-\d+/.test(oid) && !usedIds[oid]) ? oid : ('c-' + Date.now() + '-' + Math.floor(Math.random() * 100000));
+      usedIds[id] = true;
+      c = { id: id, name: o.name || '', phone: o.phone || '', address: o.address || '', allergies: '', notes: '', createdAt: o.createdAt || '', lastOrder: o.createdAt || '' };
+      byKey[k] = c;
+    } else {
+      if (!c.id) { c.id = 'c-' + Date.now() + '-' + Math.floor(Math.random() * 100000); usedIds[c.id] = true; }
+      if (!c.name && o.name) c.name = o.name;
+      if (!c.address && o.address) c.address = o.address;
+      if (!c.createdAt) c.createdAt = o.createdAt || '';
+      if (String(o.createdAt || '') > String(c.lastOrder || '')) c.lastOrder = o.createdAt;
+    }
+    if (String(o.customerId || '') !== c.id) orderUpdates.push({ id: o.id, customerId: c.id });
+  });
+  var list = Object.keys(byKey).map(function (k) { return byKey[k]; })
+    .sort(function (a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
+  return { list: list, junk: junk, kept: kept, orderUpdates: orderUpdates };
+}
+
+function rebuildCustomers_(payload) {
+  if (!botSecretOk_(payload.secret)) return json({ ok: false, error: 'unauthorized' });
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var os = ss.getSheetByName('Orders'), cs = ss.getSheetByName('Customers');
+  if (!os || !cs) return json({ ok: false, error: 'no_sheet' });
+  var res = computeCustomers_(sheetObjects_(os, true), sheetObjects_(cs, false));
+  var summary = { customers: res.list.length, junkRows: res.junk, keptExisting: res.kept, orderUpdates: res.orderUpdates.length };
+  if (payload.dryRun) { summary.dryRun = true; summary.sample = res.list.slice(0, 5); return json(Object.assign({ ok: true }, summary)); }
+  var bakName = 'Customers_bak_' + Utilities.formatDate(new Date(), 'Asia/Jerusalem', 'yyyyMMdd_HHmm');
+  cs.copyTo(ss).setName(bakName);
+  var hdr = ['id', 'name', 'phone', 'address', 'allergies', 'notes', 'createdAt', 'lastOrder'];
+  var out = [hdr].concat(res.list.map(function (c) { return [c.id, c.name, c.phone, c.address, c.allergies || '', c.notes || '', c.createdAt || '', c.lastOrder || '']; }));
+  cs.clearContents();
+  cs.getRange(1, 1, out.length, hdr.length).setValues(out);
+  var od = os.getDataRange().getValues();
+  var oh = od[0].map(function (h) { return String(h).trim(); });
+  var idC = oh.indexOf('id'); if (idC === -1) idC = 0;
+  var cidC = oh.indexOf('customerId'); if (cidC === -1) cidC = 1;
+  var updated = 0;
+  res.orderUpdates.forEach(function (u) {
+    for (var r = 1; r < od.length; r++) {
+      if (String(od[r][idC]) === String(u.id)) { os.getRange(r + 1, cidC + 1).setValue(u.customerId); updated++; break; }
+    }
+  });
+  summary.orderUpdates = updated; summary.backup = bakName;
+  return json(Object.assign({ ok: true }, summary));
 }
 
 // "name:qty|name:qty"  (legacy "name|name" → each flavor inherits productQty)

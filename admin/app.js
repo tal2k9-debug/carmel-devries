@@ -324,6 +324,8 @@ function custToRow(c){ return [c.id, c.name, c.phone, c.address, c.allergies, c.
 function rowToOrder(r){ return {id:r[0]||'', customerId:r[1]||'', name:r[2]||'', phone:r[3]||'', address:r[4]||'', fulfillment:r[5]||'pickup', date:r[6]||'', items:r[7]||'', notes:r[8]||'', status:r[9]||'new', createdAt:r[10]||'', updatedAt:r[11]||'', paid:(r[12]==='1'||r[12]===1||r[12]===true||String(r[12]).toLowerCase()==='true'), paymentMethod:r[13]||'', total:r[14]||'', receiptUrl:r[16]||''}; }
 function orderToRow(o){ return [o.id, o.customerId, o.name, o.phone, o.address, o.fulfillment, o.date, o.items, o.notes, o.status, o.createdAt, o.updatedAt, o.paid?'1':'0', o.paymentMethod||'']; }
 // Israeli phone -> wa.me format (972XXXXXXXXX): handles leading 0 and 9-digit (no-0) forms.
+// תאריך+שעה בשעון ישראל מתוך ISO (למשל 2026-09-11T05:57:04.696Z -> 11.09.2026 08:57)
+function fmtDateTime(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN(d)) return esc(String(iso)); try{ return d.toLocaleString('he-IL',{timeZone:'Asia/Jerusalem',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }catch(e){ return esc(String(iso)); } }
 function waPhone(p){ let d=String(p||'').replace(/\D/g,''); if(d.startsWith('972'))return d; if(d.startsWith('0'))return '972'+d.slice(1); if(d.length===9)return '972'+d; return d; }
 const PAYMENT_METHODS = ['מזומן','ביט','העברה בנקאית','אשראי','צ׳ק','אחר'];
 function rowToExp(r){ return {id:r[0]||'', date:r[1]||'', category:r[2]||'', description:r[3]||'', amount:parseFloat(r[4])||0, vendor:r[5]||''}; }
@@ -698,8 +700,12 @@ function showOrder(id) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
       <div><strong>שם:</strong> ${esc(o.name)}</div>
       <div><strong>טלפון:</strong> <a href="tel:${esc(o.phone)}">${esc(o.phone)}</a></div>
-      <div><strong>תאריך:</strong> ${esc(o.date)}</div>
-      <div><strong>מסירה:</strong> ${o.fulfillment==='delivery'?'משלוח':'איסוף'}</div>
+      <div><strong>תאריך מבוקש:</strong> ${esc(o.date)||'—'}</div>
+      <div><strong>מסירה:</strong> ${o.fulfillment==='delivery'?'🚚 משלוח':'🏠 איסוף עצמי'}</div>
+      <div><strong>הוזמן ב:</strong> ${fmtDateTime(o.createdAt)}</div>
+      <div><strong>סה״כ:</strong> ₪${Math.round(orderTotal(o))}${o.paymentMethod?' · '+esc(o.paymentMethod):''}</div>
+      <div><strong>מקור:</strong> ${/וואטסאפ/.test(o.notes||'')?'📱 קטלוג וואטסאפ':(/הזמנת אתר/.test(o.notes||'')?'🌐 האתר':'✍️ ידני')}</div>
+      ${o.updatedAt&&o.updatedAt!==o.createdAt?`<div><strong>עודכן:</strong> ${fmtDateTime(o.updatedAt)}</div>`:''}
       ${o.address?`<div style="grid-column:span 2"><strong>כתובת:</strong> ${esc(o.address)}</div>`:''}
     </div>
     <div style="margin-bottom:14px"><strong>פריטים:</strong><br>${esc(o.items).replace(/\n/g,'<br>')}</div>
