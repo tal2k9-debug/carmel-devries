@@ -649,8 +649,8 @@ function kanbanCard(o) {
   if (o.date === today) cls = 'today';
   else if (o.date < today && o.status !== 'delivered') cls = 'urgent';
   const payBadge = o.paid
-    ? `<span style="background:#e8f5e9;color:var(--ok);font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px">₪ שולם${o.paymentMethod?' · '+esc(o.paymentMethod):''}</span>`
-    : `<span style="background:#ffebee;color:var(--err);font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px">₪ חוב פתוח</span>`;
+    ? `<span style="background:#e8f5e9;color:var(--ok);font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px">₪${Math.round(orderTotal(o))} · שולם${o.paymentMethod?' · '+esc(o.paymentMethod):''}</span>`
+    : `<span style="background:#ffebee;color:var(--err);font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px">₪${Math.round(orderTotal(o))} · חוב פתוח</span>`;
   return `<div class="kcard ${cls}" draggable="true" ondragstart="event.dataTransfer.setData('id','${o.id}');this.classList.add('dragging')" ondragend="this.classList.remove('dragging')" onclick="showOrder('${o.id}')">
     <div class="n">${esc(o.name)}</div>
     <div class="d">📅 ${esc(o.date)} · ${o.fulfillment==='delivery'?'🚚 משלוח':'🏠 איסוף'} ${dayTag(o)}</div>
@@ -2830,7 +2830,7 @@ function renderKanban() {
     }
     const sum = ords.reduce((t,o)=>t+orderTotal(o),0);
     return `<div class="kcol" data-status="${s.id}" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dropOrder(event,'${s.id}')">
-      <h3>${s.label} <span><span class="count">${ords.length}</span> <span class="sum">₪${Math.round(sum)}</span></span></h3>
+      <h3>${s.label} <span>${s.id==='delivered' ? `<span class="count" title="מוצגים ${ords.length} מתוך ${hidden+ords.length}">${ords.length} / ${hidden+ords.length}</span>` : `<span class="count">${ords.length}</span> <span class="sum">₪${Math.round(sum)}</span>`}</span></h3>
       ${ords.map(o => kanbanCard(o)).join('')}
       ${s.id==='delivered' ? `<button class="kfoot" onclick="switchTab('history')">🗂️ היסטוריה מלאה (${hidden + ords.length})</button>` : ''}
     </div>`;
