@@ -333,6 +333,8 @@ function normalizeIlMobile(p){
   if(d.length===9 && d.charAt(0)==='5') d='0'+d;
   return /^05\d{8}$/.test(d) ? d : '';
 }
+// טלפון לתצוגה: 052-644-6814 (נייד), 03-123-4567 (קווי); אחרת כמו שהוא
+function fmtPhone(p){ const m=normalizeIlMobile(p); if(m) return m.slice(0,3)+'-'+m.slice(3,6)+'-'+m.slice(6); let d=String(p||'').replace(/D/g,''); if(d.indexOf('972')===0) d='0'+d.slice(3); if(d.length===9 && /^0[2-489]/.test(d)) return d.slice(0,2)+'-'+d.slice(2,5)+'-'+d.slice(5); return String(p||''); }
 function waPhone(p){ let d=String(p||'').replace(/\D/g,''); if(d.startsWith('972'))return d; if(d.startsWith('0'))return '972'+d.slice(1); if(d.length===9)return '972'+d; return d; }
 const PAYMENT_METHODS = ['מזומן','ביט','העברה בנקאית','אשראי','צ׳ק','אחר'];
 function rowToExp(r){ return {id:r[0]||'', date:r[1]||'', category:r[2]||'', description:r[3]||'', amount:parseFloat(r[4])||0, vendor:r[5]||''}; }
@@ -655,7 +657,7 @@ function kanbanCard(o) {
     <div class="n">${esc(o.name)}</div>
     <div class="d">📅 ${esc(o.date)} · ${o.fulfillment==='delivery'?'🚚 משלוח':'🏠 איסוף'} ${dayTag(o)}</div>
     <div class="it">${esc(o.items.slice(0,80))}${o.items.length>80?'...':''}</div>
-    <div class="ph">📞 ${esc(o.phone)}</div>
+    <div class="ph">📞 ${esc(fmtPhone(o.phone))}</div>
     <div style="margin-top:6px">${payBadge}${o.receiptUrl?` <span data-rcpt="${o.id}" title="קבלה ללקוח" style="font-size:11px">${rcptBadge(_rcpt[o.id])}</span>`:''}</div>
   </div>`;
 }
@@ -701,7 +703,7 @@ function showOrder(id) {
   document.getElementById('omBody').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
       <div><strong>שם:</strong> ${esc(o.name)}</div>
-      <div><strong>טלפון:</strong> <a href="tel:${esc(o.phone)}">${esc(o.phone)}</a></div>
+      <div><strong>טלפון:</strong> <a href="tel:${esc(o.phone)}">${esc(fmtPhone(o.phone))}</a></div>
       <div><strong>תאריך מבוקש:</strong> ${esc(o.date)||'—'}</div>
       <div><strong>מסירה:</strong> ${o.fulfillment==='delivery'?'🚚 משלוח':'🏠 איסוף עצמי'}</div>
       <div><strong>הוזמן ב:</strong> ${fmtDateTime(o.createdAt)}</div>
@@ -803,7 +805,7 @@ function renderCustomers() {
   document.getElementById('custList').innerHTML = `<table><thead><tr><th>שם</th><th>טלפון</th><th>כתובת</th><th>אלרגיות</th><th>הזמנות</th><th>פעולות</th></tr></thead><tbody>
     ${list.map(c=>{
       const ord = db.orders.filter(o=>o.customerId===c.id).length;
-      return `<tr><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p)"><strong>${esc(c.name)}</strong></a></td><td><a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></td><td>${esc(c.address||'-')}</td><td>${esc(c.allergies||'-')}</td><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p);font-weight:600">${ord} 👁️</a></td><td class="row-actions"><button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="editCust('${c.id}')">ערוך</button><a class="btn btn-s" style="padding:4px 10px;font-size:12px" href="https://wa.me/${c.phone.replace(/\D/g,'')}" target="_blank">📱</a></td></tr>`;
+      return `<tr><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p)"><strong>${esc(c.name)}</strong></a></td><td><a href="tel:${esc(c.phone)}">${esc(fmtPhone(c.phone))}</a></td><td>${esc(c.address||'-')}</td><td>${esc(c.allergies||'-')}</td><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p);font-weight:600">${ord} 👁️</a></td><td class="row-actions"><button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="editCust('${c.id}')">ערוך</button><a class="btn btn-s" style="padding:4px 10px;font-size:12px" href="https://wa.me/${c.phone.replace(/\D/g,'')}" target="_blank">📱</a></td></tr>`;
     }).join('')}</tbody></table>`;
 }
 
@@ -2853,7 +2855,7 @@ function renderHistory(){
   el.innerHTML = `<div class="hist-sum">${list.length} הזמנות · ₪${Math.round(total)}${unpaid?` · <span style="color:var(--err)">${unpaid} חוב פתוח</span>`:''}</div>
   <div style="overflow-x:auto"><table><thead><tr><th>תאריך</th><th>לקוח</th><th>טלפון</th><th>פריטים</th><th>מסירה</th><th>סה״כ</th><th>תשלום</th><th>קבלה</th></tr></thead><tbody>
   ${list.map(o=>`<tr class="hist-row" onclick="showOrder('${o.id}')">
-    <td>${esc(o.date||'—')}</td><td><strong>${esc(o.name)}</strong></td><td>${esc(o.phone)}</td>
+    <td>${esc(o.date||'—')}</td><td><strong>${esc(o.name)}</strong></td><td>${esc(fmtPhone(o.phone))}</td>
     <td style="max-width:320px">${esc((o.items||'').slice(0,70))}${(o.items||'').length>70?'…':''}</td>
     <td>${o.fulfillment==='delivery'?'🚚':'🏠'}</td><td>₪${Math.round(orderTotal(o))}</td>
     <td>${o.paid?`<span style="color:var(--ok);font-weight:600">שולם${o.paymentMethod?' · '+esc(o.paymentMethod):''}</span>`:'<span style="color:var(--err);font-weight:600">חוב פתוח</span>'}</td>
@@ -2871,7 +2873,7 @@ function showCustCard(id){
   document.getElementById('ccTitle').textContent = c.name;
   document.getElementById('ccBody').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-bottom:14px;font-size:14px">
-      <div><strong>טלפון:</strong> <a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></div>
+      <div><strong>טלפון:</strong> <a href="tel:${esc(c.phone)}">${esc(fmtPhone(c.phone))}</a></div>
       <div><strong>כתובת:</strong> ${esc(c.address||'—')}</div>
       <div><strong>אלרגיות:</strong> ${esc(c.allergies||'—')}</div>
       <div><strong>לקוח/ה מאז:</strong> ${first ? fmtDateTime(first).split(',')[0] : '—'}</div>
