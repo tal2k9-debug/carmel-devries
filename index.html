@@ -61,7 +61,7 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .kbadge.parve{background:#eef5ec;color:#4a7a4e}
 .kbadge.dairy{background:#eaf1fa;color:#3f72b0}
 .kbadge.mixed{background:#f1ecf7;color:#6b54a8}
-.a2hs{position:fixed;bottom:16px;right:16px;left:16px;z-index:130;display:flex;align-items:center;gap:10px;background:#2f4034;color:#f4ead7;padding:11px 13px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35);font-family:'Heebo',sans-serif;font-size:14px;opacity:0;transform:translateY(16px);transition:opacity .25s,transform .25s;max-width:460px;margin-inline:auto}
+.a2hs{position:fixed;bottom:calc(var(--fab-b) + 68px);right:16px;left:16px;z-index:130;display:flex;align-items:center;gap:10px;background:#2f4034;color:#f4ead7;padding:11px 13px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35);font-family:'Heebo',sans-serif;font-size:14px;opacity:0;transform:translateY(16px);transition:opacity .25s,transform .25s;max-width:460px;margin-inline:auto}
 .a2hs.in{opacity:1;transform:none}
 .a2hs img{width:38px;height:38px;border-radius:9px;flex:0 0 auto}
 .a2hs-t{flex:1;line-height:1.45}
@@ -114,7 +114,9 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .bt{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--gl);font-weight:600}
 .btw{display:inline-flex;align-items:center;gap:8px;background:#25D366;color:#fff;padding:12px 22px;border-radius:30px;font-weight:600;font-size:15px;border:none;cursor:pointer;font-family:'Heebo',sans-serif}
 .btw svg{width:20px;height:20px;fill:currentColor}
-.fwa{position:fixed;bottom:90px;left:20px;z-index:80;width:58px;height:58px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(37,211,102,.45);animation:p 2.5s infinite}
+body{--fab-b:22px}
+body.cart-open{--fab-b:94px}
+.fwa{position:fixed;bottom:var(--fab-b);left:16px;z-index:80;width:56px;height:56px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(37,211,102,.45);animation:p 2.5s infinite}
 .fwa svg{width:30px;height:30px;fill:#fff}
 @keyframes p{0%{box-shadow:0 0 0 0 rgba(37,211,102,.55)}70%{box-shadow:0 0 0 18px rgba(37,211,102,0)}100%{box-shadow:0 0 0 0 rgba(37,211,102,0)}}
 .os{background:linear-gradient(180deg,#f4ead7,#faf5ec);border-top:1px solid rgba(176,141,87,.2)}
@@ -152,7 +154,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 .cn:hover{color:#fff}
 .cn .ic{width:36px;height:36px;border-radius:50%;background:var(--gold);color:var(--bk);display:flex;align-items:center;justify-content:center;font-size:16px}
 .cr{font-size:12px;color:#7a6a52;margin-top:18px;opacity:.8}
-@media (max-width:600px){.bl{font-size:56px}.fr{grid-template-columns:1fr}.oc{padding:22px}section{padding:36px 16px}.hero{padding:44px 16px 32px}.st h2{font-size:28px}.fwa{bottom:84px;left:14px;width:52px;height:52px}}
+@media (max-width:600px){.bl{font-size:56px}.fr{grid-template-columns:1fr}.oc{padding:22px}section{padding:36px 16px}.hero{padding:44px 16px 32px}.st h2{font-size:28px}.fwa{left:14px;width:52px;height:52px}.cad-a11y-btn{right:14px;width:52px;height:52px}body{--fab-b:18px}body.cart-open{--fab-b:88px}}
 /* ===== custom availability calendar ===== */
 .date-display{width:100%;text-align:right;padding:12px 14px;border:1px solid #e0c9a6;border-radius:10px;background:#fff;font-size:15px;color:#3a2f1f;cursor:pointer;font-family:inherit}
 .date-display.has{font-weight:600}
@@ -675,6 +677,7 @@ function upd(){
   const dl=calcD(sub),tot=sub+dl;
   try{window.caCartSub=sub;}catch(e){}
   $('#bar').classList.toggle('vis',sub>0);
+  document.body.classList.toggle('cart-open',sub>0);
   $('#sc').textContent=cnt+' פריטים';$('#st').textContent=fmt(tot);
   const lst=$('#ol-lines');
   if(!lines.length){lst.innerHTML='<div class="oli em">עדיין לא נבחרו פריטים</div>';$('#osl').style.display='none';$('#odl').style.display='none';}
@@ -989,9 +992,9 @@ document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ loadPr
 <style>
 .cad-skip{position:fixed;top:-60px;right:12px;z-index:100001;background:#1a1612;color:#fff;padding:10px 16px;border-radius:0 0 10px 10px;text-decoration:none;font:600 15px/1 Heebo,Arial,sans-serif;transition:top .2s}
 .cad-skip:focus{top:0;outline:3px solid #f0c67a}
-.cad-a11y-btn{position:fixed;bottom:90px;right:20px;z-index:100000;width:56px;height:56px;border-radius:50%;border:none;background:#1a1612;color:#fff;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1}
+.cad-a11y-btn{position:fixed;bottom:var(--fab-b);right:16px;z-index:100000;width:56px;height:56px;border-radius:50%;border:none;background:#1a1612;color:#fff;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1}
 .cad-a11y-btn:focus-visible{outline:3px solid #f0c67a;outline-offset:3px}
-.cad-a11y-panel{position:fixed;bottom:158px;right:20px;z-index:100000;width:272px;max-width:calc(100vw - 40px);background:#fff;color:#1a1612;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.3);padding:14px;font-family:Heebo,Arial,sans-serif;display:none}
+.cad-a11y-panel{position:fixed;bottom:calc(var(--fab-b) + 68px);right:16px;z-index:100000;width:272px;max-width:calc(100vw - 40px);background:#fff;color:#1a1612;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.3);padding:14px;font-family:Heebo,Arial,sans-serif;display:none}
 .cad-a11y-panel[data-open="1"]{display:block}
 .cad-a11y-panel h2{font-size:16px;margin:0 0 10px;text-align:center;color:#1a1612}
 .cad-a11y-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
