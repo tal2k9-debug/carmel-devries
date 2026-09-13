@@ -139,6 +139,7 @@ async function showApp() {
     await loadGapi();
     await ensureTabs();
     await ensureProductColumns();
+    await ensureCustomerColumns();
     await syncAll();
     setSync('ok', 'מסונכרן');
   } catch (e) {
@@ -230,6 +231,20 @@ async function ensureProductColumns() {
   } catch(e){ console.warn('ensureProductColumns', e); }
 }
 
+// עמודות רשימת העדכונים בלשונית Customers (I=updatesAt, J=updatesSource) — יצירת כותרות בלבד, רק אם I/J ריקות.
+async function ensureCustomerColumns() {
+  try {
+    const hdr = (await readRange('Customers!1:1'))[0] || [];
+    if (hdr.indexOf('updatesAt') === -1 && !hdr[8] && !hdr[9]) {
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID, range: 'Customers!I1:J1', valueInputOption: 'RAW',
+        resource: {values: [['updatesAt','updatesSource']]}
+      });
+      console.log('[Carmel] added updatesAt/updatesSource columns (I:J) to Customers');
+    }
+  } catch(e){ console.warn('ensureCustomerColumns', e); }
+}
+
 async function readRange(range) {
   const r = await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:SHEET_ID, range});
   return r.result.values || [];
@@ -260,7 +275,7 @@ async function syncAll() {
   setSync('syncing', 'מסנכרן...');
   try {
     const [cust, ord, exp, rec, prod, setg, wl] = await Promise.all([
-      readRange('Customers!A2:H'),
+      readRange('Customers!A2:J'), // עד J: כולל updatesAt (I) + updatesSource (J) — רשימת העדכונים בוואטסאפ
       readRange('Orders!A2:Q'), // עד Q: כולל total (O), itemsJSON (P), receiptUrl (Q) — לפני כן נטענו רק 14 עמודות והקבלות לא הוצגו
       readRange('Expenses!A2:F').catch(()=>[]),
       readRange('Recipes!A2:H').catch(()=>[]),
@@ -322,7 +337,8 @@ function loadCache() {
 function saveCache(){ localStorage.setItem(CACHE_KEY, JSON.stringify(db)); }
 
 function rowToWait(r){ return {id:r[0]||'', productId:r[1]||'', productName:r[2]||'', phone:r[3]||'', name:r[4]||'', createdAt:r[5]||'', notifiedAt:r[6]||'', status:r[7]||''}; }
-function rowToCust(r){ return {id:r[0]||'', name:r[1]||'', phone:r[2]||'', address:r[3]||'', allergies:r[4]||'', notes:r[5]||'', createdAt:r[6]||'', lastOrder:r[7]||''}; }
+function rowToCust(r){ return {id:r[0]||'', name:r[1]||'', phone:r[2]||'', address:r[3]||'', allergies:r[4]||'', notes:r[5]||'', createdAt:r[6]||'', lastOrder:r[7]||'', updatesAt:r[8]||'', updatesSource:r[9]||''}; }
+// custToRow נשאר 8 עמודות (A:H) בכוונה — עריכת לקוח לא נוגעת באישור העדכונים (I:J).
 function custToRow(c){ return [c.id, c.name, c.phone, c.address, c.allergies, c.notes, c.createdAt, c.lastOrder]; }
 function rowToOrder(r){ return {id:r[0]||'', customerId:r[1]||'', name:r[2]||'', phone:r[3]||'', address:r[4]||'', fulfillment:r[5]||'pickup', date:r[6]||'', items:r[7]||'', notes:r[8]||'', status:r[9]||'new', createdAt:r[10]||'', updatedAt:r[11]||'', paid:(r[12]==='1'||r[12]===1||r[12]===true||String(r[12]).toLowerCase()==='true'), paymentMethod:r[13]||'', total:r[14]||'', receiptUrl:r[16]||''}; }
 function orderToRow(o){ return [o.id, o.customerId, o.name, o.phone, o.address, o.fulfillment, o.date, o.items, o.notes, o.status, o.createdAt, o.updatedAt, o.paid?'1':'0', o.paymentMethod||'']; }
@@ -596,7 +612,8 @@ function renderToday() {
     {l:'היום', v:todayOrd.length, s:todayOrd.length?'🔥':'', cls: todayOrd.length?'urgent':''},
     {l:'מחר', v:tomorrowOrd.length, s:''},
     {l:'הכנסות החודש', v:'₪'+Math.round(monthRev), s:'', cls:'good'},
-    {l:'סה״כ לקוחות', v:db.customers.length, s:''}
+    {l:'סה״כ לקוחות', v:db.customers.length, s:''},
+    {l:'מאושרים לעדכונים', v:optinCustomers().length, s:'💛'}
   ];
   document.getElementById('kpis').innerHTML = kp.map(k=>`<div class="kpi ${k.cls||''}"><div class="lab">${k.l}</div><div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
 
@@ -831,13 +848,15 @@ async function getSheetId(name) {
 
 /* ============ CUSTOMERS ============ */
 function renderCustomers() {
+  renderUpdCount();
   const q = (document.getElementById('custSearch')?.value||'').toLowerCase();
   const list = db.customers.filter(c => !q || c.name.toLowerCase().includes(q) || c.phone.includes(q));
   if (!list.length) { document.getElementById('custList').innerHTML='<div style="text-align:center;padding:40px;color:var(--mute)">אין לקוחות עדיין</div>'; return; }
-  document.getElementById('custList').innerHTML = `<table><thead><tr><th>שם</th><th>טלפון</th><th>כתובת</th><th>אלרגיות</th><th>הזמנות</th><th>פעולות</th></tr></thead><tbody>
+  document.getElementById('custList').innerHTML = `<table><thead><tr><th>שם</th><th>טלפון</th><th>כתובת</th><th>אלרגיות</th><th title="אישור לקבלת עדכונים בוואטסאפ: תאריך · מקור">עדכונים</th><th>הזמנות</th><th>פעולות</th></tr></thead><tbody>
     ${list.map(c=>{
       const ord = db.orders.filter(o=>o.customerId===c.id).length;
-      return `<tr><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p)"><strong>${esc(c.name)}</strong></a></td><td><a href="tel:${esc(c.phone)}">${esc(fmtPhone(c.phone))}</a></td><td>${esc(c.address||'-')}</td><td>${esc(c.allergies||'-')}</td><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p);font-weight:600">${ord} 👁️</a></td><td class="row-actions"><button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="editCust('${c.id}')">ערוך</button><a class="btn btn-s" style="padding:4px 10px;font-size:12px" href="https://wa.me/${c.phone.replace(/\D/g,'')}" target="_blank">📱</a></td></tr>`;
+      const on = !!String(c.updatesAt||'').trim();
+      return `<tr><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p)"><strong>${esc(c.name)}</strong></a></td><td><a href="tel:${esc(c.phone)}">${esc(fmtPhone(c.phone))}</a></td><td>${esc(c.address||'-')}</td><td>${esc(c.allergies||'-')}</td><td>${updBadge(c)}</td><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p);font-weight:600">${ord} 👁️</a></td><td class="row-actions"><button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="editCust('${c.id}')">ערוך</button><button class="btn btn-s" style="padding:4px 10px;font-size:12px" title="${on?'הסרה מרשימת העדכונים':'סימון כמאושר/ת לעדכונים (רק אם ביקש/ה)'}" onclick="setCustomerUpdates('${c.id}',${on?'false':'true'})">${on?'🔕':'💛'}</button><a class="btn btn-s" style="padding:4px 10px;font-size:12px" href="https://wa.me/${c.phone.replace(/\D/g,'')}" target="_blank">📱</a></td></tr>`;
     }).join('')}</tbody></table>`;
 }
 
@@ -2909,6 +2928,7 @@ function showCustCard(id){
       <div><strong>כתובת:</strong> ${esc(c.address||'—')}</div>
       <div><strong>אלרגיות:</strong> ${esc(c.allergies||'—')}</div>
       <div><strong>לקוח/ה מאז:</strong> ${first ? fmtDateTime(first).split(',')[0] : '—'}</div>
+      <div><strong>עדכונים בוואטסאפ:</strong> ${c.updatesAt?'💛 מאושר/ת מ-'+fmtDay(c.updatesAt)+' ('+esc(updSourceLabel(c.updatesSource))+')':'לא מאושר/ת'}</div>
       ${c.notes?`<div style="grid-column:span 2;background:#fff3e0;padding:8px 10px;border-radius:8px"><strong>הערות:</strong> ${esc(c.notes)}</div>`:''}
     </div>
     <div class="ccstats">
@@ -2959,4 +2979,91 @@ function showWaiters(productId){
        <div style="margin-top:12px;font-size:13px;color:var(--mute)">ההודעה נשלחת אוטומטית ברגע שהכמות תעודכן מעל 0 והמוצר מפורסם.</div>`
     : '<div style="text-align:center;padding:30px;color:var(--mute)">אין ממתינים למוצר הזה</div>';
   document.getElementById('waitModal').classList.add('show');
+}
+
+/* ============ עדכונים בוואטסאפ למאושרים ============ */
+// מי אישר/ה: עמודות I/J בלשונית Customers (updatesAt, updatesSource). נכנסים לרשימה רק ביוזמת הלקוח —
+// תיבת הסימון בהזמנה באתר, "כן" בוואטסאפ ל-054 — או בסימון של קרן כאן. "הסר" בוואטסאפ מוציא מהרשימה לבד.
+// השליחה עצמה: הבוט בשרת (תבנית "עדכון" מאושרת ב-Meta), רק בלחיצה של קרן, לא יותר מפעם בשבוע. שום שליחה אוטומטית.
+function optinCustomers(){ return (db.customers||[]).filter(c => String(c.updatesAt||'').trim()); }
+function fmtDay(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN(d)) return esc(String(iso).slice(0,10)); try{ return d.toLocaleDateString('he-IL',{timeZone:'Asia/Jerusalem',day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){ return esc(String(iso).slice(0,10)); } }
+function updSourceLabel(s){ return ({site:'אתר',whatsapp:'וואטסאפ',dashboard:'קרן'})[s]||(s||''); }
+function updBadge(c){ return String(c.updatesAt||'').trim() ? `<span class="upd-badge on" title="מקור: ${esc(updSourceLabel(c.updatesSource))}">💛 ${fmtDay(c.updatesAt)} · ${esc(updSourceLabel(c.updatesSource))}</span>` : '<span class="upd-badge">—</span>'; }
+function renderUpdCount(){ const el=document.getElementById('updCount'); if(el) el.textContent='💛 '+optinCustomers().length+' מאושרים לעדכונים'; }
+async function setCustomerUpdates(id, on){
+  const idx = db.customers.findIndex(x=>x.id===id); if (idx<0) return;
+  const c = db.customers[idx];
+  if (!confirm(on ? 'לסמן את '+c.name+' כמאושר/ת לקבלת עדכונים בוואטסאפ?\n(רק אם ביקש/ה במפורש)' : 'להסיר את '+c.name+' מרשימת העדכונים?')) return;
+  const ok = await ensureToken();
+  if (!(ok && accessToken)) { alert('ההתחברות לגוגל פגה — רענני (F5) והתחברי מחדש.'); return; }
+  const now = new Date().toISOString();
+  try {
+    setSync('syncing','שומר...');
+    await gapi.client.sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: 'Customers!I'+(idx+2)+':J'+(idx+2), valueInputOption:'RAW', resource:{ values:[ on ? [now,'dashboard'] : ['',''] ] } });
+    c.updatesAt = on ? now : ''; c.updatesSource = on ? 'dashboard' : '';
+    saveCache(); renderCustomers(); setSync('ok','מסונכרן'); toast(on?'סומן/ה כמאושר/ת לעדכונים':'הוסר/ה מרשימת העדכונים','ok');
+  } catch(e){ console.error('setCustomerUpdates', e); setSync('err','שגיאה'); toast('לא נשמר','err'); }
+}
+
+// ── שליחת "עדכון" (דרך הבוט) ──
+// המסגרת הקבועה = בדיוק גוף התבנית "carmel_update_v1" שאושרה ב-Meta. הטקסט של קרן נכנס במקום {{2}}.
+function bcFrame(name, text){ return 'היי '+name+' 💛\nעדכון מקרן אפייה ביתית:\n'+text+'\nלהזמנות באתר: carmeldevries.co.il\nלהפסקת העדכונים השיבו "הסר"'; }
+function bcClean(t){ return String(t||'').replace(/\r/g,'').replace(/\s*\n+\s*/g,' ').replace(/\t/g,' ').replace(/ {2,}/g,' ').trim(); }
+let bcStatus = null;
+async function bcFetchStatus(){
+  const r = await fetch(RECEIPT_API + '/broadcast/status', { headers: { Authorization: 'Bearer ' + accessToken } });
+  if (!r.ok) throw new Error('status '+r.status);
+  return r.json();
+}
+async function showBroadcast(){
+  document.getElementById('bcCount').textContent = optinCustomers().length;
+  document.getElementById('bcResult').innerHTML = '';
+  document.getElementById('bcStatus').textContent = 'בודק מול הבוט...';
+  document.getElementById('bcSend').disabled = true;
+  bcPreview();
+  document.getElementById('bcModal').classList.add('show');
+  const ok = await ensureToken();
+  if (!(ok && accessToken)) { document.getElementById('bcStatus').textContent = 'ההתחברות לגוגל פגה — רענני (F5) והתחברי מחדש.'; return; }
+  try { bcStatus = await bcFetchStatus(); } catch(e) { document.getElementById('bcStatus').textContent = 'הבוט לא זמין כרגע ('+e.message+'). נסי שוב בעוד דקה.'; return; }
+  bcRenderStatus();
+}
+function bcRenderStatus(){
+  const s = bcStatus || {}; const el = document.getElementById('bcStatus'); const btn = document.getElementById('bcSend');
+  const n = optinCustomers().length;
+  const lines = [];
+  if (s.last) lines.push('נשלח לאחרונה: '+fmtDateTime(new Date(s.last.at).toISOString())+' · '+(s.last.total||0)+' נמענים · הגיעו '+(s.last.sent||0)+(s.last.failed?' · נכשלו '+s.last.failed:'')+(s.last.pending?' · בדרך '+s.last.pending:''));
+  else lines.push('עדיין לא נשלח אף עדכון.');
+  if (s.template !== 'approved') lines.push('⏳ התבנית "עדכון" עדיין לא אושרה ב-Meta ('+(s.template||'?')+'). אפשר להכין טקסט; השליחה תיפתח כשתאושר.');
+  else if (Date.now() < (s.nextAllowedAt||0)) lines.push('🔒 נעילה שבועית: אפשר לשלוח שוב ב-'+fmtDateTime(new Date(s.nextAllowedAt).toISOString()));
+  else if (!n) lines.push('אין עדיין מאושרים — אין למי לשלוח.');
+  else lines.push('✅ אפשר לשלוח עכשיו ל-'+n+' מאושרים.');
+  el.innerHTML = lines.map(l=>'<div>'+esc(l)+'</div>').join('');
+  btn.disabled = !(s.canSend && n);
+}
+function bcPreview(){
+  const t = bcClean(document.getElementById('bcText').value);
+  document.getElementById('bcLen').textContent = t.length + ' / 700';
+  document.getElementById('bcPreview').textContent = bcFrame('שרה', t || '(כאן יופיע הטקסט שלך)');
+}
+async function bcSend(){
+  const t = bcClean(document.getElementById('bcText').value);
+  if (t.length < 10) { toast('הטקסט קצר מדי','err'); return; }
+  if (t.length > 700) { toast('הטקסט ארוך מדי (עד 700 תווים)','err'); return; }
+  const n = optinCustomers().length;
+  if (!confirm('לשלוח את העדכון עכשיו ל-'+n+' לקוחות מאושרים?\nאי אפשר לבטל אחרי השליחה, והשליחה הבאה תיפתח רק בעוד שבוע.')) return;
+  const btn = document.getElementById('bcSend'); btn.disabled = true; btn.textContent = 'שולח...';
+  try {
+    const r = await fetch(RECEIPT_API + '/broadcast', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+accessToken }, body: JSON.stringify({ text: t }) });
+    const d = await r.json().catch(()=>({}));
+    if (d.ok) {
+      document.getElementById('bcResult').innerHTML = '<div style="color:var(--ok);font-weight:600">📣 יצא לדרך: '+d.queued+' מתוך '+d.total+' בתור לשליחה'+(d.failed?' · '+d.failed+' נכשלו':'')+'. סטטוס המסירה מתעדכן כאן בדקות הקרובות.</div>';
+      document.getElementById('bcText').value=''; bcPreview();
+      let tries=0; const iv=setInterval(async()=>{ tries++; try{ bcStatus=await bcFetchStatus(); bcRenderStatus(); }catch(e){} if(tries>=12) clearInterval(iv); }, 10000);
+    } else {
+      const msg = ({too_soon:'נעילה שבועית — עדיין מוקדם לשלוח שוב', template_not_approved:'התבנית עדיין לא אושרה ב-Meta', no_template:'התבנית לא מוגדרת בבוט', no_recipients:'אין מאושרים', too_many:'יותר מדי נמענים לשליחה אחת', sheet_unreachable:'הגיליון לא נגיש כרגע (הסקריפט לא עודכן?)', text_too_short:'הטקסט קצר מדי', text_too_long:'הטקסט ארוך מדי', unauthorized:'אין הרשאה'})[d.error] || (d.error||('שגיאה '+r.status));
+      document.getElementById('bcResult').innerHTML = '<div style="color:var(--err);font-weight:600">לא נשלח: '+esc(msg)+'</div>';
+    }
+  } catch(e){ document.getElementById('bcResult').innerHTML = '<div style="color:var(--err)">תקלת רשת: '+esc(e.message)+'</div>'; }
+  btn.textContent = '📣 שליחה למאושרים';
+  try { bcStatus = await bcFetchStatus(); bcRenderStatus(); } catch(e){ btn.disabled=false; }
 }

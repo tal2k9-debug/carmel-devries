@@ -100,6 +100,10 @@ function doPost(e) {
   if (payload && payload.action === 'waitlist_delete') {
     return waitlistDelete_(payload);
   }
+  // רשימת "עדכונים בוואטסאפ": הצטרפות/הסרה. הבוט (עם הסוד) כשהלקוח כותב "כן"/"הסר" ל-054.
+  if (payload && payload.action === 'updates_set') {
+    return updatesSet_(payload);
+  }
   // מחיקת הזמנה מהדשבורד: הזמנה שעוד לא נמסרה — הפריטים חוזרים למלאי (כולל לפי טעם). נמסרה — מחיקה בלבד.
   if (payload && payload.action === 'delete_order') {
     return deleteOrder_(payload);
@@ -128,6 +132,8 @@ function doPost(e) {
     if (c0[f]) c0[f] = String(c0[f]).slice(0, 300);
   });
   if (payload.date) payload.date = String(payload.date).slice(0, 20);
+  // תיבת "אשמח לקבל עדכונים" בטופס ההזמנה — אישור מפורש של הלקוח לרשימת העדכונים בוואטסאפ
+  payload.updates = payload.updates === true || payload.updates === 1 || payload.updates === '1';
 
   // בדיקה יבשה: מחזיר את הפריטים והסכום כפי שהיו נרשמים (כולל שורת משלוח) — בלי לכתוב ובלי לגעת במלאי.
   if (payload.dryRun) {
@@ -230,6 +236,7 @@ function doGet(e) {
   if (p.action === 'orders') return getOrders_(p);
   if (p.action === 'settings') return getSettings_();
   if (p.action === 'waitlist') return getWaitlist_(p);
+  if (p.action === 'optins') return getOptins_(p);
   if (p.action === 'backup') return getBackup_(p);
   if (p.action === 'set_secret') return setSecret_(p);
   return json({ ok: true, service: 'carmel-order-intake' });
@@ -415,6 +422,8 @@ function appendOrder(ss, order, now) {
 }
 
 // Create or update a customer card by phone. Returns the customer id (or '').
+// order.updates=true (תיבת "אשמח לקבל עדכונים" באתר) → מסמן אישור בעמודות updatesAt/updatesSource,
+// רק אם עוד לא מאושר. הזמנה לעולם לא מנקה אישור קיים (הסרה = רק "הסר" בוואטסאפ או קרן בדשבורד).
 function upsertCustomer(ss, order, now) {
   try {
     var sheet = ss.getSheetByName('Customers');
@@ -423,6 +432,8 @@ function upsertCustomer(ss, order, now) {
     var phone = String(c.phone || '').replace(/\D/g, '');
     if (!phone) return '';
     var norm = phone.slice(-9); // compare by last 9 digits (handles leading 0 / 972)
+    var wantUpd = !!order.updates;
+    var uc = wantUpd ? customerUpdateCols_(sheet) : null; // מוודא כותרות I/J רק כשצריך לכתוב
     var data = sheet.getDataRange().getValues();
     var hdr = data[0].map(function (h) { return String(h).trim(); });
     var idCol = hdr.indexOf('id'); if (idCol === -1) idCol = 0;
@@ -431,12 +442,18 @@ function upsertCustomer(ss, order, now) {
     for (var r = 1; r < data.length; r++) {
       if (String(data[r][phCol] || '').replace(/\D/g, '').slice(-9) === norm) {
         sheet.getRange(r + 1, loCol + 1).setValue(now); // touch lastOrder
+        if (uc && !String(data[r][uc.at] || '').trim()) {
+          sheet.getRange(r + 1, uc.at + 1).setValue(now);
+          sheet.getRange(r + 1, uc.src + 1).setValue('site');
+        }
         return String(data[r][idCol] || '');
       }
     }
     var cid = 'c-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
-    // Customers cols: id,name,phone,address,allergies,notes,createdAt,lastOrder
-    sheet.appendRow([cid, c.name || '', c.phone || '', c.address || '', '', c.notes || '', now, now]);
+    // Customers cols: id,name,phone,address,allergies,notes,createdAt,lastOrder[,updatesAt,updatesSource]
+    var row = [cid, c.name || '', c.phone || '', c.address || '', '', c.notes || '', now, now];
+    if (uc) { while (row.length < Math.max(uc.at, uc.src) + 1) row.push(''); row[uc.at] = now; row[uc.src] = 'site'; }
+    sheet.appendRow(row);
     try { sheet.getRange(sheet.getLastRow(), 3).setNumberFormat('@').setValue(String(c.phone || '')); } catch (e) {}
     return cid;
   } catch (err) { return ''; }
@@ -480,7 +497,7 @@ function computeCustomers_(orders, custRows) {
     if (!k && !realId) { junk++; return; }
     var kk = k || ('id:' + c.id);
     if (byKey[kk]) { junk++; return; } // כפילות של אותו טלפון — שומרים את הראשון
-    byKey[kk] = { id: c.id || '', name: c.name || '', phone: c.phone || '', address: c.address || '', allergies: c.allergies || '', notes: c.notes || '', createdAt: c.createdAt || '', lastOrder: c.lastOrder || '' };
+    byKey[kk] = { id: c.id || '', name: c.name || '', phone: c.phone || '', address: c.address || '', allergies: c.allergies || '', notes: c.notes || '', createdAt: c.createdAt || '', lastOrder: c.lastOrder || '', updatesAt: c.updatesAt || '', updatesSource: c.updatesSource || '' };
     kept++;
   });
   var sorted = (orders || []).slice().sort(function (a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
@@ -493,7 +510,7 @@ function computeCustomers_(orders, custRows) {
       var oid = String(o.customerId || '');
       var id = (/^c-\d+/.test(oid) && !usedIds[oid]) ? oid : ('c-' + Date.now() + '-' + Math.floor(Math.random() * 100000));
       usedIds[id] = true;
-      c = { id: id, name: o.name || '', phone: o.phone || '', address: o.address || '', allergies: '', notes: '', createdAt: o.createdAt || '', lastOrder: o.createdAt || '' };
+      c = { id: id, name: o.name || '', phone: o.phone || '', address: o.address || '', allergies: '', notes: '', createdAt: o.createdAt || '', lastOrder: o.createdAt || '', updatesAt: '', updatesSource: '' };
       byKey[k] = c;
     } else {
       if (!c.id) { c.id = 'c-' + Date.now() + '-' + Math.floor(Math.random() * 100000); usedIds[c.id] = true; }
@@ -519,8 +536,8 @@ function rebuildCustomers_(payload) {
   if (payload.dryRun) { summary.dryRun = true; summary.sample = res.list.slice(0, 5); return json(Object.assign({ ok: true }, summary)); }
   var bakName = 'Customers_bak_' + Utilities.formatDate(new Date(), 'Asia/Jerusalem', 'yyyyMMdd_HHmm');
   cs.copyTo(ss).setName(bakName);
-  var hdr = ['id', 'name', 'phone', 'address', 'allergies', 'notes', 'createdAt', 'lastOrder'];
-  var out = [hdr].concat(res.list.map(function (c) { return [c.id, c.name, c.phone, c.address, c.allergies || '', c.notes || '', c.createdAt || '', c.lastOrder || '']; }));
+  var hdr = ['id', 'name', 'phone', 'address', 'allergies', 'notes', 'createdAt', 'lastOrder', 'updatesAt', 'updatesSource'];
+  var out = [hdr].concat(res.list.map(function (c) { return [c.id, c.name, c.phone, c.address, c.allergies || '', c.notes || '', c.createdAt || '', c.lastOrder || '', c.updatesAt || '', c.updatesSource || '']; }));
   cs.clearContents();
   cs.getRange(1, 1, out.length, hdr.length).setValues(out);
   var od = os.getDataRange().getValues();
@@ -554,7 +571,7 @@ function planMerge_(pairs, customers, orders) {
     var moved = orders.filter(function (o) { return String(o.customerId || '') === from.id || (fk && key(o.phone) === fk); })
       .map(function (o) { return { id: o.id, name: o.name, oldPhone: o.phone, oldCid: o.customerId }; });
     var fill = {};
-    ['address', 'allergies', 'notes'].forEach(function (f) { if (!String(into[f] || '').trim() && String(from[f] || '').trim()) fill[f] = from[f]; });
+    ['address', 'allergies', 'notes', 'updatesAt', 'updatesSource'].forEach(function (f) { if (!String(into[f] || '').trim() && String(from[f] || '').trim()) fill[f] = from[f]; });
     plan.push({ from: { id: from.id, name: from.name, phone: from.phone }, into: { id: into.id, name: into.name, phone: into.phone }, orders: moved, fill: fill });
   });
   return { plan: plan, errors: errors };
@@ -603,6 +620,82 @@ function mergeCustomers_(payload) {
   });
   rowsToDelete.sort(function (a, b) { return b - a; }).forEach(function (rowNum) { cs.deleteRow(rowNum); });
   return json({ ok: true, merged: res.plan.length, ordersMoved: movedTotal, customersDeleted: rowsToDelete.length, backup: bakName });
+}
+
+// --- "עדכונים בוואטסאפ" — רשימת המאושרים ---
+// לשונית Customers, עמודות I/J: updatesAt (מתי אישר/ה, ISO; ריק = לא מאושר) | updatesSource (site | whatsapp | dashboard).
+// אישור נרשם רק ביוזמת הלקוח (תיבת סימון בהזמנה באתר, "כן" בוואטסאפ ל-054) או ידנית ע"י קרן בדשבורד.
+// "הסר" בוואטסאפ מנקה את שתי העמודות. השליחה עצמה: הבוט, רק בלחיצה של קרן בדשבורד (לא יותר מפעם בשבוע).
+
+// מאתר (ויוצר אם חסר) את עמודות updatesAt/updatesSource לפי שם הכותרת. מחזיר אינדקסים 0-based.
+function customerUpdateCols_(sheet) {
+  var lastCol = Math.max(sheet.getLastColumn(), 1);
+  var hdr = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+  var at = hdr.indexOf('updatesAt'), src = hdr.indexOf('updatesSource');
+  if (at === -1) {
+    at = hdr[8] ? hdr.length : 8; // I פנויה → I; אחרת אחרי העמודה האחרונה (לא דורסים כותרת קיימת)
+    sheet.getRange(1, at + 1).setValue('updatesAt');
+    hdr[at] = 'updatesAt';
+  }
+  if (src === -1) {
+    src = hdr[at + 1] ? hdr.length : at + 1;
+    sheet.getRange(1, src + 1).setValue('updatesSource');
+  }
+  return { at: at, src: src };
+}
+
+// הצטרפות/הסרה. payload: {action:'updates_set', secret, phone, value: 1|0, source?: 'whatsapp', name?}
+// לקוח שלא קיים ומבקש להצטרף → נוצר כרטיס מינימלי (טלפון = זהות). הסרה של מי שלא קיים = לא עושה כלום.
+function updatesSet_(payload) {
+  if (!botSecretOk_(payload.secret)) return json({ ok: false, error: 'unauthorized' });
+  var phone = normalizeIlMobile_(payload.phone);
+  if (!phone) return json({ ok: false, error: 'bad_phone' });
+  var on = payload.value === 1 || payload.value === '1' || payload.value === true;
+  var source = String(payload.source || 'whatsapp').replace(/[^a-z]/g, '').slice(0, 20) || 'whatsapp';
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return json({ ok: false, error: 'busy' }); }
+  try {
+    var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Customers');
+    if (!sheet) return json({ ok: false, error: 'no_sheet' });
+    var uc = customerUpdateCols_(sheet);
+    var data = sheet.getDataRange().getValues();
+    var hdr = data[0].map(function (h) { return String(h).trim(); });
+    var idCol = hdr.indexOf('id'); if (idCol === -1) idCol = 0;
+    var nameCol = hdr.indexOf('name'); if (nameCol === -1) nameCol = 1;
+    var phCol = hdr.indexOf('phone'); if (phCol === -1) phCol = 2;
+    var norm = phone.slice(-9), now = new Date().toISOString();
+    for (var r = 1; r < data.length; r++) {
+      if (String(data[r][phCol] || '').replace(/\D/g, '').slice(-9) !== norm) continue;
+      var was = !!String(data[r][uc.at] || '').trim();
+      if (on && !was) { sheet.getRange(r + 1, uc.at + 1).setValue(now); sheet.getRange(r + 1, uc.src + 1).setValue(source); }
+      if (!on && was) { sheet.getRange(r + 1, uc.at + 1).setValue(''); sheet.getRange(r + 1, uc.src + 1).setValue(''); }
+      return json({ ok: true, found: true, was: was, now: on, changed: was !== on, id: String(data[r][idCol] || ''), name: String(data[r][nameCol] || '') });
+    }
+    if (!on) return json({ ok: true, found: false, was: false, now: false, changed: false });
+    var cid = 'c-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+    var row = [cid, String(payload.name || '').slice(0, 60), phone, '', '', '', now, ''];
+    while (row.length < Math.max(uc.at, uc.src) + 1) row.push('');
+    row[uc.at] = now; row[uc.src] = source;
+    sheet.appendRow(row);
+    try { sheet.getRange(sheet.getLastRow(), phCol + 1).setNumberFormat('@').setValue(phone); } catch (e) {}
+    return json({ ok: true, found: false, created: true, was: false, now: true, changed: true, id: cid, name: String(payload.name || '') });
+  } catch (err) {
+    return json({ ok: false, error: 'exception', message: String(err) });
+  } finally { lock.releaseLock(); }
+}
+
+// רשימת המאושרים (לבוט, לפני שליחת עדכון): ?action=optins&secret=...  — רק טלפונים ניידים תקינים.
+function getOptins_(p) {
+  if (!botSecretOk_(p.secret)) return json({ ok: false, error: 'unauthorized' });
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Customers');
+  if (!sh) return json({ ok: true, optins: [], total: 0 });
+  var out = [];
+  sheetObjects_(sh, false).forEach(function (c) {
+    var ph = normalizeIlMobile_(c.phone);
+    if (!ph || !String(c.updatesAt || '').trim()) return;
+    out.push({ id: c.id || '', name: c.name || '', phone: ph, updatesAt: c.updatesAt, updatesSource: c.updatesSource || '' });
+  });
+  return json({ ok: true, optins: out, total: out.length });
 }
 
 

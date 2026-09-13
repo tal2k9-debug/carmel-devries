@@ -176,6 +176,9 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .ot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:14px;border-top:2px solid var(--gold);font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600}
 .ot .am{color:var(--gd)}
 .dn{margin-top:14px;padding:12px 14px;background:rgba(176,141,87,.08);border:1px dashed rgba(176,141,87,.4);border-radius:10px;font-size:13.5px;color:var(--is);text-align:center;line-height:1.7}
+.chk{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;color:var(--is);line-height:1.6;cursor:pointer;margin-top:-2px}
+.chk input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--gd);cursor:pointer}
+.chk small{display:block;font-size:12px;opacity:.8}
 #odl.fre #od{color:#27ae60;font-weight:600}
 .subm{width:100%;padding:16px;margin-top:18px;border:none;border-radius:14px;cursor:pointer;background:#25D366;color:#fff;font-family:'Heebo',sans-serif;font-size:17px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:10px}
 .subm svg{width:22px;height:22px;fill:currentColor}
@@ -261,6 +264,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="ff"><label>תאריך מבוקש לאיסוף / משלוח</label><input id="cust-date" type="hidden"><button type="button" id="date-display" class="date-display">בחרי תאריך ▾</button><div id="date-cal" class="date-cal" style="display:none"></div><span id="date-msg" style="display:none;color:#c0392b;font-size:13px;margin-top:6px"></span></div>
 </div>
 <div class="fr fl" id="addr-row"><div class="ff"><label for="cust-address">כתובת למשלוח (באופקים)</label><input id="cust-address" type="text" placeholder="רחוב, מספר" autocomplete="street-address"></div></div>
+<div class="fr fl" id="upd-row"><label class="chk" for="cust-updates"><input type="checkbox" id="cust-updates"><span>💛 אשמח לקבל מקרן עדכונים ומבצעים בוואטסאפ<small>לא יותר מפעם בשבוע · אפשר להסיר בכל רגע במילה "הסר"</small></span></label></div>
 <div class="fr fl"><div class="ff"><label for="cust-notes">הערות (אופציונלי)</label><textarea id="cust-notes" placeholder="טעמים מועדפים, אריזה מיוחדת וכו'"></textarea></div></div>
 <div class="fr fl"><div class="ff"><label>אמצעי תשלום</label>
 <div class="paym" id="paym">
@@ -862,6 +866,7 @@ function buildOrderObj(){
     paymentLabel:PAY_LABELS[payMethod],
     date:$('#cust-date').value,
     items:items,
+    updates:!!(($('#cust-updates')||{}).checked), // אישור מפורש לרשימת העדכונים בוואטסאפ (ברירת מחדל: לא מסומן)
     hp:($('#cust-website')||{value:''}).value
   };
 }
@@ -947,10 +952,10 @@ async function submitOrder(){
     const data=await resp.json();
     if(data.ok){
       try{fetch('https://carmel-agent.vercel.app/api/catalog-push?reason=site-order',{method:'POST',keepalive:true}).catch(()=>{});}catch(e){} // המלאי ירד → קטלוג וואטסאפ מתעדכן תוך דקה
-      const paidTotal=computeTotal();const pm=payMethod;
+      const paidTotal=computeTotal();const pm=payMethod;const wantUpd=!!(($('#cust-updates')||{}).checked);
       Object.keys(cart).forEach(k=>delete cart[k]);
       loadProductsFromSheet();
-      showOrderSuccess(pm,paidTotal);
+      showOrderSuccess(pm,paidTotal,wantUpd);
     }else if(data.error==='stock'){
       const lines=(data.problems||[]).map(p=>'• '+p.name+(p.available!=null?' — נותרו רק '+p.available:' — אזל')).join('\n');
       alert('חלק מהפריטים אזלו בזמן שהזמנת:\n'+lines+'\n\nעדכנו את הכמויות בסל ונסו שוב 🙏');
@@ -970,7 +975,7 @@ async function submitOrder(){
   }
 }
 
-function showOrderSuccess(pm,total){
+function showOrderSuccess(pm,total,upd){
   pm=pm||'cash';total=total||0;
   let payBlock='';
   if(pm==='paybox'&&PAYBOX_LINK){
@@ -993,7 +998,7 @@ function showOrderSuccess(pm,total){
     oc.innerHTML='<div style="text-align:center;padding:34px 12px">'
       +'<div style="font-size:56px">🍪</div>'
       +'<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:27px;color:var(--gd);margin:14px 0 10px">ההזמנה נקלטה!</h3>'
-      +'<p style="color:var(--is);font-size:15px;line-height:1.8">תודה רבה 💛<br>קרן תיצור איתך קשר בקרוב לאישור ההזמנה ותיאום הפרטים.</p>'
+      +'<p style="color:var(--is);font-size:15px;line-height:1.8">תודה רבה 💛<br>קרן תיצור איתך קשר בקרוב לאישור ההזמנה ותיאום הפרטים.'+(upd?'<br>נרשמתם לעדכונים מקרן בוואטסאפ 💛':'')+'</p>'
       +payBlock
       +'<button class="subm" style="max-width:240px;margin:24px auto 0" type="button" onclick="location.reload()">הזמנה נוספת</button>'
       +'</div>';
