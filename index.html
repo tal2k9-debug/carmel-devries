@@ -79,8 +79,10 @@ section{padding:48px 20px}.cont{max-width:1100px;margin:0 auto}
 .form-err ul{margin:0;padding-inline-start:18px}
 .notify-link{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:0;border:none;background:none;color:#8a6d3b;font-family:'Heebo',sans-serif;font-size:12.5px;font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px;opacity:.85}
 .notify-link:hover{opacity:1;color:#6d5530}
-#notify-modal,#install-modal{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;background:rgba(26,22,18,.55);padding:20px}
-#notify-modal.show,#install-modal.show{display:flex}
+#notify-modal,#install-modal,#upd-modal{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;background:rgba(26,22,18,.55);padding:20px}
+#notify-modal.show,#install-modal.show,#upd-modal.show{display:flex}
+.nm-inp.nm-name{direction:rtl;letter-spacing:0;font-size:15px;margin-bottom:8px}
+.upd-link{display:inline;margin:0;font-size:inherit;vertical-align:baseline}
 #install-steps{text-align:start}
 #install-steps ol{margin:6px 0 0;padding-inline-start:20px;line-height:1.9}
 .nm-box{background:#fff;border-radius:16px;max-width:340px;width:100%;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.3);font-family:'Heebo',sans-serif;text-align:center;position:relative}
@@ -239,6 +241,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="notice">
 <div class="nh">שימו ❤️</div>
 <div class="ng"><span class="ic">🍪</span><span id="order-times-note"><b>זמני הזמנה:</b> יש להזמין לפחות יומיים מראש.</span></div>
+<div class="ng"><span class="ic">💛</span><span><b>עדכונים ומבצעים בוואטסאפ:</b> <button type="button" class="notify-link upd-link" onclick="openUpd()">עדכנו אותי</button> · לא יותר מפעם בשבוע, הסרה בכל רגע במילה "הסר".</span></div>
 <div class="ng"><span class="ic">🍪</span><span><b>איסוף מיוחד לרגל ערב יום כיפור:</b> במוצאי שבת 19.9.26 בין 20:00–23:00 — איסוף עצמי בלבד 💛</span></div>
 <div class="ng"><span class="ic">🍪</span><span><b>איסוף ומשלוח:</b> איסוף עצמי מאופקים רחוב אורים 20, בתיאום מראש.<br>אופציה למשלוח באופקים בעלות סמלית של 10₪ או משלוח חינם בהזמנה מעל 150₪.</span></div>
 <div class="ng"><span class="ic">🍪</span><span><b>אלרגנים:</b> המאפים מכילים אלרגנים שונים ועלולים שלא להתאים לבעלי רגישויות.</span></div>
@@ -297,6 +300,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <a class="cn" href="tel:+972524809393"><span class="ic">☎</span><span dir="ltr">052-4809393</span></a>
 <div style="margin-top:14px"><a href="policy.html" style="color:var(--gl);font-size:14px;text-decoration:underline">תקנון ומדיניות</a></div>
 <div style="margin-top:8px"><a href="#" id="install-link" style="color:var(--gl);font-size:14px;text-decoration:underline">📲 הוספה למסך הבית</a></div>
+<div style="margin-top:8px"><a href="#" onclick="openUpd();return false" style="color:var(--gl);font-size:14px;text-decoration:underline">💛 עדכנו אותי בוואטסאפ</a></div>
 <div style="margin-top:8px"><a href="accessibility.html" style="color:var(--gl);font-size:14px;text-decoration:underline">הצהרת נגישות</a></div>
 <div class="cr">© Carmel De-vries · Homemade Baked Goods · <a href="admin/" style="color:#5a5040;text-decoration:none;opacity:.55;font-size:13px;margin-inline-start:4px;cursor:pointer" title="ניהול">🔐</a></div>
 </footer>
@@ -445,8 +449,54 @@ async function sendNotify(){
   }
 }
 function bindNotifyButtons(){
-  $$('.notify-link').forEach(b=>{ b.onclick=()=>openNotify(b.dataset.nid); });
+  $$('.notify-link[data-nid]').forEach(b=>{ b.onclick=()=>openNotify(b.dataset.nid); });
 }
+// "עדכנו אותי" — הרשמה לעדכונים בוואטסאפ בלי הזמנה (לשונית Customers, עמודות I/J). אישור מפורש של הלקוח; הסרה במילה "הסר".
+let _lastOrderPhone='', _lastOrderName='';
+function openUpd(){
+  const inp=$('#um-phone');
+  const known=(( $('#cust-phone')||{}).value||_lastOrderPhone||'').replace(/\D/g,'');
+  inp.value=/^0?5\d{8}$/.test(known)?(known.length===9?'0'+known:known):'';
+  $('#um-name').value=(( $('#cust-name')||{}).value||_lastOrderName||'').trim();
+  $('#um-msg').textContent=''; $('#um-msg').className='nm-msg';
+  const btn=$('#um-send'); btn.disabled=false; btn.textContent='עדכנו אותי';
+  $('#um-form').hidden=false;
+  $('#upd-modal').classList.add('show');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>(inp.value?btn:inp).focus(),50);
+}
+function closeUpd(){ $('#upd-modal').classList.remove('show'); document.body.style.overflow=''; }
+async function sendUpd(){
+  const inp=$('#um-phone'), msg=$('#um-msg'), btn=$('#um-send');
+  const phone=normalizeIlMobile(inp.value);
+  if(!phone){ msg.className='nm-msg err'; msg.textContent='נא להזין מספר נייד ישראלי תקין (10 ספרות, מתחיל ב-05)'; inp.focus(); return; }
+  btn.disabled=true; btn.textContent='רושם...';
+  try{
+    const resp=await fetch(WEBAPP_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'updates_optin',phone:phone,name:($('#um-name').value||'').trim().slice(0,60),hp:($('#cust-website')||{value:''}).value})});
+    const data=await resp.json();
+    if(data.ok){
+      $('#um-form').hidden=true;
+      msg.className='nm-msg ok';
+      msg.textContent=data.already?'כבר רשומים 💛 העדכון הבא יגיע בוואטסאפ.':'נרשמתם 💛 העדכונים יגיעו בוואטסאפ, לא יותר מפעם בשבוע.';
+      setTimeout(closeUpd,2800);
+    }else{
+      msg.className='nm-msg err';
+      msg.textContent=data.error==='bad_phone'?'מספר לא תקין — 10 ספרות שמתחילות ב-05':'לא הצלחנו לרשום כרגע. נסו שוב, או כתבו "כן" בוואטסאפ ל-054-966-8819.';
+      btn.disabled=false; btn.textContent='עדכנו אותי';
+    }
+  }catch(e){
+    msg.className='nm-msg err'; msg.textContent='תקלת רשת, נסו שוב';
+    btn.disabled=false; btn.textContent='עדכנו אותי';
+  }
+}
+// Esc סוגר את החלונות הקטנים (נגישות מקלדת)
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Escape') return;
+  if($('#upd-modal')&&$('#upd-modal').classList.contains('show')) closeUpd();
+  if($('#notify-modal')&&$('#notify-modal').classList.contains('show')) closeNotify();
+  const im=$('#install-modal'); if(im&&im.classList.contains('show')){ im.classList.remove('show'); document.body.style.overflow=''; }
+});
 
 /* ===== "הוסף למסך הבית" — האתר כאפליקציה ===== */
 (function(){
@@ -953,6 +1003,7 @@ async function submitOrder(){
     if(data.ok){
       try{fetch('https://carmel-agent.vercel.app/api/catalog-push?reason=site-order',{method:'POST',keepalive:true}).catch(()=>{});}catch(e){} // המלאי ירד → קטלוג וואטסאפ מתעדכן תוך דקה
       const paidTotal=computeTotal();const pm=payMethod;const wantUpd=!!(($('#cust-updates')||{}).checked);
+      _lastOrderPhone=($('#cust-phone')||{value:''}).value; _lastOrderName=($('#cust-name')||{value:''}).value;
       Object.keys(cart).forEach(k=>delete cart[k]);
       loadProductsFromSheet();
       showOrderSuccess(pm,paidTotal,wantUpd);
@@ -999,6 +1050,7 @@ function showOrderSuccess(pm,total,upd){
       +'<div style="font-size:56px">🍪</div>'
       +'<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:27px;color:var(--gd);margin:14px 0 10px">ההזמנה נקלטה!</h3>'
       +'<p style="color:var(--is);font-size:15px;line-height:1.8">תודה רבה 💛<br>קרן תיצור איתך קשר בקרוב לאישור ההזמנה ותיאום הפרטים.'+(upd?'<br>נרשמתם לעדכונים מקרן בוואטסאפ 💛':'')+'</p>'
+      +(upd?'':'<button type="button" class="notify-link" style="margin-top:6px" onclick="openUpd()">💛 רוצים לקבל עדכונים ומבצעים מקרן בוואטסאפ? עדכנו אותי</button>')
       +payBlock
       +'<button class="subm" style="max-width:240px;margin:24px auto 0" type="button" onclick="location.reload()">הזמנה נוספת</button>'
       +'</div>';
@@ -1214,6 +1266,20 @@ body.cad-noanim,body.cad-noanim *{animation:none!important;transition:none!impor
     <div class="nm-t">📲 הוספה למסך הבית</div>
     <div class="nm-p" id="install-steps"></div>
     <button type="button" id="install-go" class="nm-send" hidden>הוספה עכשיו</button>
+  </div>
+</div>
+<div id="upd-modal" role="dialog" aria-modal="true" aria-label="הרשמה לעדכונים בוואטסאפ">
+  <div class="nm-box">
+    <button type="button" class="nm-x" onclick="closeUpd()" aria-label="סגירה">✕</button>
+    <div class="nm-t">💛 עדכונים מקרן בוואטסאפ</div>
+    <div class="nm-p">מבצעים, מה נאפה השבוע וחגים — לא יותר מפעם בשבוע.<br>להסרה בכל רגע: משיבים "הסר".</div>
+    <div id="um-form">
+      <input id="um-name" class="nm-inp nm-name" type="text" autocomplete="name" maxlength="60" placeholder="שם (לא חובה)" aria-label="שם">
+      <input id="um-phone" class="nm-inp" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="0500000000" aria-label="מספר טלפון נייד"
+        oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" onkeydown="if(event.key==='Enter')sendUpd()">
+      <button type="button" id="um-send" class="nm-send" onclick="sendUpd()">עדכנו אותי</button>
+    </div>
+    <div id="um-msg" class="nm-msg"></div>
   </div>
 </div>
 <div id="notify-modal" role="dialog" aria-modal="true" aria-label="עדכון כשהמוצר חוזר למלאי">

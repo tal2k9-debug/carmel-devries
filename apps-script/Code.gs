@@ -104,6 +104,10 @@ function doPost(e) {
   if (payload && payload.action === 'updates_set') {
     return updatesSet_(payload);
   }
+  // "עדכנו אותי" מהאתר בלי הזמנה — ציבורי (כמו waitlist_add): נייד תקין, בלי סוד, יצירה/סימון בלבד.
+  if (payload && payload.action === 'updates_optin') {
+    return updatesOptin_(payload);
+  }
   // מחיקת הזמנה מהדשבורד: הזמנה שעוד לא נמסרה — הפריטים חוזרים למלאי (כולל לפי טעם). נמסרה — מחיקה בלבד.
   if (payload && payload.action === 'delete_order') {
     return deleteOrder_(payload);
@@ -644,8 +648,34 @@ function customerUpdateCols_(sheet) {
   return { at: at, src: src };
 }
 
-// הצטרפות/הסרה. payload: {action:'updates_set', secret, phone, value: 1|0, source?: 'whatsapp', name?}
-// לקוח שלא קיים ומבקש להצטרף → נוצר כרטיס מינימלי (טלפון = זהות). הסרה של מי שלא קיים = לא עושה כלום.
+// הליבה: מסמן/מנקה אישור לטלפון. on=true ולקוח לא קיים → כרטיס מינימלי (טלפון = זהות). מחזיר אובייקט תוצאה.
+function setUpdates_(sheet, phone, on, source, name) {
+  var uc = customerUpdateCols_(sheet);
+  var data = sheet.getDataRange().getValues();
+  var hdr = data[0].map(function (h) { return String(h).trim(); });
+  var idCol = hdr.indexOf('id'); if (idCol === -1) idCol = 0;
+  var nameCol = hdr.indexOf('name'); if (nameCol === -1) nameCol = 1;
+  var phCol = hdr.indexOf('phone'); if (phCol === -1) phCol = 2;
+  var norm = phone.slice(-9), now = new Date().toISOString();
+  for (var r = 1; r < data.length; r++) {
+    if (String(data[r][phCol] || '').replace(/\D/g, '').slice(-9) !== norm) continue;
+    var was = !!String(data[r][uc.at] || '').trim();
+    if (on && !was) { sheet.getRange(r + 1, uc.at + 1).setValue(now); sheet.getRange(r + 1, uc.src + 1).setValue(source); }
+    if (!on && was) { sheet.getRange(r + 1, uc.at + 1).setValue(''); sheet.getRange(r + 1, uc.src + 1).setValue(''); }
+    if (on && name && !String(data[r][nameCol] || '').trim()) sheet.getRange(r + 1, nameCol + 1).setValue(name);
+    return { ok: true, found: true, was: was, now: on, changed: was !== on, id: String(data[r][idCol] || ''), name: String(data[r][nameCol] || '') };
+  }
+  if (!on) return { ok: true, found: false, was: false, now: false, changed: false };
+  var cid = 'c-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+  var row = [cid, name || '', phone, '', '', '', now, ''];
+  while (row.length < Math.max(uc.at, uc.src) + 1) row.push('');
+  row[uc.at] = now; row[uc.src] = source;
+  sheet.appendRow(row);
+  try { sheet.getRange(sheet.getLastRow(), phCol + 1).setNumberFormat('@').setValue(phone); } catch (e) {}
+  return { ok: true, found: false, created: true, was: false, now: true, changed: true, id: cid, name: name || '' };
+}
+
+// הצטרפות/הסרה ע"י הבוט. payload: {action:'updates_set', secret, phone, value: 1|0, source?: 'whatsapp', name?}
 function updatesSet_(payload) {
   if (!botSecretOk_(payload.secret)) return json({ ok: false, error: 'unauthorized' });
   var phone = normalizeIlMobile_(payload.phone);
@@ -657,31 +687,32 @@ function updatesSet_(payload) {
   try {
     var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Customers');
     if (!sheet) return json({ ok: false, error: 'no_sheet' });
-    var uc = customerUpdateCols_(sheet);
-    var data = sheet.getDataRange().getValues();
-    var hdr = data[0].map(function (h) { return String(h).trim(); });
-    var idCol = hdr.indexOf('id'); if (idCol === -1) idCol = 0;
-    var nameCol = hdr.indexOf('name'); if (nameCol === -1) nameCol = 1;
-    var phCol = hdr.indexOf('phone'); if (phCol === -1) phCol = 2;
-    var norm = phone.slice(-9), now = new Date().toISOString();
-    for (var r = 1; r < data.length; r++) {
-      if (String(data[r][phCol] || '').replace(/\D/g, '').slice(-9) !== norm) continue;
-      var was = !!String(data[r][uc.at] || '').trim();
-      if (on && !was) { sheet.getRange(r + 1, uc.at + 1).setValue(now); sheet.getRange(r + 1, uc.src + 1).setValue(source); }
-      if (!on && was) { sheet.getRange(r + 1, uc.at + 1).setValue(''); sheet.getRange(r + 1, uc.src + 1).setValue(''); }
-      return json({ ok: true, found: true, was: was, now: on, changed: was !== on, id: String(data[r][idCol] || ''), name: String(data[r][nameCol] || '') });
-    }
-    if (!on) return json({ ok: true, found: false, was: false, now: false, changed: false });
-    var cid = 'c-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
-    var row = [cid, String(payload.name || '').slice(0, 60), phone, '', '', '', now, ''];
-    while (row.length < Math.max(uc.at, uc.src) + 1) row.push('');
-    row[uc.at] = now; row[uc.src] = source;
-    sheet.appendRow(row);
-    try { sheet.getRange(sheet.getLastRow(), phCol + 1).setNumberFormat('@').setValue(phone); } catch (e) {}
-    return json({ ok: true, found: false, created: true, was: false, now: true, changed: true, id: cid, name: String(payload.name || '') });
+    return json(setUpdates_(sheet, phone, on, source, String(payload.name || '').slice(0, 60)));
   } catch (err) {
     return json({ ok: false, error: 'exception', message: String(err) });
   } finally { lock.releaseLock(); }
+}
+
+// "עדכנו אותי" מהאתר (בלי הזמנה, בלי סוד). payload: {action:'updates_optin', phone, name?, hp?}
+// רק הצטרפות (לעולם לא הסרה בלי סוד). honeypot כמו בהזמנה. תקרה על גודל הלשונית.
+function updatesOptin_(payload) {
+  try {
+    if (payload.hp) return json({ ok: true, added: true });
+    var phone = normalizeIlMobile_(payload.phone);
+    if (!phone) return json({ ok: false, error: 'bad_phone' });
+    var name = String(payload.name || '').slice(0, 60);
+    var lock = LockService.getScriptLock();
+    try { lock.waitLock(15000); } catch (e) { return json({ ok: false, error: 'busy' }); }
+    try {
+      var sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Customers');
+      if (!sheet) return json({ ok: false, error: 'no_sheet' });
+      if (sheet.getLastRow() > 5000) return json({ ok: false, error: 'full' });
+      var r = setUpdates_(sheet, phone, true, 'site', name);
+      return json({ ok: true, already: !!r.was, added: !r.was });
+    } finally { lock.releaseLock(); }
+  } catch (err) {
+    return json({ ok: false, error: 'exception', message: String(err) });
+  }
 }
 
 // רשימת המאושרים (לבוט, לפני שליחת עדכון): ?action=optins&secret=...  — רק טלפונים ניידים תקינים.
