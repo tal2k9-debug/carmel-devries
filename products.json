@@ -108,7 +108,7 @@
     {
       "id": "p-1785013968527-44q7ev",
       "name": "✨️מארז רגעים מתוקים✨️",
-      "description": "מארז עוגיות עשיר ומפנק בעבודת יד, המשלב טעמים ומרקמים קלאסיים לצד מיוחדים.\nהמארז כולל 14 יח‘ עוגיות סינבון, 6 יח‘ עוגיות ריבה פרח,11 עוגיות טחינה,\n7 יח‘ אלפחורס(חלבי) , 10 יח‘ עוגיות מכונה מרוקאיות.",
+      "description": "מארז עוגיות עשיר ומפנק בעבודת יד, המשלב טעמים ומרקמים קלאסיים לצד מיוחדים.\nהמארז כולל 14 יח‘ עוגיות קינמון, 6 יח‘ עוגיות ריבה פרח,11 עוגיות טחינה,\n7 יח‘ אלפחורס(חלבי) , 10 יח‘ עוגיות מכונה מרוקאיות.\n\n**ניתן להחליף את עוגיות הקינמון בעוגיות פקאן**",
       "price": 149,
       "currency": "ILS",
       "unit": "מארז של כ-48 יח'.",
@@ -270,6 +270,18 @@
       "url": "https://carmeldevries.co.il/#product-p-1780511935165-fhnygt"
     },
     {
+      "id": "p-1788626647409-3avxat",
+      "name": "הבחושה עם הקרמבל",
+      "description": "עוגה בחושה, רכה ועסיסית עם שכבה נדיבה של קרמבל זהוב ומתפצפץ מלמעלה.",
+      "price": 55,
+      "currency": "ILS",
+      "unit": "מארז",
+      "kosher": "חלבי",
+      "availability": "in_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1788626647409-3avxat-cb02aa0529.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1788626647409-3avxat"
+    },
+    {
       "id": "p-1780512016737-f4lkz1",
       "name": "פס עוגת שוקולד בציפוי סוכריות",
       "description": "עוגת שוקולד עשירה בציפוי גנאש וסוכריות.",
@@ -364,18 +376,6 @@
       "availability": "out_of_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1786378242675-sdkvxo-b5365bee1c.jpg",
       "url": "https://carmeldevries.co.il/#product-p-1786378242675-sdkvxo"
-    },
-    {
-      "id": "p-1788626647409-3avxat",
-      "name": "הבחושה עם הקרמבל",
-      "description": "עוגה בחושה, רכה ועסיסית עם שכבה נדיבה של קרמבל זהוב ומתפצפץ מלמעלה.",
-      "price": 55,
-      "currency": "ILS",
-      "unit": "מארז",
-      "kosher": "חלבי",
-      "availability": "out_of_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1788626647409-3avxat-cb02aa0529.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1788626647409-3avxat"
     }
   ],
   "links": {
