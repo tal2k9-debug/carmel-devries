@@ -189,18 +189,6 @@
       "url": "https://carmeldevries.co.il/#product-p-1787572351814-v5d2yl"
     },
     {
-      "id": "p-1787522218780-zrcuuc",
-      "name": "עוגיות ריבה פרח",
-      "description": "עוגיות חמאה פריכות ועדינות בצורת פרח, במילוי ריבה מתוקה ומפנקת ובפיזור עדין של אבקת סוכר. שילוב מושלם של פריכות, מתיקות וטעם ביתי נוסטלגי. ✨",
-      "price": 59,
-      "currency": "ILS",
-      "unit": "מארז של כ-13 יח'",
-      "kosher": "פרווה",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1787522218780-zrcuuc-b64d595e57.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1787522218780-zrcuuc"
-    },
-    {
       "id": "p-1787078664355-v3d49z",
       "name": "מושלגות שוקולד",
       "description": "עוגיות שוקולד עשירות ורכות בפנים,מצופות שכבה נדיבה של אבקת סוכר שיוצרת את המראה המושלג והקסום.",
@@ -363,6 +351,18 @@
       "availability": "out_of_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/tahini-0229a658f9.jpg",
       "url": "https://carmeldevries.co.il/#product-tahini"
+    },
+    {
+      "id": "p-1787522218780-zrcuuc",
+      "name": "עוגיות ריבה פרח",
+      "description": "עוגיות חמאה פריכות ועדינות בצורת פרח, במילוי ריבה מתוקה ומפנקת ובפיזור עדין של אבקת סוכר. שילוב מושלם של פריכות, מתיקות וטעם ביתי נוסטלגי. ✨",
+      "price": 59,
+      "currency": "ILS",
+      "unit": "מארז של כ-13 יח'",
+      "kosher": "פרווה",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1787522218780-zrcuuc-b64d595e57.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1787522218780-zrcuuc"
     },
     {
       "id": "p-1788626647409-3avxat",
