@@ -341,18 +341,6 @@
       "url": "https://carmeldevries.co.il/#product-p-1780511935165-fhnygt"
     },
     {
-      "id": "p-1788626647409-3avxat",
-      "name": "הבחושה עם הקרמבל",
-      "description": "עוגה בחושה, רכה ועסיסית עם שכבה נדיבה של קרמבל זהוב ומתפצפץ מלמעלה.",
-      "price": 55,
-      "currency": "ILS",
-      "unit": "מארז",
-      "kosher": "חלבי",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1788626647409-3avxat-cb02aa0529.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1788626647409-3avxat"
-    },
-    {
       "id": "p-1780512016737-f4lkz1",
       "name": "פס עוגת שוקולד בציפוי סוכריות",
       "description": "עוגת שוקולד עשירה בציפוי גנאש וסוכריות.",
@@ -375,6 +363,18 @@
       "availability": "out_of_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/tahini-0229a658f9.jpg",
       "url": "https://carmeldevries.co.il/#product-tahini"
+    },
+    {
+      "id": "p-1788626647409-3avxat",
+      "name": "הבחושה עם הקרמבל",
+      "description": "עוגה בחושה, רכה ועסיסית עם שכבה נדיבה של קרמבל זהוב ומתפצפץ מלמעלה.",
+      "price": 55,
+      "currency": "ILS",
+      "unit": "מארז",
+      "kosher": "חלבי",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1788626647409-3avxat-cb02aa0529.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1788626647409-3avxat"
     }
   ],
   "links": {
