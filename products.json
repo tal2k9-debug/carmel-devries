@@ -29,8 +29,8 @@
   "ordering": {
     "acceptingOrders": true,
     "closedMessage": "",
-    "leadDays": 1,
-    "leadDaysNote": "יש להזמין לפחות 1 ימים מראש (התאריך המבוקש חייב להיות לפחות 1 ימים מהיום).",
+    "leadDays": 0,
+    "leadDaysNote": "אין דרישת הזמנה מראש.",
     "orderWindow": {
       "note": "שעות שבהן האתר מקבל הזמנות (לא שעות פתיחה לקהל — איסוף בתיאום מראש). יום 0 = ראשון.",
       "summary": "א׳–ה׳: כל היום · ו׳: 14:00–09:00 · שבת: סגור",
@@ -160,7 +160,7 @@
       "currency": "ILS",
       "listPrice": 69,
       "onSale": true,
-      "unit": "מארז של כ-17 יח'",
+      "unit": "מארז של כ-16 יח'",
       "kosher": "חלבי",
       "availability": "in_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1779604656941-9uocgy-43f6b252ab.jpg",
