@@ -103,6 +103,18 @@
   },
   "products": [
     {
+      "id": "p-1790245752383-s6f7e8",
+      "name": "✨️מארז קרם בורלה✨️",
+      "description": "קרם ברולה עשיר וקרמי עם מחית וניל איכותית,שכבת סוכר מקורמלת פריכה וזהובה שנשברת בכל כפית.\nפינוק אלגנטי ומושלם לאירוח, למתנה או לרגע מתוק במיוחד.",
+      "price": 139,
+      "currency": "ILS",
+      "unit": "מארז של כ- 9 יח'.",
+      "kosher": "חלבי",
+      "availability": "in_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1790245752383-s6f7e8-3ac9ed30f6.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1790245752383-s6f7e8"
+    },
+    {
       "id": "p-1788277026121-vs0fu8",
       "name": "✨️מארז חגיגי כדורי שוקולד בציפוי קוקוס✨️",
       "description": "מארז קריסטל מרשים ומושלם לאירוח. המארז כולל 35 יח' כדורי שוקולד מפנקים ועשירים בכל טוב בציפוי קוקוס.",
@@ -137,18 +149,6 @@
       "availability": "in_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1790096743847-0qcld4-78fd0e8a83.jpg",
       "url": "https://carmeldevries.co.il/#product-p-1790096743847-0qcld4"
-    },
-    {
-      "id": "maroc",
-      "name": "עוגיות מכונה מרוקאיות",
-      "description": "עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.",
-      "price": 45,
-      "currency": "ILS",
-      "unit": "מארז של כ-20 יח׳",
-      "kosher": "פרווה",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/maroc-cc18a777bb.jpg",
-      "url": "https://carmeldevries.co.il/#product-maroc"
     },
     {
       "id": "p-1781016873316-s1fivy",
@@ -223,20 +223,6 @@
       "url": "https://carmeldevries.co.il/#product-p-1784554127861-lstnhx"
     },
     {
-      "id": "p-1779604656941-9uocgy",
-      "name": "אלפחורס",
-      "description": "מארז אלפחורס בעבודת יד, עוגיות רכות ונימוחות במילוי ריבת חלב עשירה, מצופות קוקוס עדין.",
-      "price": 59,
-      "currency": "ILS",
-      "listPrice": 69,
-      "onSale": true,
-      "unit": "מארז של כ-16 יח'",
-      "kosher": "חלבי",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1779604656941-9uocgy-43f6b252ab.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1779604656941-9uocgy"
-    },
-    {
       "id": "p-1788956297971-t6u1t4",
       "name": "עוגיות פקאן",
       "description": "עוגיות פריכות ועדינות, עשירות בפקאן קצוץ שמוסיף קראנצ׳יות וטעם אגוזי נפלא. שילוב מושלם של מתיקות עדינה ופקאן בכל ביס.",
@@ -266,7 +252,7 @@
         },
         {
           "name": "נוטלה",
-          "availability": "in_stock"
+          "availability": "out_of_stock"
         }
       ],
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/rolled-2b267fc5d0.jpg",
@@ -351,16 +337,16 @@
       "url": "https://carmeldevries.co.il/#product-p-1780512016737-f4lkz1"
     },
     {
-      "id": "p-1785013968527-44q7ev",
-      "name": "✨️מארז רגעים מתוקים✨️",
-      "description": "מארז עוגיות עשיר ומפנק בעבודת יד, המשלב טעמים ומרקמים קלאסיים לצד מיוחדים.\nהמארז כולל 14 יח‘ עוגיות קינמון, 6 יח‘ עוגיות ריבה פרח,11 עוגיות טחינה,\n7 יח‘ אלפחורס(חלבי) , 10 יח‘ עוגיות מכונה מרוקאיות.\n\n**ניתן להחליף את עוגיות הקינמון בעוגיות פקאן**",
-      "price": 149,
+      "id": "maroc",
+      "name": "עוגיות מכונה מרוקאיות",
+      "description": "עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.",
+      "price": 45,
       "currency": "ILS",
-      "unit": "מארז של כ-48 יח'.",
-      "kosher": "חלבי ופרווה",
+      "unit": "מארז של כ-20 יח׳",
+      "kosher": "פרווה",
       "availability": "out_of_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1785013968527-44q7ev-bc8cb5de46.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1785013968527-44q7ev"
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/maroc-cc18a777bb.jpg",
+      "url": "https://carmeldevries.co.il/#product-maroc"
     },
     {
       "id": "p-1787522218780-zrcuuc",
@@ -373,6 +359,32 @@
       "availability": "out_of_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1787522218780-zrcuuc-b64d595e57.jpg",
       "url": "https://carmeldevries.co.il/#product-p-1787522218780-zrcuuc"
+    },
+    {
+      "id": "p-1779604656941-9uocgy",
+      "name": "אלפחורס",
+      "description": "מארז אלפחורס בעבודת יד, עוגיות רכות ונימוחות במילוי ריבת חלב עשירה, מצופות קוקוס עדין.",
+      "price": 59,
+      "currency": "ILS",
+      "listPrice": 69,
+      "onSale": true,
+      "unit": "מארז של כ-16 יח'",
+      "kosher": "חלבי",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1779604656941-9uocgy-43f6b252ab.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1779604656941-9uocgy"
+    },
+    {
+      "id": "p-1785013968527-44q7ev",
+      "name": "✨️מארז רגעים מתוקים✨️",
+      "description": "מארז עוגיות עשיר ומפנק בעבודת יד, המשלב טעמים ומרקמים קלאסיים לצד מיוחדים.\nהמארז כולל 14 יח‘ עוגיות קינמון, 6 יח‘ עוגיות ריבה פרח,11 עוגיות טחינה,\n7 יח‘ אלפחורס(חלבי) , 10 יח‘ עוגיות מכונה מרוקאיות.\n\n**ניתן להחליף את עוגיות הקינמון בעוגיות פקאן**",
+      "price": 149,
+      "currency": "ILS",
+      "unit": "מארז של כ-48 יח'.",
+      "kosher": "חלבי ופרווה",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1785013968527-44q7ev-bc8cb5de46.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1785013968527-44q7ev"
     },
     {
       "id": "p-1788626647409-3avxat",
