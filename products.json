@@ -29,8 +29,8 @@
   "ordering": {
     "acceptingOrders": true,
     "closedMessage": "",
-    "leadDays": 1,
-    "leadDaysNote": "יש להזמין לפחות 1 ימים מראש (התאריך המבוקש חייב להיות לפחות 1 ימים מהיום).",
+    "leadDays": 0,
+    "leadDaysNote": "אין דרישת הזמנה מראש.",
     "orderWindow": {
       "note": "שעות שבהן האתר מקבל הזמנות (לא שעות פתיחה לקהל — איסוף בתיאום מראש). יום 0 = ראשון.",
       "summary": "א׳–ה׳: כל היום · ו׳: 14:00–09:00 · שבת: סגור",
@@ -103,18 +103,6 @@
   },
   "products": [
     {
-      "id": "p-1790245752383-s6f7e8",
-      "name": "✨️מארז קרם בורלה✨️",
-      "description": "קרם ברולה עשיר וקרמי עם מחית וניל איכותית,שכבת סוכר מקורמלת פריכה וזהובה שנשברת בכל כפית.\nפינוק אלגנטי ומושלם לאירוח, למתנה או לרגע מתוק במיוחד.",
-      "price": 139,
-      "currency": "ILS",
-      "unit": "מארז של כ- 9 יח'.",
-      "kosher": "חלבי",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1790245752383-s6f7e8-3ac9ed30f6.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1790245752383-s6f7e8"
-    },
-    {
       "id": "p-1788277026121-vs0fu8",
       "name": "✨️מארז חגיגי כדורי שוקולד בציפוי קוקוס✨️",
       "description": "מארז קריסטל מרשים ומושלם לאירוח. המארז כולל 35 יח' כדורי שוקולד מפנקים ועשירים בכל טוב בציפוי קוקוס.",
@@ -175,42 +163,6 @@
       "url": "https://carmeldevries.co.il/#product-p-1787572351814-v5d2yl"
     },
     {
-      "id": "tahini",
-      "name": "עוגיות טחינה קלאסיות",
-      "description": "מרקם נימוח שנמס בפה.",
-      "price": 55,
-      "currency": "ILS",
-      "unit": "מארז של כ- 23 יח'",
-      "kosher": "פרווה",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/tahini-0229a658f9.jpg",
-      "url": "https://carmeldevries.co.il/#product-tahini"
-    },
-    {
-      "id": "p-1787078664355-v3d49z",
-      "name": "מושלגות שוקולד",
-      "description": "עוגיות שוקולד עשירות ורכות בפנים,מצופות שכבה נדיבה של אבקת סוכר שיוצרת את המראה המושלג והקסום.",
-      "price": 55,
-      "currency": "ILS",
-      "unit": "מארז של כ- 20 יח'.",
-      "kosher": "פרווה",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1787078664355-v3d49z-d2ce258362.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1787078664355-v3d49z"
-    },
-    {
-      "id": "p-1781016466770-or7dp2",
-      "name": "כדורי שוקולד סוכריות",
-      "description": "כדורי שוקלד עשירים בכל טוב, מצופים סוכריות צבעוניות.",
-      "price": 45,
-      "currency": "ILS",
-      "unit": "מארז של כ-11 יח'",
-      "kosher": "חלבי",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1781016466770-or7dp2-1726c713de.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1781016466770-or7dp2"
-    },
-    {
       "id": "p-1784554127861-lstnhx",
       "name": "עוגיות קינמון",
       "description": "עוגיות סינבון פריכות, שילוב מטריף של בצק פריך עשיר בחמאה וקינמון.",
@@ -221,6 +173,20 @@
       "availability": "in_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1784554127861-lstnhx-e635ff504b.jpg",
       "url": "https://carmeldevries.co.il/#product-p-1784554127861-lstnhx"
+    },
+    {
+      "id": "p-1779604656941-9uocgy",
+      "name": "אלפחורס",
+      "description": "מארז אלפחורס בעבודת יד, עוגיות רכות ונימוחות במילוי ריבת חלב עשירה, מצופות קוקוס עדין.",
+      "price": 59,
+      "currency": "ILS",
+      "listPrice": 69,
+      "onSale": true,
+      "unit": "מארז של כ-16 יח'",
+      "kosher": "חלבי",
+      "availability": "in_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1779604656941-9uocgy-43f6b252ab.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1779604656941-9uocgy"
     },
     {
       "id": "p-1788956297971-t6u1t4",
@@ -337,6 +303,18 @@
       "url": "https://carmeldevries.co.il/#product-p-1780512016737-f4lkz1"
     },
     {
+      "id": "p-1790245752383-s6f7e8",
+      "name": "✨️מארז קרם בורלה✨️",
+      "description": "קרם ברולה עשיר וקרמי עם מחית וניל איכותית,שכבת סוכר מקורמלת פריכה וזהובה שנשברת בכל כפית.\nפינוק אלגנטי ומושלם לאירוח, למתנה או לרגע מתוק במיוחד.",
+      "price": 139,
+      "currency": "ILS",
+      "unit": "מארז של כ- 9 יח'.",
+      "kosher": "חלבי",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1790245752383-s6f7e8-3ac9ed30f6.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1790245752383-s6f7e8"
+    },
+    {
       "id": "maroc",
       "name": "עוגיות מכונה מרוקאיות",
       "description": "עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.",
@@ -347,6 +325,18 @@
       "availability": "out_of_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/maroc-cc18a777bb.jpg",
       "url": "https://carmeldevries.co.il/#product-maroc"
+    },
+    {
+      "id": "tahini",
+      "name": "עוגיות טחינה קלאסיות",
+      "description": "מרקם נימוח שנמס בפה.",
+      "price": 55,
+      "currency": "ILS",
+      "unit": "מארז של כ- 23 יח'",
+      "kosher": "פרווה",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/tahini-0229a658f9.jpg",
+      "url": "https://carmeldevries.co.il/#product-tahini"
     },
     {
       "id": "p-1787522218780-zrcuuc",
@@ -361,18 +351,28 @@
       "url": "https://carmeldevries.co.il/#product-p-1787522218780-zrcuuc"
     },
     {
-      "id": "p-1779604656941-9uocgy",
-      "name": "אלפחורס",
-      "description": "מארז אלפחורס בעבודת יד, עוגיות רכות ונימוחות במילוי ריבת חלב עשירה, מצופות קוקוס עדין.",
-      "price": 59,
+      "id": "p-1787078664355-v3d49z",
+      "name": "מושלגות שוקולד",
+      "description": "עוגיות שוקולד עשירות ורכות בפנים,מצופות שכבה נדיבה של אבקת סוכר שיוצרת את המראה המושלג והקסום.",
+      "price": 55,
       "currency": "ILS",
-      "listPrice": 69,
-      "onSale": true,
-      "unit": "מארז של כ-16 יח'",
+      "unit": "מארז של כ- 20 יח'.",
+      "kosher": "פרווה",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1787078664355-v3d49z-d2ce258362.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1787078664355-v3d49z"
+    },
+    {
+      "id": "p-1781016466770-or7dp2",
+      "name": "כדורי שוקולד סוכריות",
+      "description": "כדורי שוקלד עשירים בכל טוב, מצופים סוכריות צבעוניות.",
+      "price": 45,
+      "currency": "ILS",
+      "unit": "מארז של כ-11 יח'",
       "kosher": "חלבי",
       "availability": "out_of_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1779604656941-9uocgy-43f6b252ab.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1779604656941-9uocgy"
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1781016466770-or7dp2-1726c713de.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1781016466770-or7dp2"
     },
     {
       "id": "p-1785013968527-44q7ev",
