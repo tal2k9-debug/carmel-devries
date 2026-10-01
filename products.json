@@ -143,18 +143,6 @@
       "url": "https://carmeldevries.co.il/#product-p-1788288904350-0cs4hh"
     },
     {
-      "id": "p-1790096743847-0qcld4",
-      "name": "עוגת גבינה פירורים",
-      "description": "קרם גבינה עשיר ועדין על בסיס פריך, עם שכבה נדיבה של פירורים זהובים מעל.",
-      "price": 69,
-      "currency": "ILS",
-      "unit": "קופסת קריסטל קוטר 16",
-      "kosher": "חלבי",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1790096743847-0qcld4-78fd0e8a83.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1790096743847-0qcld4"
-    },
-    {
       "id": "maroc",
       "name": "עוגיות מכונה מרוקאיות",
       "description": "עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.",
@@ -341,6 +329,18 @@
       "availability": "in_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1790604719948-ld1gv3-7410e04a06.jpg",
       "url": "https://carmeldevries.co.il/#product-p-1790604719948-ld1gv3"
+    },
+    {
+      "id": "p-1790096743847-0qcld4",
+      "name": "עוגת גבינה פירורים",
+      "description": "קרם גבינה עשיר ועדין על בסיס פריך, עם שכבה נדיבה של פירורים זהובים מעל.",
+      "price": 69,
+      "currency": "ILS",
+      "unit": "קופסת קריסטל קוטר 16",
+      "kosher": "חלבי",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1790096743847-0qcld4-78fd0e8a83.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1790096743847-0qcld4"
     },
     {
       "id": "tahini",
