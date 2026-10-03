@@ -74,9 +74,7 @@
         }
       ]
     },
-    "closedDates": [
-      "2026-10-02"
-    ],
+    "closedDates": [],
     "fulfillment": {
       "pickup": {
         "available": true,
