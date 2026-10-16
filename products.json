@@ -141,18 +141,6 @@
       "url": "https://carmeldevries.co.il/#product-p-1790096743847-0qcld4"
     },
     {
-      "id": "maroc",
-      "name": "עוגיות מכונה מרוקאיות",
-      "description": "עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.",
-      "price": 45,
-      "currency": "ILS",
-      "unit": "מארז של כ-20 יח׳",
-      "kosher": "פרווה",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/maroc-cc18a777bb.jpg",
-      "url": "https://carmeldevries.co.il/#product-maroc"
-    },
-    {
       "id": "p-1781016873316-s1fivy",
       "name": "כדורי שוקולד קוקוס",
       "description": "כדורי שוקולד עשירים בכל טוב, מצופים בקוקוס.",
@@ -339,6 +327,18 @@
       "availability": "in_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1790604719948-ld1gv3-7410e04a06.jpg",
       "url": "https://carmeldevries.co.il/#product-p-1790604719948-ld1gv3"
+    },
+    {
+      "id": "maroc",
+      "name": "עוגיות מכונה מרוקאיות",
+      "description": "עוגיות נוסטלגיות פריכות ומוארכות בשילוב קוקוס ושומשום.",
+      "price": 45,
+      "currency": "ILS",
+      "unit": "מארז של כ-20 יח׳",
+      "kosher": "פרווה",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/maroc-cc18a777bb.jpg",
+      "url": "https://carmeldevries.co.il/#product-maroc"
     },
     {
       "id": "p-1781016466770-or7dp2",
