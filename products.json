@@ -281,18 +281,6 @@
       "url": "https://carmeldevries.co.il/#product-p-1780434999545-58bv1z"
     },
     {
-      "id": "p-1780511935165-fhnygt",
-      "name": "פס עוגת שוקולד בציפוי קוקוס",
-      "description": "עוגת שוקולד עשירה בציפוי גאנש וקוקוס.",
-      "price": 55,
-      "currency": "ILS",
-      "unit": "מארז",
-      "kosher": "חלבי",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1780511935165-fhnygt-2ca13c3845.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1780511935165-fhnygt"
-    },
-    {
       "id": "p-1780512016737-f4lkz1",
       "name": "פס עוגת שוקולד בציפוי סוכריות",
       "description": "עוגת שוקולד עשירה בציפוי גנאש וסוכריות.",
@@ -351,6 +339,18 @@
       "availability": "out_of_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1785013968527-44q7ev-bc8cb5de46.jpg",
       "url": "https://carmeldevries.co.il/#product-p-1785013968527-44q7ev"
+    },
+    {
+      "id": "p-1780511935165-fhnygt",
+      "name": "פס עוגת שוקולד בציפוי קוקוס",
+      "description": "עוגת שוקולד עשירה בציפוי גאנש וקוקוס.",
+      "price": 55,
+      "currency": "ILS",
+      "unit": "מארז",
+      "kosher": "חלבי",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1780511935165-fhnygt-2ca13c3845.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1780511935165-fhnygt"
     },
     {
       "id": "p-1788626647409-3avxat",
