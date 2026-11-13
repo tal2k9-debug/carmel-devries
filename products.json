@@ -29,8 +29,8 @@
   "ordering": {
     "acceptingOrders": true,
     "closedMessage": "",
-    "leadDays": 1,
-    "leadDaysNote": "יש להזמין לפחות 1 ימים מראש (התאריך המבוקש חייב להיות לפחות 1 ימים מהיום).",
+    "leadDays": 0,
+    "leadDaysNote": "אין דרישת הזמנה מראש.",
     "orderWindow": {
       "note": "שעות שבהן האתר מקבל הזמנות (לא שעות פתיחה לקהל — איסוף בתיאום מראש). יום 0 = ראשון.",
       "summary": "א׳–ה׳: כל היום · ו׳: 14:00–09:00 · שבת: סגור",
@@ -227,20 +227,6 @@
       "url": "https://carmeldevries.co.il/#product-rolled"
     },
     {
-      "id": "p-1780434838887-k7f5ia",
-      "name": "עוגת גבינה בציפוי קרם לוטוס",
-      "description": "עוגת גבינה קרה ומפנקת, עם שברי שוקולד איכותי וציפוי לוטוס עשיר ומפנק שאי אפשר להפסיק ממנו.",
-      "price": 69,
-      "currency": "ILS",
-      "listPrice": 89,
-      "onSale": true,
-      "unit": "קופסת קריסטל קוטר 16",
-      "kosher": "חלבי",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1780434838887-k7f5ia-846813f3c7.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1780434838887-k7f5ia"
-    },
-    {
       "id": "p-1780435087102-p7v0ed",
       "name": "עוגת גבינה בציפוי בייגלה מלוח",
       "description": "עוגת גבינה קרה ומפנקת, בשילוב שברי שוקולד איכותי עם ציפוי בייגלה מלוח שיוצר שילוב ממכר של מתוק-מלוח.",
@@ -303,6 +289,20 @@
       "availability": "in_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1780512016737-f4lkz1-e00688eacf.jpg",
       "url": "https://carmeldevries.co.il/#product-p-1780512016737-f4lkz1"
+    },
+    {
+      "id": "p-1780434838887-k7f5ia",
+      "name": "עוגת גבינה בציפוי קרם לוטוס",
+      "description": "עוגת גבינה קרה ומפנקת, עם שברי שוקולד איכותי וציפוי לוטוס עשיר ומפנק שאי אפשר להפסיק ממנו.",
+      "price": 69,
+      "currency": "ILS",
+      "listPrice": 89,
+      "onSale": true,
+      "unit": "קופסת קריסטל קוטר 16",
+      "kosher": "חלבי",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1780434838887-k7f5ia-846813f3c7.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1780434838887-k7f5ia"
     }
   ],
   "links": {
