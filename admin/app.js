@@ -8,9 +8,9 @@ const PRICING_KEY = 'carmel_pricing_v1';
 // כתובת המוח החכם (פרויקט Vercel נפרד). מתעדכן אחרי פריסה.
 const AGENT_URL = 'https://carmel-agent.vercel.app';
 // כניסה ישירה = הולכים לגוגל וחוזרים באותה לשונית, בלי חלון קופץ (ראו "כניסה ישירה" למטה).
-// עובדת רק אחרי שהכתובת REDIRECT_URI רשומה ב-Google Cloud → Google Auth Platform → Clients →
-// "Carmel Admin Web" → Authorized redirect URIs. כל עוד היא לא רשומה — להשאיר false.
-const DIRECT_LOGIN_ENABLED = false;
+// תלויה בכך שהכתובת REDIRECT_URI רשומה ב-Google Cloud → Google Auth Platform → Clients →
+// "Carmel Admin Web" → Authorized redirect URIs (נרשמה 18.11.2026). אם הכתובת תוסר משם — להחזיר ל-false.
+const DIRECT_LOGIN_ENABLED = true;
 const REDIRECT_URI = 'https://carmeldevries.co.il/admin/';
 const STATUSES = [
   {id:'new', label:'חדש', color:'new'},
