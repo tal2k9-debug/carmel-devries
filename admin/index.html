@@ -25,6 +25,8 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .login-card .ico{font-size:54px;margin-bottom:16px}
 #g-signin-btn{display:flex;justify-content:center;margin:20px 0}
 .login-note{font-size:13px;color:var(--mute);margin-top:20px;line-height:1.6}
+.login-alt{margin-top:14px;font-size:13px}
+.login-alt a{color:var(--info);text-decoration:underline}
 .login-err{color:var(--err);background:#ffebee;padding:12px;border-radius:8px;margin-top:16px;font-size:13px;display:none}
 
 /* HEADER */
@@ -263,6 +265,7 @@ th,td{padding:8px}
       רק טל וקרן מורשים להיכנס.<br>
       התחבר עם חשבון Google כדי לסנכרן את כל הנתונים אוטומטית.
     </div>
+    <div id="login-alt" class="login-alt" style="display:none"><a href="#">לא מצליחים להיכנס? כניסה בדרך אחרת</a></div>
     <div id="login-err" class="login-err"></div>
   </div>
 </div>
@@ -751,6 +754,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=74"></script>
+<script src="app.js?v=75"></script>
 </body>
 </html>

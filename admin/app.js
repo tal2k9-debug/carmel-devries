@@ -7,6 +7,11 @@ const CACHE_KEY = 'carmel_cache_v2';
 const PRICING_KEY = 'carmel_pricing_v1';
 // כתובת המוח החכם (פרויקט Vercel נפרד). מתעדכן אחרי פריסה.
 const AGENT_URL = 'https://carmel-agent.vercel.app';
+// כניסה ישירה = הולכים לגוגל וחוזרים באותה לשונית, בלי חלון קופץ (ראו "כניסה ישירה" למטה).
+// עובדת רק אחרי שהכתובת REDIRECT_URI רשומה ב-Google Cloud → Google Auth Platform → Clients →
+// "Carmel Admin Web" → Authorized redirect URIs. כל עוד היא לא רשומה — להשאיר false.
+const DIRECT_LOGIN_ENABLED = false;
+const REDIRECT_URI = 'https://carmeldevries.co.il/admin/';
 const STATUSES = [
   {id:'new', label:'חדש', color:'new'},
   {id:'confirmed', label:'מאושר', color:'confirmed'},
@@ -35,36 +40,52 @@ let pendingWrites = []; // queue for offline
 window.addEventListener('load', initApp);
 
 async function initApp() {
+  // חזרה מכניסה ישירה? קוראים את האישור מהכתובת (ומוחקים אותו ממנה) לפני כל דבר אחר.
+  const directRet = DIRECT_LOGIN_ENABLED ? readDirectLoginReturn() : null;
+
   let tries = 0;
   while (!window.google && tries < 50) { await sleep(100); tries++; }
-  if (!window.google) { showLoginError('שגיאה בטעינת Google'); return; }
-  console.log('[Carmel] google loaded');
+  // בלי ספריית גוגל אין חלון קופץ — אבל כניסה ישירה לא צריכה אותה, אז לא עוצרים אם היא זמינה.
+  if (!window.google && !DIRECT_LOGIN_ENABLED) { showLoginError('שגיאה בטעינת Google'); return; }
 
-  // Initialize OAuth2 token client (gives us access_token directly)
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: CLIENT_ID,
-    scope: SCOPES,
-    callback: handleToken,
-    error_callback: (err) => { console.error('[Carmel] oauth error', err); if (_tokenRefreshResolve) { const r=_tokenRefreshResolve; _tokenRefreshResolve=null; r(false); return; } showLoginError('שגיאת הרשאות: ' + (err.type || err.message || JSON.stringify(err))); }
-  });
+  if (window.google) {
+    console.log('[Carmel] google loaded');
+    // Initialize OAuth2 token client (gives us access_token directly)
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: handleToken,
+      error_callback: (err) => { console.error('[Carmel] oauth error', err); if (_tokenRefreshResolve) { const r=_tokenRefreshResolve; _tokenRefreshResolve=null; r(false); return; } showLoginError(popupErrorText(err)); }
+    });
+  } else {
+    console.warn('[Carmel] google library not loaded — direct login only');
+  }
+
+  const mode = loginMode();
 
   // Render a simple "Sign in with Google" button that triggers OAuth popup directly
   const btnEl = document.getElementById('g-signin-btn');
   btnEl.innerHTML = '<button id="myGoogleBtn" style="background:#4285F4;color:#fff;padding:14px 28px;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:10px;box-shadow:0 4px 12px rgba(66,133,244,.3)"><svg width="20" height="20" viewBox="0 0 18 18"><path fill="#fff" d="M9 3.48c1.69 0 2.84.73 3.49 1.34l2.55-2.49C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z" opacity=".9"/><path fill="#fff" d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.1.83-.64 2.08-1.84 2.92l2.84 2.2c1.7-1.57 2.68-3.88 2.68-6.62z" opacity=".7"/><path fill="#fff" d="M3.88 10.78A5.54 5.54 0 0 1 3.58 9c0-.62.11-1.22.29-1.78L.96 4.96A9.008 9.008 0 0 0 0 9c0 1.45.35 2.82.96 4.04l2.92-2.26z" opacity=".5"/><path fill="#fff" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.84-2.2c-.76.53-1.78.9-3.12.9-2.38 0-4.4-1.57-5.12-3.74L.97 13.04C2.45 15.98 5.48 18 9 18z" opacity=".8"/></svg>כניסה באמצעות Google</button>';
-  document.getElementById('myGoogleBtn').onclick = () => {
-    console.log('[Carmel] sign-in clicked');
-    try {
-      tokenClient.requestAccessToken({prompt:'consent'});
-    } catch(e) {
-      console.error('[Carmel] requestAccessToken threw', e);
-      showLoginError('שגיאה: ' + e.message);
-    }
-  };
+  document.getElementById('myGoogleBtn').onclick = () => startLogin(mode);
+
+  // קישור "כניסה בדרך אחרת" — מפעיל את הדרך השנייה (ישירה ↔ חלון קופץ). מוצג רק כשכניסה ישירה זמינה.
+  const altEl = document.getElementById('login-alt');
+  if (altEl && DIRECT_LOGIN_ENABLED) {
+    altEl.style.display = 'block';
+    const a = altEl.querySelector('a');
+    if (a) a.onclick = (e) => { e.preventDefault(); startLogin(mode === 'direct' ? 'popup' : 'direct'); };
+  }
 
   loadCache();
 
+  // חזרנו מגוגל בכניסה ישירה — משלימים את הכניסה. אם נכשלה, נשארים במסך הכניסה עם הודעה.
+  if (directRet) {
+    if (await finishDirectLogin(directRet)) return;
+  }
+
   // Restore session if token still valid
-  const saved = localStorage.getItem('carmel_user');
+  let saved = null;
+  try { saved = localStorage.getItem('carmel_user'); } catch(e){}
   if (saved) {
     try {
       const su = JSON.parse(saved);
@@ -78,8 +99,136 @@ async function initApp() {
   }
 }
 
-async function handleToken(resp) {
-  console.log('[Carmel] token resp', resp);
+/* ============ כניסה ישירה (בלי חלון קופץ) ============
+   בטלפון, חלון הכניסה הקופץ של גוגל לפעמים לא מחזיר את האישור לדף (18.11.2026: גוגל אישר את קרן
+   שלוש פעמים והדף לא קיבל כלום). בכניסה ישירה הכול קורה באותה לשונית: הולכים לגוגל וחוזרים לכאן,
+   והאישור מגיע בכתובת הדף (אחרי #). אין חלון שני — אז אין מה שיתנתק בדרך. */
+
+// באיזו דרך הכפתור הראשי נכנס: מה שהצליח בפעם הקודמת במכשיר הזה; אחרת — טלפון: ישירה, מחשב: חלון קופץ.
+function loginMode() {
+  if (!DIRECT_LOGIN_ENABLED) return 'popup';
+  let saved = null;
+  try { saved = localStorage.getItem('carmel_login_mode'); } catch(e){}
+  if (saved === 'direct' || saved === 'popup') return saved;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ? 'direct' : 'popup';
+}
+
+function startLogin(mode) {
+  console.log('[Carmel] sign-in clicked', mode);
+  hideLoginError();
+  if (mode === 'direct' && DIRECT_LOGIN_ENABLED) { startDirectLogin(); return; }
+  if (!tokenClient) {
+    if (DIRECT_LOGIN_ENABLED) { startDirectLogin(); return; }
+    showLoginError('Google עדיין נטען — נסו שוב בעוד רגע.');
+    return;
+  }
+  try {
+    tokenClient.requestAccessToken({prompt:'consent'});
+  } catch(e) {
+    console.error('[Carmel] requestAccessToken threw', e);
+    showLoginError('שגיאה: ' + e.message);
+  }
+}
+
+function randomState() {
+  try {
+    const a = new Uint8Array(16);
+    crypto.getRandomValues(a);
+    return Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
+  } catch(e) { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+}
+
+function startDirectLogin() {
+  // state = מספר אקראי שנשמר כאן ונבדק בחזרה, כדי שרק כניסה שהתחילה מהדף הזה תתקבל.
+  const state = randomState();
+  try { sessionStorage.setItem('carmel_oauth_state', state); } catch(e){}
+  const q = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+    response_type: 'token',
+    scope: SCOPES,
+    state: state,
+    prompt: 'select_account',
+    include_granted_scopes: 'true'
+  });
+  location.assign('https://accounts.google.com/o/oauth2/v2/auth?' + q.toString());
+}
+
+// מחזיר null אם זו טעינה רגילה; אחרת {access_token, expires_in} או {error}.
+function readDirectLoginReturn() {
+  const raw = (location.hash || '').replace(/^#/, '');
+  if (!raw || !/(^|&)(access_token|error)=/.test(raw)) return null;
+  const h = new URLSearchParams(raw);
+  // מוחקים את האישור מהכתובת מיד — שלא יישאר בהיסטוריה או בצילום מסך.
+  try { history.replaceState(null, '', location.pathname + location.search); } catch(e){}
+  let expected = null;
+  try { expected = sessionStorage.getItem('carmel_oauth_state'); sessionStorage.removeItem('carmel_oauth_state'); } catch(e){}
+  if (h.get('error')) return {error: h.get('error')};
+  if (!expected || h.get('state') !== expected) return {error: 'state_mismatch'};
+  if (!h.get('access_token')) return {error: 'no_token'};
+  return {access_token: h.get('access_token'), expires_in: Number(h.get('expires_in')) || 3600};
+}
+
+async function finishDirectLogin(ret) {
+  if (ret.error) {
+    showLoginError(ret.error === 'access_denied'
+      ? 'הכניסה בוטלה. אפשר לנסות שוב.'
+      : 'הכניסה לא הושלמה — נסו שוב. (' + ret.error + ')');
+    return false;
+  }
+  try {
+    // מוודאים מול גוגל שהאישור הונפק לאפליקציה הזו ולא לאפליקציה אחרת.
+    const ti = await fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(ret.access_token)).then(r => r.json());
+    if (!ti || ti.aud !== CLIENT_ID) { showLoginError('הכניסה לא הושלמה — נסו שוב. (aud)'); return false; }
+  } catch(e) {
+    showLoginError('שגיאה באימות הכניסה: ' + e.message);
+    return false;
+  }
+  await handleToken({access_token: ret.access_token, expires_in: ret.expires_in}, 'direct');
+  return !!user;
+}
+
+// הודעה ברורה כשחלון הכניסה הקופץ נכשל. הקוד הטכני נשאר בסוגריים — כדי שצילום מסך יספיק לאבחון.
+function popupErrorText(err) {
+  const t = (err && (err.type || err.message)) || 'unknown';
+  let msg = t === 'popup_failed_to_open' ? 'הדפדפן חסם את חלון הכניסה של Google.'
+          : t === 'popup_closed' ? 'חלון הכניסה נסגר לפני שהכניסה הושלמה.'
+          : 'שגיאת הרשאות.';
+  if (DIRECT_LOGIN_ENABLED) msg += ' אפשר ללחוץ למטה על "כניסה בדרך אחרת".';
+  return msg + ' (' + t + ')';
+}
+
+// פרטי המשתמש מגוגל. ניסיון ראשון userinfo; אם הוא נחסם או נכשל — tokeninfo (שרת אחר של גוגל)
+// שמחזיר גם את האימייל, כדי שתקלה בשרת אחד לא תחסום את הכניסה.
+async function fetchGoogleProfile(token) {
+  try {
+    const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {headers:{Authorization:'Bearer '+token}}).then(r=>r.json());
+    if (ui && ui.email) return ui;
+    console.warn('[Carmel] userinfo returned no email', ui && ui.error);
+  } catch(e) { console.warn('[Carmel] userinfo failed, trying tokeninfo', e); }
+  const ti = await fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(token)).then(r=>r.json());
+  if (ti && ti.aud && ti.aud !== CLIENT_ID) return {};
+  return {email: ti && ti.email, name: (ti && ti.email) || '', picture: ''};
+}
+
+// כותב לזיכרון הדפדפן בלי לזרוק שגיאה. מחזיר false כשהזיכרון מלא או חסום.
+function lsSet(key, val) {
+  try { localStorage.setItem(key, val); return true; }
+  catch(e) { console.warn('[Carmel] storage write failed:', key, e && e.name); return false; }
+}
+
+// שמירת ההתחברות בזיכרון הדפדפן היא נוחות בלבד (לא להתחבר שוב בכל רענון). אם הזיכרון מלא —
+// מפנים את מטמון הנתונים (הנתונים עצמם שמורים בגיליון) ומנסים שוב; ואם גם זה לא עוזר ממשיכים
+// בלי לשמור. לעולם לא חוסמים כניסה בגלל זיכרון דפדפן מלא.
+function saveUserSession() {
+  const val = JSON.stringify(user);
+  if (lsSet('carmel_user', val)) return;
+  try { localStorage.removeItem(CACHE_KEY); } catch(e){}
+  if (!lsSet('carmel_user', val)) console.warn('[Carmel] session not persisted (storage full)');
+}
+
+async function handleToken(resp, via) {
+  console.log('[Carmel] token resp', resp && resp.error ? resp : '(ok)');
   if (resp.error) {
     if (_tokenRefreshResolve) { const r=_tokenRefreshResolve; _tokenRefreshResolve=null; r(false); return; }
     showLoginError('שגיאה: ' + resp.error + ' - ' + (resp.error_description||''));
@@ -88,15 +237,16 @@ async function handleToken(resp) {
   accessToken = resp.access_token;
   // Fetch user info using the token
   try {
-    const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {headers:{Authorization:'Bearer '+accessToken}}).then(r=>r.json());
-    console.log('[Carmel] userinfo', ui);
+    const ui = await fetchGoogleProfile(accessToken);
+    console.log('[Carmel] userinfo', ui && ui.email);
     if (!ALLOWLIST.includes((ui.email||'').toLowerCase())) {
       showLoginError(`האימייל ${ui.email} לא מורשה. רק טל וקרן יכולים להיכנס.`);
       accessToken = null;
       return;
     }
     user = {email: ui.email, name: ui.name, picture: ui.picture, token: accessToken, expiry: Date.now() + (resp.expires_in*1000) - 60000};
-    localStorage.setItem('carmel_user', JSON.stringify(user));
+    saveUserSession();
+    lsSet('carmel_login_mode', via === 'direct' ? 'direct' : 'popup'); // הדרך שהצליחה — תהיה ברירת המחדל במכשיר הזה
     if (typeof gapi !== 'undefined' && gapi.client) { try { gapi.client.setToken({access_token: accessToken}); } catch(e){} }
     // Silent refresh path: token renewed mid-session — resolve and skip re-rendering the app.
     if (_tokenRefreshResolve) { const r=_tokenRefreshResolve; _tokenRefreshResolve=null; r(true); return; }
@@ -123,8 +273,8 @@ function ensureToken() {
 
 function signOut() {
   localStorage.removeItem('carmel_user');
-  if (google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
-  if (accessToken) google.accounts.oauth2.revoke(accessToken, ()=>{});
+  if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+  if (accessToken && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(accessToken, ()=>{});
   user = null; accessToken = null;
   location.reload();
 }
@@ -153,6 +303,10 @@ function showLoginError(msg) {
   const el = document.getElementById('login-err');
   el.textContent = msg;
   el.style.display = 'block';
+}
+function hideLoginError() {
+  const el = document.getElementById('login-err');
+  if (el) { el.textContent = ''; el.style.display = 'none'; }
 }
 
 function parseJwt(t) {
@@ -334,7 +488,16 @@ function loadCache() {
     if (!db.settings) db.settings = {};
   } catch(e){}
 }
-function saveCache(){ localStorage.setItem(CACHE_KEY, JSON.stringify(db)); }
+// המטמון הוא רק עותק מקומי להצגה מהירה/בלי רשת — הנתונים עצמם בגיליון. תמונות המוצרים כבדות,
+// ובדפדפנים עם מגבלת זיכרון קטנה (אייפון: 5MB) המטמון עלול לא להיכנס. במקרה כזה מוותרים עליו
+// במכשיר הזה ולא מפילים את הפעולה (לפני כן השמירה זרקה שגיאה והדשבורד הציג "אופליין" או נתקע).
+function saveCache(){
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(db)); }
+  catch(e) {
+    try { localStorage.removeItem(CACHE_KEY); } catch(_){}
+    console.warn('[Carmel] cache skipped (storage full)', e && e.name);
+  }
+}
 
 function rowToWait(r){ return {id:r[0]||'', productId:r[1]||'', productName:r[2]||'', phone:r[3]||'', name:r[4]||'', createdAt:r[5]||'', notifiedAt:r[6]||'', status:r[7]||''}; }
 function rowToCust(r){ return {id:r[0]||'', name:r[1]||'', phone:r[2]||'', address:r[3]||'', allergies:r[4]||'', notes:r[5]||'', createdAt:r[6]||'', lastOrder:r[7]||'', updatesAt:r[8]||'', updatesSource:r[9]||''}; }
