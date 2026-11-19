@@ -428,12 +428,15 @@ async function updateRow(sheetName, rowNum, row) {
 async function syncAll() {
   setSync('syncing', 'מסנכרן...');
   try {
+    // קריאת המוצרים נכשלה ≠ "אין מוצרים": בלי ההבחנה הזו נוצרה שורת הגדרות כפולה בגיליון בכל תקלה רגעית
+    // (כך הצטברו 4 שורות __settings__ עד 19.11.2026).
+    let prodOk = true;
     const [cust, ord, exp, rec, prod, setg, wl] = await Promise.all([
       readRange('Customers!A2:J'), // עד J: כולל updatesAt (I) + updatesSource (J) — רשימת העדכונים בוואטסאפ
       readRange('Orders!A2:Q'), // עד Q: כולל total (O), itemsJSON (P), receiptUrl (Q) — לפני כן נטענו רק 14 עמודות והקבלות לא הוצגו
       readRange('Expenses!A2:F').catch(()=>[]),
       readRange('Recipes!A2:H').catch(()=>[]),
-      readRange('Products!A2:O').catch(()=>[]),
+      readRange('Products!A2:O').catch(()=>{ prodOk = false; return []; }),
       readRange('Settings!A2:B').catch(()=>[]),
       readRange('Waitlist!A2:H').catch(()=>[]) // "עדכני אותי כשחוזר" — הלשונית נוצרת בפעם הראשונה שלקוח נרשם
     ]);
@@ -449,7 +452,7 @@ async function syncAll() {
     // afterwards saveOrderSettings keeps it in sync. This auto-publishes whatever
     // Keren already saved, just by opening the dashboard (no extra click).
     try {
-      if (!(db.products||[]).some(p=>p.id==='__settings__') && db.settings && Object.keys(db.settings).length) {
+      if (prodOk && !(db.products||[]).some(p=>p.id==='__settings__') && db.settings && Object.keys(db.settings).length) {
         await writeSettingsProductRow({
           acceptingOrders: String(db.settings.acceptingOrders!=null?db.settings.acceptingOrders:'1'),
           leadDays:        String(db.settings.leadDays!=null?db.settings.leadDays:'2'),
@@ -462,7 +465,8 @@ async function syncAll() {
     refreshRecipesList();
     saveCache();
     renderAll();
-    setSync('ok', 'מסונכרן');
+    if (prodOk) setSync('ok', 'מסונכרן');
+    else setSync('err', 'המוצרים לא נטענו — לחצי סנכרון');
   } catch(e) {
     console.error('syncAll', e);
     setSync('err', 'שגיאת סנכרון');
@@ -764,6 +768,7 @@ function renderAll() {
 
 /* ============ TODAY ============ */
 function renderToday() {
+  renderWaitSummary();
   const today = todayStr(), tomorrow = addDaysStr(today, 1);
   const open = db.orders.filter(o => o.status!=='delivered');
   const todayOrd = db.orders.filter(o => o.date===today);
@@ -3115,33 +3120,102 @@ function showCustCard(id){
 
 /* ============ "עדכני אותי כשחוזר" — מי מחכה למה ============ */
 // הלקוחות נרשמים באתר (לשונית Waitlist בגיליון). הבוט שולח להם ברגע שהמוצר חוזר למלאי.
+const WAIT_MAX_DAYS = 90; // כמו בבוט (WAITLIST_AGE_LIMIT): אחרי 90 יום ההרשמה פגה ולא נשלחת הודעה
+function waitDays(w){ const t = Date.parse(w.createdAt||''); return isNaN(t) ? null : Math.max(0, Math.floor((Date.now()-t)/86400000)); }
+function allWaiting(){ return (db.waitlist||[]).filter(w => !String(w.notifiedAt||'').trim()); }
 function waitersFor(productId){
-  return (db.waitlist||[]).filter(w => String(w.productId)===String(productId) && !String(w.notifiedAt||'').trim());
+  return allWaiting().filter(w => String(w.productId)===String(productId));
 }
 function waitBadge(productId){
   const n = waitersFor(productId).length;
   if (!n) return '';
   return ` <button class="wait-badge" onclick="event.stopPropagation();showWaiters('${productId}')" title="לקוחות שממתינים שהמוצר יחזור">🔔 ${n} ממתינים</button>`;
 }
+// למה עדיין מחכים: המוצר מוסתר מהאתר / אזל / כבר זמין (ההודעה תצא בסבב הקרוב של הבוט).
+function waitProductState(p){
+  if (!p) return 'המוצר נמחק מהרשימה';
+  const flavors = parseFlavors(p.flavors, p.qty);
+  const total = flavors.length ? flavorsTotalQty(flavors) : (Number(p.qty)||0);
+  if (!p.published) return 'המוצר מוסתר מהאתר';
+  if (total <= 0) return 'המוצר אזל';
+  return 'המוצר זמין — ההודעה תישלח בדקות הקרובות';
+}
+// כרטיס במסך הראשי: מופיע רק כשמישהו מחכה, כדי שלא יתפספס (עד 19.11.2026 זה נראה רק בשורת המוצר).
+function renderWaitSummary(){
+  const el = document.getElementById('waitCard'); if (!el) return;
+  const waiting = allWaiting();
+  if (!waiting.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const byProd = {};
+  waiting.forEach(w => { (byProd[w.productId] = byProd[w.productId] || []).push(w); });
+  const rows = Object.keys(byProd).map(pid => {
+    const list = byProd[pid];
+    const p = (db.products||[]).find(x=>String(x.id)===String(pid));
+    const name = (p&&p.name) || list[0].productName || pid;
+    const oldest = Math.max.apply(null, list.map(w => waitDays(w)||0));
+    const soon = oldest >= WAIT_MAX_DAYS - 14;
+    return `<div style="padding:10px 0;border-bottom:1px solid #f0e0d0;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+      <div><strong>${esc(name)}</strong> · ${list.length===1?'1 ממתין/ה':list.length+' ממתינים'}
+        <div style="font-size:12px;color:var(--mute);margin-top:2px">${esc(waitProductState(p))} · ההמתנה הארוכה ביותר: ${oldest} ימים${soon?` · <span style="color:var(--warn)">ההרשמה פגה אחרי ${WAIT_MAX_DAYS} יום</span>`:''}</div></div>
+      <button class="btn btn-s" style="padding:6px 12px;font-size:13px" onclick="showWaiters('${esc(pid)}')">פרטים</button>
+    </div>`;
+  }).join('');
+  el.innerHTML = `<h3 style="margin-bottom:6px;color:var(--ink)">🔔 ממתינים שמוצר יחזור (${waiting.length})</h3>${rows}
+    <div style="margin-top:10px;font-size:12px;color:var(--mute)">ההודעה נשלחת לבד ברגע שהמוצר חוזר למלאי ומפורסם באתר. אחרי ${WAIT_MAX_DAYS} יום ההרשמה פגה בלי הודעה.</div>`;
+  el.style.display = '';
+}
 function showWaiters(productId){
   const p = (db.products||[]).find(x=>String(x.id)===String(productId));
   const waiting = waitersFor(productId);
-  const notified = (db.waitlist||[]).filter(w => String(w.productId)===String(productId) && String(w.notifiedAt||'').trim());
-  document.getElementById('wlTitle').textContent = 'ממתינים: ' + ((p&&p.name)||productId);
-  const rows = (list, done) => list.map(w=>`<tr>
+  const done = (db.waitlist||[]).filter(w => String(w.productId)===String(productId) && String(w.notifiedAt||'').trim());
+  const notified = done.filter(w => !/^(removed|expired)$/.test(String(w.status||'')));
+  document.getElementById('wlTitle').textContent = 'ממתינים: ' + ((p&&p.name)||(waiting[0]&&waiting[0].productName)||(done[0]&&done[0].productName)||productId);
+  const doneLabel = w => {
+    const d = esc(String(w.notifiedAt||'').slice(0,10)), st = String(w.status||'');
+    if (st==='removed') return `<span style="color:var(--mute)">🚫 הוסר ${d}</span>`;
+    if (st==='expired') return `<span style="color:var(--mute)">⌛ פג אחרי ${WAIT_MAX_DAYS} יום</span>`;
+    return `<span style="color:var(--ok)">✅ עודכן ${d}</span>`;
+  };
+  const rows = (list, isDone) => list.map(w=>{
+    const days = waitDays(w);
+    return `<tr>
       <td>${esc(fmtPhone(w.phone))}</td>
       <td>${esc(w.name||'—')}</td>
       <td>${esc(String(w.createdAt||'').slice(0,10))}</td>
-      <td>${done?`<span style="color:var(--ok)">✅ עודכן ${esc(String(w.notifiedAt||'').slice(0,10))}</span>`:'<span style="color:var(--warn)">⏳ ממתין</span>'}</td>
-      <td><a class="btn btn-s" style="padding:4px 10px;font-size:12px" href="https://wa.me/${waPhone(w.phone)}" target="_blank" rel="noopener">📱</a></td>
-    </tr>`).join('');
-  document.getElementById('wlBody').innerHTML = (waiting.length||notified.length)
+      <td>${isDone?doneLabel(w):`<span style="color:var(--warn)">⏳ ממתין${days!=null?' · '+days+' ימים':''}</span>`}</td>
+      <td style="white-space:nowrap"><a class="btn btn-s" style="padding:4px 10px;font-size:12px" href="https://wa.me/${waPhone(w.phone)}" target="_blank" rel="noopener">📱</a>${isDone?'':` <button class="btn btn-d" style="padding:4px 10px;font-size:12px" onclick="removeWaiter('${esc(w.id)}')" title="להסיר מרשימת ההמתנה — לא תישלח הודעה">הסרה</button>`}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('wlBody').innerHTML = (waiting.length||done.length)
     ? `<div style="font-size:14px;color:var(--ink2);margin-bottom:10px">${waiting.length} ממתינים · ${notified.length} כבר עודכנו</div>
        <div style="overflow-x:auto"><table><thead><tr><th>טלפון</th><th>שם</th><th>נרשמ/ה</th><th>סטטוס</th><th></th></tr></thead>
-       <tbody>${rows(waiting,false)}${rows(notified,true)}</tbody></table></div>
-       <div style="margin-top:12px;font-size:13px;color:var(--mute)">ההודעה נשלחת אוטומטית ברגע שהכמות תעודכן מעל 0 והמוצר מפורסם.</div>`
+       <tbody>${rows(waiting,false)}${rows(done,true)}</tbody></table></div>
+       <div style="margin-top:12px;font-size:13px;color:var(--mute)">ההודעה נשלחת אוטומטית ברגע שהכמות תעודכן מעל 0 והמוצר מפורסם. אחרי ${WAIT_MAX_DAYS} יום ההרשמה פגה בלי הודעה. "הסרה" — למי שכבר עודכן בדרך אחרת, או כשהמוצר לא חוזר.</div>`
     : '<div style="text-align:center;padding:30px;color:var(--mute)">אין ממתינים למוצר הזה</div>';
   document.getElementById('waitModal').classList.add('show');
+}
+// הסרה מרשימת ההמתנה: השורה נשארת בגיליון (לתיעוד) ומסומנת removed — הבוט מפסיק לחכות לה ולא שולח הודעה.
+async function removeWaiter(id){
+  const idx = (db.waitlist||[]).findIndex(w => String(w.id)===String(id));
+  if (idx < 0) return;
+  const w = db.waitlist[idx];
+  if (!confirm('להסיר את ' + fmtPhone(w.phone) + ' מרשימת ההמתנה ל"' + (w.productName||'') + '"?\nלא תישלח אליו/ה הודעה כשהמוצר יחזור.')) return;
+  const ok = await ensureToken();
+  if (!ok || !accessToken) { setSync('err','צריך להתחבר מחדש'); alert('ההתחברות לגוגל פגה — ההסרה לא נשמרה. רענני (F5), התחברי מחדש, ונסי שוב.'); return; }
+  setSync('syncing','שומר...');
+  try {
+    if (typeof gapi !== 'undefined' && gapi.client) gapi.client.setToken({access_token: accessToken});
+    const rowNum = idx + 2;
+    // מוודאים שהשורה בגיליון היא עדיין אותה הרשמה (שורות יכלו לזוז מאז הטעינה) — אחרת לא נוגעים בכלום.
+    const cur = await readRange('Waitlist!A'+rowNum+':G'+rowNum);
+    const r = (cur && cur[0]) || [];
+    if (String(r[0]||'') !== String(w.id)) { setSync('err','הרשימה השתנתה'); alert('רשימת ההמתנה השתנתה מאז שנטענה. לחצי "סנכרון" ונסי שוב.'); return; }
+    if (String(r[6]||'').trim()) { setSync('ok','מסונכרן'); toast('ההרשמה הזו כבר נסגרה','ok'); await syncAll(); return; }
+    const now = new Date().toISOString();
+    await gapi.client.sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: 'Waitlist!G'+rowNum+':H'+rowNum, valueInputOption:'RAW', resource:{ values:[[now,'removed']] } });
+    w.notifiedAt = now; w.status = 'removed';
+    saveCache(); setSync('ok','מסונכרן'); toast('הוסר מרשימת ההמתנה','ok');
+    renderToday(); renderProducts(); showWaiters(w.productId);
+  } catch(e) { console.error(e); setSync('err','שגיאת שמירה'); alert('ההסרה נכשלה (אולי תקלת רשת). נסי שוב.'); }
 }
 
 /* ============ עדכונים בוואטסאפ למאושרים ============ */

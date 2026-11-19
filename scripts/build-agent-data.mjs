@@ -224,7 +224,7 @@ function cardHtml(p) {
   const pic = p.img
     ? '<div class="pi has"><img src="' + esc(p.img) + '" alt="' + esc(p.name) + '" oncontextmenu="return false" draggable="false"><span class="copyr">© Carmel De-vries · כל הזכויות שמורות</span></div>'
     : '<div class="pi"><span class="copyr">© Carmel De-vries · כל הזכויות שמורות</span></div>';
-  return '<article class="product" data-id="' + esc(p.id) + '">' + pic + '<div class="pb"><div class="pn">' + esc(p.name) + kbadge + stockBadge + '</div><div class="pd">' + esc(p.desc).replace(/\r?\n/g, ' ') + '</div><div class="pr">' + priceHtml + '<div class="pu">' + esc(formatUnit(p)) + '</div></div>' + qtyHtml + (p.minNote ? '<div class="mn">' + esc(p.minNote) + '</div>' : '') + '</div></article>';
+  return '<article class="product" id="product-' + esc(p.id) + '" data-id="' + esc(p.id) + '">' + pic + '<div class="pb"><div class="pn">' + esc(p.name) + kbadge + stockBadge + '</div><div class="pd">' + esc(p.desc).replace(/\r?\n/g, ' ') + '</div><div class="pr">' + priceHtml + '<div class="pu">' + esc(formatUnit(p)) + '</div></div>' + qtyHtml + (p.minNote ? '<div class="mn">' + esc(p.minNote) + '</div>' : '') + '</div></article>';
 }
 
 // ───────────────────────────── JSON-LD (schema.org) ─────────────────────────────

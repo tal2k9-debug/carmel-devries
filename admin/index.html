@@ -303,6 +303,7 @@ th,td{padding:8px}
 <!-- TODAY -->
 <section class="page active" id="page-today">
   <div class="page-h"><h2>סקירת היום</h2><div class="actions"><button class="btn btn-s" onclick="syncAll()">🔄 סנכרון</button></div></div>
+  <div class="card" id="waitCard" style="display:none;margin-bottom:16px"></div>
   <div class="kpis" id="kpis"></div>
   <div class="card"><h3 style="margin-bottom:14px;color:var(--ink)">🔥 הזמנות דחופות (היום + מחר)</h3><div id="urgentOrders">טוען...</div></div>
   <div class="card" style="margin-top:16px"><h3 style="margin-bottom:14px;color:var(--ink)">📰 פעילות אחרונה</h3><div id="activity">טוען...</div></div>
@@ -754,6 +755,6 @@ th,td{padding:8px}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
-<script src="app.js?v=76"></script>
+<script src="app.js?v=77"></script>
 </body>
 </html>

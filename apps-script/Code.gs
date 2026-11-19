@@ -47,6 +47,19 @@ var DELIVERY_FEE = 10;
 var DELIVERY_FREE_FROM = 150;
 var DELIVERY_ITEM_NAME = 'משלוח באופקים';
 
+// --- גרסת הקוד ---
+// GET בלי action מחזיר אותה — כך בודקים מבחוץ איזו גרסה פרוסה בפועל.
+var CODE_VERSION = '2026-11-19';
+
+// --- תמונות מוצרים כקבצים (19.11.2026) ---
+// התמונות שמורות בגיליון כ-base64 (כ-40KB למוצר), ולכן רשימת המוצרים שקלה כ-600KB.
+// carmel-agent משכפל כל תמונה ל-Vercel Blob בשם שנגזר מהתוכן:
+//   catalog/<id>-<10 תווים ראשונים של sha1 על תא התמונה>.<סיומת>
+// עם ?light=1 הסקריפט מחזיר את הקישור לקובץ במקום התמונה עצמה (כ-10KB לכל הרשימה).
+// אם הקובץ עדיין לא שם (תמונה שהועלתה הרגע), הדפדפן מבקש את התמונה עצמה ב-?action=image&id=...
+// הגיליון עצמו לא משתנה — התמונות נשארות בו כמקור.
+var IMAGE_BLOB_BASE = 'https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/';
+
 // טלפון נייד ישראלי תקין -> "05XXXXXXXX"; אחרת "". מקבל 050-1234567 / +972 50 123 4567 / 501234567 (בלי 0 מוביל).
 // זהות הלקוח = הטלפון, לכן טעות הקלדה = "לקוח" נוסף; מכאן ההקשחה (החלטת טל 12.09).
 function normalizeIlMobile_(p) {
@@ -166,6 +179,33 @@ function doPost(e) {
       if (ci[need[n]] === undefined) return json({ ok: false, error: 'bad_header', missing: need[n] });
     }
 
+    // הגרסה שהלקוח מצהיר עליה. v>=2 = האתר החדש, שיודע להציג "המחיר התעדכן" ו"סגור".
+    // לקוחות ישנים (לשונית פתוחה מלפני העדכון, קטלוג הוואטסאפ) לא מקבלים קודי שגיאה חדשים.
+    var clientV = parseInt(order.v, 10) || 1;
+
+    // אותה בקשה פעמיים (הרשת נפלה אחרי שההזמנה כבר נרשמה והלקוח לחץ שוב) — לא נרשמת פעמיים.
+    // הבדיקה בתוך הנעילה, כך ששתי בקשות זהות בו-זמנית לא עוברות שתיהן.
+    var reqId = String(order.reqId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+    var reqCache = null;
+    if (reqId) {
+      try {
+        reqCache = CacheService.getScriptCache();
+        var doneId = reqCache.get('req:' + reqId);
+        if (doneId) return json({ ok: true, duplicate: true, id: doneId });
+      } catch (errCache) { reqCache = null; }
+    }
+
+    // החנות סגורה (המתג הראשי בדשבורד) — לשונית שנשארה פתוחה מלפני הסגירה לא יכולה להזמין.
+    if (clientV >= 2) {
+      var closedMsg = shopClosedMessage_(ss);
+      if (closedMsg) return json({ ok: false, error: 'closed', message: closedMsg });
+    }
+
+    // המחיר הקובע = מה שבגיליון ברגע ההזמנה, בדיוק כפי שהאתר מציג אותו (אותו חישוב כמו shapeProduct).
+    var priceDisp = ci.price !== undefined ? prod.getRange(1, ci.price + 1, data.length, 1).getDisplayValues() : null;
+    var saleDisp = ci.salePrice !== undefined ? prod.getRange(1, ci.salePrice + 1, data.length, 1).getDisplayValues() : null;
+    var priceChanges = [];
+
     var items = order.items || [];
     var problems = [];
     var changed = {}; // rowIndex -> true
@@ -181,6 +221,21 @@ function doPost(e) {
         if (String(data[r][ci.id]) === String(it.id)) { row = r; break; }
       }
       if (row < 0) { problems.push({ name: it.name || it.id, reason: 'not_found' }); return; }
+
+      // מוצר שהוסר מהאתר (לא מפורסם) לא ניתן להזמנה, גם אם נשאר לו מלאי.
+      if (ci.published !== undefined && !isPublished_(data[row][ci.published])) {
+        problems.push({ name: it.name || it.id, reason: 'unavailable' }); return;
+      }
+
+      // מחיר: מה שבגיליון קובע, לא מה שהדפדפן שלח. מחיר 0/לא קריא בגיליון — לא אוכפים (לא חוסמים הזמנה).
+      var sp = serverPrice_(priceDisp, saleDisp, row);
+      if (sp > 0) {
+        var cp = parseFloat(it.price);
+        if (isNaN(cp) || Math.abs(cp - sp) >= 0.005) {
+          priceChanges.push({ id: String(it.id), name: String((ci.name !== undefined && data[row][ci.name]) || it.name || it.id), flavor: String(it.flavor || ''), was: isNaN(cp) ? null : cp, now: sp });
+        }
+        it.price = sp;
+      }
 
       var flavorsStr = String(data[row][ci.flavors] || '');
       if (flavorsStr && it.flavor) {
@@ -202,12 +257,21 @@ function doPost(e) {
 
     if (problems.length) return json({ ok: false, error: 'stock', problems: problems });
 
+    if (priceChanges.length) {
+      // האתר החדש: לא רושמים — מחזירים את המחירים המעודכנים, הלקוח רואה את הסכום החדש ומאשר.
+      if (clientV >= 2) return json({ ok: false, error: 'price_changed', changes: priceChanges });
+      // לקוח ישן: ההזמנה נרשמת במחיר שבגיליון (כבר עודכן בפריטים), עם הערה לקרן על הפער.
+      order._priceNote = '[מחיר עודכן לפי המחירון: ' + priceChanges.map(function (c) {
+        return c.name + ' ' + (c.was === null ? '?' : c.was) + '→' + c.now + ' ₪';
+      }).join(', ') + ']';
+    }
+
     var now = new Date().toISOString();
 
     // Record the order FIRST, before touching stock. If recording throws, we
     // return an error and stock stays untouched — an order can never go missing.
     // (Worst case becomes: order recorded but stock not reduced — visible & fixable.)
-    appendOrder(ss, order, now);
+    var saved = appendOrder(ss, order, now) || {};
 
     // Then commit stock changes.
     Object.keys(changed).forEach(function (rs) {
@@ -220,7 +284,10 @@ function doPost(e) {
     // (וואטסאפ לקרן נשלח ע"י carmel-bot שסורק את הגיליון כל 2 דקות —
     //  ה-hook הישן הוסר כדי לא להתריע פעמיים ולא לעכב את התשובה ללקוח.)
 
-    return json({ ok: true });
+    // זוכרים את הבקשה 6 שעות — שליחה חוזרת של אותה הזמנה תקבל "כבר נרשמה".
+    if (reqCache && reqId) { try { reqCache.put('req:' + reqId, String(saved.id || '1'), 21600); } catch (errPut) {} }
+
+    return json({ ok: true, id: saved.id || '', total: saved.total });
   } catch (err) {
     return json({ ok: false, error: 'exception', message: String(err) });
   } finally {
@@ -237,13 +304,14 @@ function doPost(e) {
 function doGet(e) {
   var p = (e && e.parameter) || {};
   if (p.action === 'products') return getProducts_(p);
+  if (p.action === 'image') return getImage_(p);
   if (p.action === 'orders') return getOrders_(p);
   if (p.action === 'settings') return getSettings_();
   if (p.action === 'waitlist') return getWaitlist_(p);
   if (p.action === 'optins') return getOptins_(p);
   if (p.action === 'backup') return getBackup_(p);
   if (p.action === 'set_secret') return setSecret_(p);
-  return json({ ok: true, service: 'carmel-order-intake' });
+  return json({ ok: true, service: 'carmel-order-intake', version: CODE_VERSION });
 }
 
 // Order-availability settings (open days/hours, lead time, closed message) that
@@ -316,7 +384,83 @@ function getProducts_(p) {
       return v === 1 || v === '1' || v === true || String(v).toLowerCase() === 'true';
     });
   }
-  return json({ ok: true, products: rows });
+  // light=1: קישור לקובץ התמונה במקום התמונה עצמה. imgFile=1 מסמן לדפדפן שיש גיבוי ב-?action=image.
+  if (String(p.light || '') === '1') {
+    rows.forEach(function (o) {
+      var url = imageFileUrl_(o.id, o.img);
+      if (url) { o.img = url; o.imgFile = 1; }
+    });
+  }
+  // version: האתר יודע לפיה אם הסקריפט כבר מזהה הזמנה כפולה (reqId).
+  return json({ ok: true, products: rows, version: CODE_VERSION });
+}
+
+function isPublished_(v) {
+  return v === 1 || v === '1' || v === true || String(v).toLowerCase() === 'true';
+}
+
+// המחיר שהאתר מציג ומחייב: מחיר מבצע אם קיים ונמוך מהמחיר הרגיל, אחרת המחיר הרגיל.
+// חייב להישאר זהה ל-shapeProduct ב-index.html (Number() על הערך המוצג בתא).
+function serverPrice_(priceDisp, saleDisp, row) {
+  var list = priceDisp ? (Number(priceDisp[row][0]) || 0) : 0;
+  var sale = saleDisp ? (Number(saleDisp[row][0]) || 0) : 0;
+  return (sale > 0 && sale < list) ? sale : list;
+}
+
+// החנות סגורה? מחזיר את הודעת הסגירה, או null כשפתוח. אותו כלל כמו parseSettings באתר.
+// תקלה בקריאת ההגדרות לא חוסמת הזמנה אמיתית (מחזיר null).
+function shopClosedMessage_(ss) {
+  try {
+    var sh = ss.getSheetByName('Settings');
+    if (!sh) return null;
+    var data = sh.getDataRange().getDisplayValues();
+    var s = {};
+    for (var r = 1; r < data.length; r++) {
+      var k = String(data[r][0] || '').trim();
+      if (k) s[k] = data[r][1];
+    }
+    if (s.acceptingOrders === undefined) return null;
+    var v = String(s.acceptingOrders).trim().toLowerCase();
+    if (!(v === '0' || v === 'false' || v === 'no' || v === '')) return null;
+    return String(s.closedMessage || '').trim() || 'כרגע איננו מקבלים הזמנות 💛 נשמח לקבל את הזמנתכם כשנפתח שוב.';
+  } catch (err) { return null; }
+}
+
+function sha1Hex_(s) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1, String(s), Utilities.Charset.UTF_8);
+  var out = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var v = bytes[i] < 0 ? bytes[i] + 256 : bytes[i];
+    out += (v < 16 ? '0' : '') + v.toString(16);
+  }
+  return out;
+}
+
+// כתובת קובץ התמונה ב-Blob. אותו חישוב בדיוק כמו carmel-agent/lib/catalog.js (safeId + shortHash) —
+// שינוי באחד מחייב שינוי בשני. מחזיר '' כשהתא אינו תמונת base64.
+function imageFileUrl_(id, img) {
+  var m = String(img || '').match(/^data:image\/([a-zA-Z0-9.+-]+);base64,/);
+  if (!m) return '';
+  var ext = m[1].toLowerCase();
+  if (ext === 'jpeg') ext = 'jpg';
+  var safe = String(id || 'x').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 48);
+  return IMAGE_BLOB_BASE + safe + '-' + sha1Hex_(img).slice(0, 10) + '.' + ext;
+}
+
+// תמונה אחת כפי שהיא בגיליון — גיבוי לדפדפן כשקובץ התמונה עוד לא קיים. מוצר לא מפורסם: רק עם הסוד.
+function getImage_(p) {
+  var id = String(p.id || '');
+  if (!id) return json({ ok: false, error: 'no_id' });
+  var all = botSecretOk_(p.secret);
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Products');
+  if (!sh) return json({ ok: false, error: 'no_products_sheet' });
+  var rows = sheetObjects_(sh, false);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) !== id) continue;
+    if (!all && !isPublished_(rows[i].published)) break;
+    return json({ ok: true, id: id, img: String(rows[i].img || '') });
+  }
+  return json({ ok: false, error: 'not_found' });
 }
 
 function getOrders_(p) {
@@ -417,12 +561,13 @@ function appendOrder(ss, order, now) {
   sheet.appendRow([
     id, customerId, c.name || '', c.phone || '', c.address || '',
     order.fulfillment || 'pickup', order.date || '', itemsText,
-    (c.notes || '') + ' [הזמנת אתר]', 'new', now, now,
+    (c.notes || '') + ' [הזמנת אתר]' + (order._priceNote ? ' ' + order._priceNote : ''), 'new', now, now,
     '0', '', // paid=false, paymentMethod=blank — set later by Keren in dashboard
     total, itemsJSON, '' // receiptUrl — filled by the bot once the receipt is issued
   ]);
   // הטלפון כטקסט, כדי שה-0 המוביל לא ייעלם (הגיליון הופך "0526…" למספר)
   try { sheet.getRange(sheet.getLastRow(), 4).setNumberFormat('@').setValue(String(c.phone || '')); } catch (e) {}
+  return { id: id, total: total };
 }
 
 // Create or update a customer card by phone. Returns the customer id (or '').
