@@ -187,20 +187,6 @@
       "url": "https://carmeldevries.co.il/#product-p-1793828867445-2jeqnx"
     },
     {
-      "id": "p-1779604656941-9uocgy",
-      "name": "אלפחורס",
-      "description": "מארז אלפחורס בעבודת יד, עוגיות רכות ונימוחות במילוי ריבת חלב עשירה, מצופות קוקוס עדין.",
-      "price": 59,
-      "currency": "ILS",
-      "listPrice": 69,
-      "onSale": true,
-      "unit": "מארז של כ-16 יח'",
-      "kosher": "חלבי",
-      "availability": "in_stock",
-      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1779604656941-9uocgy-43f6b252ab.jpg",
-      "url": "https://carmeldevries.co.il/#product-p-1779604656941-9uocgy"
-    },
-    {
       "id": "rolled",
       "name": "מגולגלות במילויים",
       "description": "בצק עדין במילוי עשיר וטעים, 2 טעמים לבחירה.",
@@ -214,7 +200,7 @@
       "flavors": [
         {
           "name": "קינדר",
-          "availability": "in_stock"
+          "availability": "out_of_stock"
         },
         {
           "name": "נוטלה",
@@ -289,6 +275,20 @@
       "availability": "in_stock",
       "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1780512016737-f4lkz1-e00688eacf.jpg",
       "url": "https://carmeldevries.co.il/#product-p-1780512016737-f4lkz1"
+    },
+    {
+      "id": "p-1779604656941-9uocgy",
+      "name": "אלפחורס",
+      "description": "מארז אלפחורס בעבודת יד, עוגיות רכות ונימוחות במילוי ריבת חלב עשירה, מצופות קוקוס עדין.",
+      "price": 59,
+      "currency": "ILS",
+      "listPrice": 69,
+      "onSale": true,
+      "unit": "מארז של כ-16 יח'",
+      "kosher": "חלבי",
+      "availability": "out_of_stock",
+      "image": "https://kqp7xrcdaulgm1ep.public.blob.vercel-storage.com/catalog/p-1779604656941-9uocgy-43f6b252ab.jpg",
+      "url": "https://carmeldevries.co.il/#product-p-1779604656941-9uocgy"
     },
     {
       "id": "p-1785395858188-y1i00u",
