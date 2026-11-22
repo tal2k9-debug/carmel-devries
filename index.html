@@ -264,6 +264,7 @@ footer .bs{color:#bda77f;margin-bottom:18px}
 <div class="fr">
 <div class="ff"><label for="cust-fulfill">סוג קבלה</label><select id="cust-fulfill"><option value="delivery">🚚 משלוח באופקים</option><option value="pickup">🏠 איסוף עצמי - אורים 20</option></select></div>
 <div class="ff"><label>תאריך מבוקש לאיסוף / משלוח</label><input id="cust-date" type="hidden"><button type="button" id="date-display" class="date-display">בחרי תאריך ▾</button><div id="date-cal" class="date-cal" style="display:none"></div><span id="date-msg" style="display:none;color:#c0392b;font-size:13px;margin-top:6px"></span></div>
+<div class="ff"><label for="cust-time">שעת איסוף / משלוח מבוקשת</label><select id="cust-time"><option value="">בחרי קודם תאריך</option></select></div>
 </div>
 <div class="fr fl" id="addr-row"><div class="ff"><label for="cust-address">כתובת למשלוח (באופקים)</label><input id="cust-address" type="text" placeholder="רחוב, מספר" autocomplete="street-address"></div></div>
 <div class="fr fl" id="upd-row"><label class="chk" for="cust-updates"><input type="checkbox" id="cust-updates"><span>💛 אשמח לקבל מקרן עדכונים ומבצעים בוואטסאפ<small>לא יותר מפעם בשבוע · אפשר להסיר בכל רגע במילה "הסר"</small></span></label></div>
@@ -682,6 +683,25 @@ function pickDate(iso){
   const b=$('#date-display');if(b){b.textContent='יום '+DAY_NAMES[d.getDay()]+' · '+p[2]+'/'+p[1]+'/'+p[0]+'  ✎';b.classList.add('has');b.classList.remove('inv');}
   $('#date-cal').style.display='none';
   const msg=document.getElementById('date-msg');if(msg)msg.style.display='none';
+  populateTimeOptions(iso);
+}
+// שעות איסוף/משלוח לבחירה לפי היום: א׳–ה׳ 09:00–20:00, שישי 09:00–14:00, חצי שעה. שבת אין.
+function populateTimeOptions(iso){
+  const sel=$('#cust-time');if(!sel)return;
+  const prev=sel.value;
+  const p=String(iso).split('-');const dow=p.length===3?new Date(+p[0],+p[1]-1,+p[2]).getDay():-1;
+  let endH=20;
+  if(dow===5)endH=14;
+  if(dow===6){sel.innerHTML='<option value="">אין איסוף/משלוח בשבת</option>';sel.classList.remove('inv');return;}
+  let opts='<option value="">בחרי שעה ▾</option>';
+  for(let h=9;h<=endH;h++){
+    const hh=(h<10?'0':'')+h;
+    opts+='<option value="'+hh+':00">'+hh+':00</option>';
+    if(h<endH)opts+='<option value="'+hh+':30">'+hh+':30</option>';
+  }
+  sel.innerHTML=opts;
+  if(prev&&sel.querySelector('option[value="'+prev+'"]'))sel.value=prev;
+  sel.classList.remove('inv');
 }
 function dateLeadOK(v){if(!v)return true;const p=String(v).split('-');if(p.length!==3)return true;const sel=new Date(+p[0],+p[1]-1,+p[2]);const now=new Date();now.setHours(0,0,0,0);const diff=Math.round((sel-now)/86400000);return diff>=leadDaysVal();}
 // Is the chosen pickup date available? A specific-date override (חופשה / יום מיוחד)
@@ -925,6 +945,7 @@ function buildMsg(){
   if(n)m+='שם: '+n+'\n';
   if(p)m+='טלפון: '+p+'\n';
   if(d)m+='תאריך מבוקש: '+d+'\n';
+  const _t=($('#cust-time')||{}).value;if(_t)m+='שעת איסוף/משלוח: '+_t+'\n';
   if(f==='delivery'&&a)m+='כתובת: '+a+', אופקים\n';
   if(no)m+='הערות: '+no+'\n';
   m+='אמצעי תשלום: '+PAY_LABELS[payMethod]+'\n';
@@ -951,6 +972,7 @@ function buildOrderObj(){
     payment:payMethod,
     paymentLabel:PAY_LABELS[payMethod],
     date:$('#cust-date').value,
+    time:($('#cust-time')||{}).value||'',
     items:items,
     updates:!!(($('#cust-updates')||{}).checked), // אישור מפורש לרשימת העדכונים בוואטסאפ (ברירת מחדל: לא מסומן)
     hp:($('#cust-website')||{value:''}).value
@@ -982,6 +1004,8 @@ function send(){
   if(!_phone)need.push(['#cust-phone','טלפון']);
   else if(!normalizeIlMobile(_phone))need.push(['#cust-phone','טלפון נייד ישראלי תקין (05X-XXXXXXX)']);
   if(!_date)need.push(['#date-display','תאריך מבוקש']);
+  const _time=($('#cust-time')||{}).value.trim();
+  if(!_time)need.push(['#cust-time','שעת איסוף / משלוח']);
   if(_del&&!_addr)need.push(['#cust-address','כתובת למשלוח']);
   $$('.inv').forEach(e=>e.classList.remove('inv'));
   if(need.length){
