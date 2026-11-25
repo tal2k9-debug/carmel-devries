@@ -267,7 +267,7 @@ function ensureToken() {
     _tokenRefreshResolve = resolve;
     try { tokenClient.requestAccessToken({ prompt: '' }); }
     catch (e) { _tokenRefreshResolve = null; resolve(false); return; }
-    setTimeout(() => { if (_tokenRefreshResolve) { _tokenRefreshResolve = null; resolve(false); } }, 8000);
+    setTimeout(() => { if (_tokenRefreshResolve === resolve) { _tokenRefreshResolve = null; resolve(false); } }, 8000);
   });
 }
 
@@ -294,7 +294,8 @@ async function showApp() {
     setSync('ok', 'מסונכרן');
   } catch (e) {
     console.error('Sync error', e);
-    setSync('err', 'אופליין - נטען מהמטמון');
+    // התחברות שפגה מקבלת כפתור התחברות (נקבע ב-syncAll) — לא דורסים אותו ב"אופליין".
+    if (!((e && e.message === 'token_expired') || syncErrCode(e) === 401)) setSync('err', 'אופליין - נטען מהמטמון');
     renderAll();
   }
 }
@@ -425,8 +426,42 @@ async function updateRow(sheetName, rowNum, row) {
 }
 
 /* ============ SYNC ============ */
-async function syncAll() {
+// קוד השגיאה שחזר מגוגל (401 = ההתחברות פגה). 0 = לא הגיעה תשובה בכלל (אין רשת).
+function syncErrCode(e) {
+  if (!e) return 0;
+  const c = e.status || (e.result && e.result.error && e.result.error.code) || 0;
+  return Number(c) || 0;
+}
+
+// ההתחברות לגוגל פגה: התג האדום הופך לכפתור התחברות, במקום "שגיאת סנכרון" שלא אומרת מה לעשות.
+function setSyncRelogin() {
+  setSync('err', 'ההתחברות פגה — לחצי כאן');
+  const el = document.getElementById('syncStatus');
+  el.style.cursor = 'pointer';
+  el.onclick = reloginFromSync;
+}
+
+async function reloginFromSync() {
+  // טלפון (כניסה ישירה): הולכים לגוגל וחוזרים לדשבורד באותה לשונית. מה שלא נשמר לגיליון כבר קיבל התראה בזמן אמת.
+  if (loginMode() === 'direct' || !tokenClient) { startLogin('direct'); return; }
+  // מחשב: חלון גוגל, ואז ממשיכים מאותו מקום בלי לטעון את הדף מחדש.
+  setSync('syncing', 'מתחבר...');
+  const ok = await new Promise((resolve) => {
+    _tokenRefreshResolve = resolve;
+    try { tokenClient.requestAccessToken({prompt: 'select_account'}); }
+    catch (e) { _tokenRefreshResolve = null; resolve(false); return; }
+    setTimeout(() => { if (_tokenRefreshResolve === resolve) { _tokenRefreshResolve = null; resolve(false); } }, 120000);
+  });
+  if (!ok) { setSyncRelogin(); return; }
+  try { await syncAll(); } catch (e) {}
+}
+
+async function syncAll(_retried) {
   setSync('syncing', 'מסנכרן...');
+  // האישור מגוגל תקף שעה. בלי הבדיקה הזו, סנכרון אחרי שעה נכשל ב-"שגיאת סנכרון" בלי הסבר (25.11.2026).
+  const tokOk = await ensureToken();
+  if (!tokOk || !accessToken) { setSyncRelogin(); throw new Error('token_expired'); }
+  try { gapi.client.setToken({access_token: accessToken}); } catch(e){}
   try {
     // קריאת המוצרים נכשלה ≠ "אין מוצרים": בלי ההבחנה הזו נוצרה שורת הגדרות כפולה בגיליון בכל תקלה רגעית
     // (כך הצטברו 4 שורות __settings__ עד 19.11.2026).
@@ -469,7 +504,20 @@ async function syncAll() {
     else setSync('err', 'המוצרים לא נטענו — לחצי סנכרון');
   } catch(e) {
     console.error('syncAll', e);
-    setSync('err', 'שגיאת סנכרון');
+    const code = syncErrCode(e);
+    if (code === 401) {
+      // גוגל דחה את האישור למרות שלפי השעון הוא עוד תקף — מנסים לחדש פעם אחת ולסנכרן שוב.
+      if (!_retried) {
+        if (user) user.expiry = 0;
+        if (await ensureToken()) return syncAll(true);
+      }
+      setSyncRelogin();
+    } else if (!code && typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setSync('err', 'אין אינטרנט — נסי שוב');
+    } else {
+      // הקוד בסוגריים — כדי שצילום מסך יספיק לאבחון.
+      setSync('err', 'שגיאת סנכרון (' + (code || (e && e.message ? String(e.message).slice(0, 40) : '?')) + ')');
+    }
     throw e;
   }
 }
@@ -478,6 +526,7 @@ function setSync(kind, txt) {
   const el = document.getElementById('syncStatus');
   el.className = 'sync-status ' + kind;
   el.textContent = txt;
+  el.onclick = null; el.style.cursor = '';
 }
 
 function loadCache() {
