@@ -250,6 +250,8 @@ async function handleToken(resp, via) {
     if (typeof gapi !== 'undefined' && gapi.client) { try { gapi.client.setToken({access_token: accessToken}); } catch(e){} }
     // Silent refresh path: token renewed mid-session — resolve and skip re-rendering the app.
     if (_tokenRefreshResolve) { const r=_tokenRefreshResolve; _tokenRefreshResolve=null; r(true); return; }
+    // אישור שהגיע באיחור (אחרי שכבר הפסקנו לחכות לו): הדשבורד כבר פתוח — רק מעדכנים את האישור, לא בונים הכול מחדש.
+    if (_appShown) return;
     showApp();
   } catch(e) {
     console.error('[Carmel] userinfo failed', e);
@@ -261,14 +263,20 @@ async function handleToken(resp, via) {
 // Ensure a valid access token before a write. If expired, silently refresh
 // (no popup while the Google session is alive). Resolves false if it can't —
 // callers then alert the user to re-login, so a click is never lost silently.
+let _tokenRefreshPromise = null, _appShown = false;
 function ensureToken() {
-  return new Promise((resolve) => {
-    if (accessToken && user && user.expiry && user.expiry > Date.now() + 10000) { resolve(true); return; }
+  if (accessToken && user && user.expiry && user.expiry > Date.now() + 10000) return Promise.resolve(true);
+  // שתי פעולות שמבקשות חידוש באותו רגע מחכות לאותה תשובה (קודם השנייה דרסה את הראשונה והיא נכשלה סתם).
+  if (_tokenRefreshPromise) return _tokenRefreshPromise;
+  const p = new Promise((resolve) => {
     _tokenRefreshResolve = resolve;
     try { tokenClient.requestAccessToken({ prompt: '' }); }
     catch (e) { _tokenRefreshResolve = null; resolve(false); return; }
     setTimeout(() => { if (_tokenRefreshResolve === resolve) { _tokenRefreshResolve = null; resolve(false); } }, 8000);
   });
+  _tokenRefreshPromise = p;
+  p.then(() => { if (_tokenRefreshPromise === p) _tokenRefreshPromise = null; });
+  return p;
 }
 
 function signOut() {
@@ -283,6 +291,7 @@ async function showApp() {
   document.getElementById('login').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('userEmail').textContent = user.email;
+  _appShown = true;
   bindUI();
   setSync('syncing', 'מסנכרן...');
   try {
@@ -425,6 +434,94 @@ async function updateRow(sheetName, rowNum, row) {
   });
 }
 
+/* ============ כתיבה בטוחה לגיליון (26.11.2026) ============
+   עד עכשיו הדשבורד כתב לשורה "מיקום ברשימה המקומית + 2". כשהגיליון השתנה מאז הטעינה (הזמנה מהאתר,
+   מחיקה ממכשיר אחר) הכתיבה נחתה על רשומה אחרת. מעכשיו כל כתיבה ומחיקה מאתרת קודם את השורה לפי המזהה
+   שבעמודה A, וכותבת רק את התאים שהשתנו. */
+
+// אם ספריית גוגל לא עלתה בפתיחה (קליטה חלשה) — מנסים שוב, במקום להישאר שבורים עד טעינה מחדש.
+async function ensureGapi() {
+  if (typeof gapi !== 'undefined' && gapi.client && gapi.client.sheets) return;
+  await loadGapi();
+}
+
+// מספר השורה האמיתי של רשומה בגיליון לפי המזהה שלה (עמודה A). ‎-1 = הרשומה כבר לא קיימת בגיליון.
+async function rowOf(sheetName, id, hintIdx) {
+  await ensureGapi();
+  const col = await readRange(sheetName + '!A2:A');
+  const same = (i) => !!col[i] && String(col[i][0]) === String(id);
+  if (hintIdx != null && hintIdx >= 0 && same(hintIdx)) return hintIdx + 2;
+  for (let i = 0; i < col.length; i++) if (same(i)) return i + 2;
+  return -1;
+}
+
+// כותב תאים בודדים בשורה אחת: cells = {J:'ready', L:'2026-…'}. שאר השורה לא נגעת.
+async function writeCells(sheetName, rowNum, cells) {
+  const data = Object.keys(cells).map(c => ({ range: `${sheetName}!${c}${rowNum}`, values: [[cells[c]]] }));
+  if (!data.length) return;
+  return gapi.client.sheets.spreadsheets.values.batchUpdate({ spreadsheetId: SHEET_ID, resource: { valueInputOption: 'RAW', data } });
+}
+
+// שורה שלמה, אחרי איתור לפי מזהה. מחזיר false כשהרשומה כבר לא בגיליון.
+async function updateRowById(sheetName, id, hintIdx, row) {
+  const r = await rowOf(sheetName, id, hintIdx);
+  if (r < 0) return false;
+  await updateRow(sheetName, r, row);
+  return true;
+}
+
+// מחיקת שורה לפי מזהה. מחזיר false כשהיא כבר לא קיימת (נמחקה ממקום אחר) — ואז לא מוחקים כלום.
+async function deleteRowById(sheetName, id, hintIdx) {
+  const r = await rowOf(sheetName, id, hintIdx);
+  if (r < 0) return false;
+  await gapi.client.sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    resource: { requests: [{ deleteDimension: { range: { sheetId: await getSheetId(sheetName), dimension: 'ROWS', startIndex: r - 1, endIndex: r } } }] }
+  });
+  return true;
+}
+
+// הרשומה נמחקה ממקום אחר: מודיעים ומרעננים, במקום לכתוב על שורה של מישהו אחר.
+async function rowGone(what) {
+  setSync('err', 'הרשימה השתנתה');
+  alert((what || 'הרשומה') + ' כבר לא בגיליון (נמחק ממכשיר אחר). הנתונים מתרעננים עכשיו.');
+  try { await syncAll(); } catch (e) {}
+}
+
+// ההתחברות פגה באמצע שמירה: הודעה שמתאימה גם לטלפון (בלי "F5") + התג האדום הופך לכפתור התחברות.
+function needRelogin(what) {
+  setSyncRelogin();
+  alert('ההתחברות לגוגל פגה — ' + (what || 'השינוי') + ' לא נשמר בגיליון.\nלחצי על התג האדום למעלה ("ההתחברות פגה") כדי להתחבר מחדש, ואז נסי שוב.');
+}
+
+// הודעת שגיאה קריאה מתשובת גוגל.
+function gErr(e) { return (e && e.result && e.result.error && e.result.error.message) || (e && e.message) || 'תקלת רשת'; }
+
+/* ---- מלאי: שילוב עם מה שנמכר בינתיים ----
+   הדשבורד כותב שורת מוצר שלמה. אם מאז הטעינה ירד מלאי בגיליון (הזמנה מהאתר), כתיבה של הכמות המקומית
+   הייתה מחזירה את המלאי שכבר נמכר. לכן זוכרים מה היה בגיליון בסנכרון האחרון (_prodBase), קוראים את הכמות
+   העדכנית רגע לפני הכתיבה, ומחילים רק את ההפרש שקרן עשתה. */
+let _prodBase = {};                     // id -> {qty, flavors} כפי שהיו בגיליון בסנכרון/בכתיבה האחרונים
+let _prodQueue = Promise.resolve();     // כתיבות מוצר אחת אחרי השנייה (לחיצות מהירות על + / −)
+function snapProdBase() {
+  _prodBase = {};
+  (db.products || []).forEach(p => { _prodBase[p.id] = { qty: parseInt(p.qty) || 0, flavors: p.flavors || '' }; });
+}
+function mergeStock(base, local, fresh) {
+  if (!base || (fresh.qty === base.qty && fresh.flavors === base.flavors)) return local;
+  const lf = parseFlavors(local.flavors, local.qty);
+  if (lf.length) {
+    const toMap = (s, q) => { const m = {}; parseFlavors(s, q).forEach(f => { m[f.name] = f.qty; }); return m; };
+    const bf = toMap(base.flavors, base.qty), ff = toMap(fresh.flavors, fresh.qty);
+    const out = lf.map(f => ({
+      name: f.name,
+      qty: (f.name in bf && f.name in ff) ? Math.max(0, ff[f.name] + (f.qty - bf[f.name])) : f.qty
+    }));
+    return { qty: flavorsTotalQty(out), flavors: serializeFlavors(out) };
+  }
+  return { qty: Math.max(0, fresh.qty + ((parseInt(local.qty) || 0) - base.qty)), flavors: local.flavors || '' };
+}
+
 /* ============ SYNC ============ */
 // קוד השגיאה שחזר מגוגל (401 = ההתחברות פגה). 0 = לא הגיעה תשובה בכלל (אין רשת).
 function syncErrCode(e) {
@@ -456,32 +553,69 @@ async function reloginFromSync() {
   try { await syncAll(); } catch (e) {}
 }
 
+const _loadFailed = {};   // לשוניות שהקריאה האחרונה שלהן נכשלה (Expenses/Recipes/Products/Settings/Waitlist)
+let _lastSyncAt = 0;
+
+/* סנכרון אוטומטי: כשחוזרים ללשונית וכל 3 דקות. בלי זה הזמנות חדשות מהאתר, קבלות ומלאי הופיעו רק אחרי
+   לחיצה על "סנכרון", והדשבורד עבד על תמונה ישנה. לא מפריע באמצע עבודה: לא רץ כשחלון פתוח, כשמקלידים,
+   כשיש הזמנה חדשה באמצע מילוי או כששמירה בדרך. לא פותח חלון התחברות לבד — רק מסמן שההתחברות פגה. */
+function autoSyncOk() {
+  if (!_appShown || !user || document.visibilityState !== 'visible') return false;
+  if (document.querySelector('.modal.show')) return false;
+  const st = document.getElementById('syncStatus');
+  if (st && st.classList.contains('syncing')) return false;
+  const a = document.activeElement;
+  if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return false;
+  if (typeof pickedItems !== 'undefined' && pickedItems.length) return false;
+  return true;
+}
+async function autoSync() {
+  if (!autoSyncOk() || Date.now() - _lastSyncAt < 60000) return;
+  if (!(user.expiry && user.expiry > Date.now() + 10000)) {
+    const st = document.getElementById('syncStatus');
+    if (st && !st.onclick) setSyncRelogin();
+    return;
+  }
+  try { await syncAll(); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { autoSync(); });
+setInterval(autoSync, 180000);
+
 async function syncAll(_retried) {
   setSync('syncing', 'מסנכרן...');
   // האישור מגוגל תקף שעה. בלי הבדיקה הזו, סנכרון אחרי שעה נכשל ב-"שגיאת סנכרון" בלי הסבר (25.11.2026).
   const tokOk = await ensureToken();
   if (!tokOk || !accessToken) { setSyncRelogin(); throw new Error('token_expired'); }
-  try { gapi.client.setToken({access_token: accessToken}); } catch(e){}
+  try { await _prodQueue; } catch(e){}   // כתיבת מלאי שעדיין בדרך מסתיימת לפני שקוראים מחדש
   try {
-    // קריאת המוצרים נכשלה ≠ "אין מוצרים": בלי ההבחנה הזו נוצרה שורת הגדרות כפולה בגיליון בכל תקלה רגעית
-    // (כך הצטברו 4 שורות __settings__ עד 19.11.2026).
-    let prodOk = true;
+    await ensureGapi();
+    try { gapi.client.setToken({access_token: accessToken}); } catch(e){}
+    // קריאה שנכשלה ≠ "הלשונית ריקה". בלי ההבחנה הזו נוצרה שורת הגדרות כפולה בכל תקלה רגעית (4 שורות
+    // __settings__ עד 19.11.2026), והוצאות/מתכונים/הגדרות "נעלמו" עד הסנכרון הבא (26.11.2026).
+    // לשונית שעוד לא קיימת (גוגל מחזיר 400) = ריקה באמת. התחברות שפגה (401) עוצרת את כל הסנכרון.
+    const soft = (range, key) => readRange(range).then(
+      v => { _loadFailed[key] = false; return v; },
+      e => { const c = syncErrCode(e); if (c === 401) throw e; if (c === 400) { _loadFailed[key] = false; return []; } _loadFailed[key] = true; return null; });
     const [cust, ord, exp, rec, prod, setg, wl] = await Promise.all([
       readRange('Customers!A2:J'), // עד J: כולל updatesAt (I) + updatesSource (J) — רשימת העדכונים בוואטסאפ
-      readRange('Orders!A2:Q'), // עד Q: כולל total (O), itemsJSON (P), receiptUrl (Q) — לפני כן נטענו רק 14 עמודות והקבלות לא הוצגו
-      readRange('Expenses!A2:F').catch(()=>[]),
-      readRange('Recipes!A2:H').catch(()=>[]),
-      readRange('Products!A2:O').catch(()=>{ prodOk = false; return []; }),
-      readRange('Settings!A2:B').catch(()=>[]),
-      readRange('Waitlist!A2:H').catch(()=>[]) // "עדכני אותי כשחוזר" — הלשונית נוצרת בפעם הראשונה שלקוח נרשם
+      readRange('Orders!A2:S'), // עד S: total (O), itemsJSON (P), receiptUrl (Q), time (R), payChoice (S)
+      soft('Expenses!A2:F', 'Expenses'),
+      soft('Recipes!A2:H', 'Recipes'),
+      soft('Products!A2:O', 'Products'),
+      soft('Settings!A2:B', 'Settings'),
+      soft('Waitlist!A2:H', 'Waitlist') // "עדכני אותי כשחוזר" — הלשונית נוצרת בפעם הראשונה שלקוח נרשם
     ]);
+    const prodOk = !_loadFailed.Products;
     db.customers = cust.map(r => rowToCust(r));
     db.orders = ord.map(r => rowToOrder(r));
-    db.expenses = exp.map(r => rowToExp(r));
-    db.recipes = rec.map(r => rowToRecipe(r));
-    db.products = prod.map(r => rowToProd(r));
-    db.settings = settingsRowsToObj(setg);
-    db.waitlist = (wl||[]).map(r => rowToWait(r));
+    // לשונית שהקריאה שלה נכשלה שומרת את מה שכבר היה במכשיר (לא מתאפסת).
+    if (exp)  db.expenses = exp.map(r => rowToExp(r));
+    if (rec)  db.recipes = rec.map(r => rowToRecipe(r));
+    if (prod) { db.products = prod.map(r => rowToProd(r)); snapProdBase(); }
+    if (setg) db.settings = settingsRowsToObj(setg);
+    if (wl)   db.waitlist = wl.map(r => rowToWait(r));
+    ['customers','orders','expenses','recipes','products','waitlist'].forEach(k => { if (!db[k]) db[k] = []; });
+    if (!db.settings) db.settings = {};
     // Make sure the public-facing "__settings__" row exists so the live site reads
     // the open hours/days with NO Apps Script deploy. Only writes when missing —
     // afterwards saveOrderSettings keeps it in sync. This auto-publishes whatever
@@ -500,8 +634,10 @@ async function syncAll(_retried) {
     refreshRecipesList();
     saveCache();
     renderAll();
-    if (prodOk) setSync('ok', 'מסונכרן');
-    else setSync('err', 'המוצרים לא נטענו — לחצי סנכרון');
+    _lastSyncAt = Date.now();
+    if (!prodOk) setSync('err', 'המוצרים לא נטענו — לחצי סנכרון');
+    else if (Object.keys(_loadFailed).some(k => _loadFailed[k])) setSync('err', 'חלק מהנתונים לא נטענו — לחצי סנכרון');
+    else setSync('ok', 'מסונכרן');
   } catch(e) {
     console.error('syncAll', e);
     const code = syncErrCode(e);
@@ -556,7 +692,7 @@ function rowToWait(r){ return {id:r[0]||'', productId:r[1]||'', productName:r[2]
 function rowToCust(r){ return {id:r[0]||'', name:r[1]||'', phone:r[2]||'', address:r[3]||'', allergies:r[4]||'', notes:r[5]||'', createdAt:r[6]||'', lastOrder:r[7]||'', updatesAt:r[8]||'', updatesSource:r[9]||''}; }
 // custToRow נשאר 8 עמודות (A:H) בכוונה — עריכת לקוח לא נוגעת באישור העדכונים (I:J).
 function custToRow(c){ return [c.id, c.name, c.phone, c.address, c.allergies, c.notes, c.createdAt, c.lastOrder]; }
-function rowToOrder(r){ return {id:r[0]||'', customerId:r[1]||'', name:r[2]||'', phone:r[3]||'', address:r[4]||'', fulfillment:r[5]||'pickup', date:r[6]||'', items:r[7]||'', notes:r[8]||'', status:r[9]||'new', createdAt:r[10]||'', updatedAt:r[11]||'', paid:(r[12]==='1'||r[12]===1||r[12]===true||String(r[12]).toLowerCase()==='true'), paymentMethod:r[13]||'', total:r[14]||'', receiptUrl:r[16]||''}; }
+function rowToOrder(r){ return {id:r[0]||'', customerId:r[1]||'', name:r[2]||'', phone:r[3]||'', address:r[4]||'', fulfillment:r[5]||'pickup', date:r[6]||'', items:r[7]||'', notes:r[8]||'', status:r[9]||'new', createdAt:r[10]||'', updatedAt:r[11]||'', paid:(r[12]==='1'||r[12]===1||r[12]===true||String(r[12]).toLowerCase()==='true'), paymentMethod:r[13]||'', total:r[14]||'', receiptUrl:r[16]||'', time:r[17]||'', payChoice:r[18]||''}; }
 function orderToRow(o){ return [o.id, o.customerId, o.name, o.phone, o.address, o.fulfillment, o.date, o.items, o.notes, o.status, o.createdAt, o.updatedAt, o.paid?'1':'0', o.paymentMethod||'']; }
 // Israeli phone -> wa.me format (972XXXXXXXXX): handles leading 0 and 9-digit (no-0) forms.
 // תאריך+שעה בשעון ישראל מתוך ISO (למשל 2026-09-11T05:57:04.696Z -> 11.09.2026 08:57)
@@ -569,7 +705,7 @@ function normalizeIlMobile(p){
   return /^05\d{8}$/.test(d) ? d : '';
 }
 // טלפון לתצוגה: 052-644-6814 (נייד), 03-123-4567 (קווי); אחרת כמו שהוא
-function fmtPhone(p){ const m=normalizeIlMobile(p); if(m) return m.slice(0,3)+'-'+m.slice(3,6)+'-'+m.slice(6); let d=String(p||'').replace(/D/g,''); if(d.indexOf('972')===0) d='0'+d.slice(3); if(d.length===9 && /^0[2-489]/.test(d)) return d.slice(0,2)+'-'+d.slice(2,5)+'-'+d.slice(5); return String(p||''); }
+function fmtPhone(p){ const m=normalizeIlMobile(p); if(m) return m.slice(0,3)+'-'+m.slice(3,6)+'-'+m.slice(6); let d=String(p||'').replace(/\D/g,''); if(d.indexOf('972')===0) d='0'+d.slice(3); if(d.length===9 && /^0[2-489]/.test(d)) return d.slice(0,2)+'-'+d.slice(2,5)+'-'+d.slice(5); return String(p||''); }
 // המלאי השתנה → מבקשים מ-Meta למשוך את הקטלוג עכשיו (במקום לחכות לשעה). fire-and-forget, לא חוסם.
 function pingCatalogSync(reason){ try { const base=AGENT_URL.endsWith('/')?AGENT_URL.slice(0,-1):AGENT_URL; fetch(base+'/api/catalog-push?reason='+encodeURIComponent(reason||'dashboard'), {method:'POST', keepalive:true}).catch(()=>{}); } catch(e){} }
 function waPhone(p){ let d=String(p||'').replace(/\D/g,''); if(d.startsWith('972'))return d; if(d.startsWith('0'))return '972'+d.slice(1); if(d.length===9)return '972'+d; return d; }
@@ -741,18 +877,20 @@ async function writeSettingsProductRow(s){
     sortOrder:99999, minOrder:0, minNote:'', flavors:'', updatedAt:now
   });
   const idx = (db.products||[]).findIndex(p=>p.id==='__settings__');
-  if (idx >= 0) {
-    await updateRow('Products', idx+2, row);
+  // השורה מאותרת לפי המזהה שלה בגיליון (ולא לפי מיקום מקומי), כדי לא לכתוב הגדרות על שורת מוצר.
+  if (idx >= 0 && await updateRowById('Products', '__settings__', idx, row)) {
     pingCatalogSync('manual-order');
   } else {
     await appendRow('Products', row);
     pingCatalogSync('manual-order');
     db.products = db.products || [];
-    db.products.push(rowToProd(row)); // keep a local copy so the next save updates instead of appending again
+    if (idx < 0) db.products.push(rowToProd(row)); // keep a local copy so the next save updates instead of appending again
   }
 }
 
 async function saveOrderSettings(){
+  // ההגדרות לא נטענו מהגיליון (תקלה רגעית) — המסך מציג ברירות מחדל, ושמירה הייתה דורסת את השעות האמיתיות.
+  if (_loadFailed.Settings) { alert('ההגדרות לא נטענו מהגיליון בסנכרון האחרון, ולכן אי אפשר לשמור עכשיו.\nלחצי "סנכרון" ונסי שוב.'); return false; }
   const accepting = document.getElementById('setAccepting').checked ? '1' : '0';
   const leadDays = String(Math.max(0, parseInt(document.getElementById('setLeadDays').value,10)||0));
   const closedMessage = document.getElementById('setClosedMsg').value.trim() || DEFAULT_SETTINGS.closedMessage;
@@ -764,14 +902,16 @@ async function saveOrderSettings(){
   const s = { acceptingOrders: accepting, leadDays, closedMessage, hours: JSON.stringify(hours), overrides: JSON.stringify(_overrides||[]) };
   db.settings = s; saveCache();
   const ok = await ensureToken();
-  if (!ok || !accessToken) { setSync('err','צריך להתחבר מחדש'); alert('ההתחברות לגוגל פגה — ההגדרות לא נשמרו לגיליון. רענני (F5), התחברי מחדש, ונסי שוב.'); return; }
+  if (!ok || !accessToken) { needRelogin('ההגדרות'); return false; }
   setSync('syncing','שומר...');
   try {
-    if (typeof gapi !== 'undefined' && gapi.client) gapi.client.setToken({access_token: accessToken});
+    await ensureGapi();
+    gapi.client.setToken({access_token: accessToken});
     await writeSettings(s);
     await writeSettingsProductRow(s);
     setSync('ok','מסונכרן'); toast('ההגדרות נשמרו ✓','ok');
-  } catch(e) { console.error(e); setSync('err','שגיאת שמירה'); alert('שמירת ההגדרות נכשלה (אולי תקלת רשת). נסי שוב.'); }
+    return true;
+  } catch(e) { console.error(e); setSync('err','שגיאת שמירה'); alert('שמירת ההגדרות נכשלה (' + gErr(e) + '). נסי שוב.'); return false; }
 }
 
 /* ============ UI BINDING ============ */
@@ -836,7 +976,7 @@ function renderToday() {
 
   const urgent = [...todayOrd, ...tomorrowOrd].filter(o=>o.status!=='delivered').slice(0,8);
   document.getElementById('urgentOrders').innerHTML = urgent.length ?
-    urgent.map(o=>`<div style="padding:10px;border-bottom:1px solid #f0e0d0;cursor:pointer" onclick="showOrder('${o.id}')"><strong>${esc(o.name)}</strong> · ${esc(o.date)} · ${esc(o.items.slice(0,50))}${o.items.length>50?'...':''} <span class="tag ${o.status}">${stLabel(o.status)}</span></div>`).join('') :
+    urgent.map(o=>`<div style="padding:10px;border-bottom:1px solid #f0e0d0;cursor:pointer" onclick="showOrder('${o.id}')"><strong>${esc(o.name)}</strong> · ${esc(o.date)}${o.time?' 🕒 '+esc(o.time):''} · ${esc(o.items.slice(0,50))}${o.items.length>50?'...':''} <span class="tag ${o.status}">${stLabel(o.status)}</span></div>`).join('') :
     '<div style="color:var(--mute)">אין הזמנות דחופות</div>';
 
   const recent = [...db.orders].sort((a,b)=>(b.updatedAt||b.createdAt||'').localeCompare(a.updatedAt||a.createdAt||'')).slice(0,5);
@@ -861,8 +1001,12 @@ function matchProductLine(line) {
   if (!m) return null;
   const qty = parseInt(m[1]);
   if (!qty) return null;
+  // קודם כול שם מוצר מלא שמופיע בשורה (הארוך ביותר). ההתאמה לפי 4 אותיות ראשונות נשארת רק כגיבוי —
+  // היא תפסה את המוצר הראשון שמתחיל ב"עוגי…" לכל העוגיות ונתנה סכום שגוי.
+  const named = (db.products||[]).filter(p => p.name && p.id !== '__settings__' && line.includes(p.name)).sort((a,b) => b.name.length - a.name.length)[0];
+  if (named) return {product:named, qty};
   for (const p of (db.products||[])) {
-    if (!p.name) continue;
+    if (!p.name || p.id === '__settings__') continue;
     const aliases = PRODUCT_ALIASES[p.id] || [];
     if (line.includes(p.name.slice(0,4)) || aliases.some(a => line.includes(a))) {
       return {product:p, qty};
@@ -896,7 +1040,7 @@ function kanbanCard(o) {
     : `<span style="background:#ffebee;color:var(--err);font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px">₪${Math.round(orderTotal(o))} · חוב פתוח</span>`;
   return `<div class="kcard ${cls}" draggable="true" ondragstart="event.dataTransfer.setData('id','${o.id}');this.classList.add('dragging')" ondragend="this.classList.remove('dragging')" onclick="showOrder('${o.id}')">
     <div class="n">${esc(o.name)}</div>
-    <div class="d">📅 ${esc(o.date)} · ${o.fulfillment==='delivery'?'🚚 משלוח':'🏠 איסוף'} ${dayTag(o)}</div>
+    <div class="d">📅 ${esc(o.date)}${o.time?' · 🕒 '+esc(o.time):''} · ${o.fulfillment==='delivery'?'🚚 משלוח':'🏠 איסוף'} ${dayTag(o)}</div>
     <div class="it">${esc(o.items.slice(0,80))}${o.items.length>80?'...':''}</div>
     <div class="ph">📞 ${esc(fmtPhone(o.phone))}</div>
     <div style="margin-top:6px">${payBadge}${o.receiptUrl?` <span data-rcpt="${o.id}" title="קבלה ללקוח" style="font-size:11px">${rcptBadge(_rcpt[o.id])}</span>`:''}</div>
@@ -909,28 +1053,44 @@ async function dropOrder(ev, status) {
   const id = ev.dataTransfer.getData('id');
   const o = db.orders.find(x => x.id === id);
   if (!o || o.status === status) return;
-  o.status = status;
-  o.updatedAt = new Date().toISOString();
-  saveCache();
-  renderAll();
-  await updateOrderRow(o);
+  await changeOrder(id, { status }, ['status']);
 }
 
-async function updateOrderRow(o) {
+// כותב להזמנה רק את התאים שהשתנו (ולא את כל השורה), אחרי איתור השורה לפי מזהה ההזמנה.
+// fields: 'status' / 'paid' / 'paymentMethod'. מחזיר true רק כשהשינוי באמת נשמר בגיליון.
+const ORDER_COL = { status: 'J', paid: 'M', paymentMethod: 'N' };
+async function updateOrderRow(o, fields) {
   const idx = db.orders.findIndex(x => x.id === o.id);
-  if (idx < 0) return;
+  if (idx < 0) return false;
   const ok = await ensureToken();
-  if (!ok || !accessToken) {
-    setSync('err','צריך להתחבר מחדש');
-    alert('ההתחברות לגוגל פגה ולכן השינוי לא נשמר.\nרענני את הדף (F5), היכנסי מחדש לגוגל, וסמני שוב.');
-    return;
-  }
+  if (!ok || !accessToken) { needRelogin('השינוי בהזמנה'); return false; }
   setSync('syncing', 'שומר...');
   try {
-    if (typeof gapi !== 'undefined' && gapi.client) gapi.client.setToken({access_token: accessToken});
-    await updateRow('Orders', idx + 2, orderToRow(o));
+    await ensureGapi();
+    gapi.client.setToken({access_token: accessToken});
+    const row = await rowOf('Orders', o.id, idx);
+    if (row < 0) { await rowGone('ההזמנה'); return false; }
+    const cells = { L: o.updatedAt || '' };
+    (fields || ['status', 'paid', 'paymentMethod']).forEach(f => { cells[ORDER_COL[f]] = f === 'paid' ? (o.paid ? '1' : '0') : (o[f] || ''); });
+    await writeCells('Orders', row, cells);
     setSync('ok', 'מסונכרן');
-  } catch(e) { console.error(e); setSync('err','שגיאת שמירה'); alert('השמירה נכשלה (תקלת רשת?). נסי שוב.'); }
+    return true;
+  } catch(e) { console.error(e); setSync('err','שגיאת שמירה'); alert('השמירה נכשלה (תקלת רשת?). נסי שוב.'); return false; }
+}
+// שינוי בהזמנה שמוצג מיד, ואם השמירה נכשלה — חוזר למה שהיה (כדי שהמסך לא יראה משהו שלא נשמר).
+async function changeOrder(id, patch, fields) {
+  const o = db.orders.find(x => x.id === id); if (!o) return false;
+  const prev = {}; Object.keys(patch).forEach(k => { prev[k] = o[k]; });
+  prev.updatedAt = o.updatedAt;
+  Object.assign(o, patch); o.updatedAt = new Date().toISOString();
+  saveCache(); renderAll();
+  if (document.getElementById('orderModal').classList.contains('show')) showOrder(id);
+  const ok = await updateOrderRow(o, fields);
+  if (!ok) {
+    const cur = db.orders.find(x => x.id === id);   // אחרי "הרשומה נמחקה" הרשימה כבר התרעננה
+    if (cur === o) { Object.assign(o, prev); saveCache(); renderAll(); if (document.getElementById('orderModal').classList.contains('show')) showOrder(id); }
+  }
+  return ok;
 }
 
 /* ============ ORDER DETAIL ============ */
@@ -945,7 +1105,7 @@ function showOrder(id) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
       <div><strong>שם:</strong> ${esc(o.name)}</div>
       <div><strong>טלפון:</strong> <a href="tel:${esc(o.phone)}">${esc(fmtPhone(o.phone))}</a></div>
-      <div><strong>תאריך מבוקש:</strong> ${esc(o.date)||'—'}</div>
+      <div><strong>תאריך מבוקש:</strong> ${esc(o.date)||'—'}${o.time?' · <strong>שעה:</strong> 🕒 '+esc(o.time):''}</div>
       <div><strong>מסירה:</strong> ${o.fulfillment==='delivery'?'🚚 משלוח':'🏠 איסוף עצמי'}</div>
       <div><strong>הוזמן ב:</strong> ${fmtDateTime(o.createdAt)}</div>
       <div><strong>סה״כ:</strong> ₪${Math.round(orderTotal(o))}${o.paymentMethod?' · '+esc(o.paymentMethod):''}</div>
@@ -969,6 +1129,7 @@ function showOrder(id) {
         <button class="pay-cancel" onclick="unmarkPaid('${o.id}')">ביטול (טעות)</button>
       </div>` : `
       <div class="pay-open">לא שולם — חוב פתוח</div>
+      ${o.payChoice?`<div style="font-size:13px;color:var(--ink2);margin-bottom:6px">הלקוח/ה בחר/ה באתר לשלם ב: <strong>${esc(o.payChoice)}</strong></div>`:''}
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px">
         <span style="color:var(--mute)">איך שולם?</span>
         <select onchange="onPayMethodChange('${o.id}', this.value)" style="padding:6px 10px;border:1px solid var(--bd);border-radius:6px;background:#fff;font-size:13px">${payOpts}</select>
@@ -994,25 +1155,15 @@ function showOrder(id) {
 }
 
 async function setOrderPaid(id, val) {
-  const o = db.orders.find(x => x.id === id); if (!o) return;
-  o.paid = !!val;
-  o.updatedAt = new Date().toISOString();
-  saveCache(); renderAll(); showOrder(id);
-  await updateOrderRow(o);
+  // אמצעי התשלום נכתב יחד עם הסימון — הבוט מפיק קבלה רק כששניהם בגיליון.
+  return changeOrder(id, { paid: !!val }, ['paid', 'paymentMethod']);
 }
 async function setOrderPaymentMethod(id, method) {
-  const o = db.orders.find(x => x.id === id); if (!o) return;
-  o.paymentMethod = method;
-  o.updatedAt = new Date().toISOString();
-  saveCache();
-  await updateOrderRow(o);
+  return changeOrder(id, { paymentMethod: method }, ['paymentMethod']);
 }
 
 async function setOrderStatus(id, status) {
-  const o = db.orders.find(x => x.id === id); if (!o) return;
-  o.status = status; o.updatedAt = new Date().toISOString();
-  saveCache(); renderAll(); showOrder(id);
-  await updateOrderRow(o);
+  return changeOrder(id, { status }, ['status']);
 }
 
 async function deleteOrder(id) {
@@ -1022,12 +1173,12 @@ async function deleteOrder(id) {
   const o = db.orders[idx];
   // הזמנה שלא נמסרה: הסקריפט מוחק ומחזיר את הפריטים למלאי (כולל לפי טעם). נמסרה: מחיקה בלבד.
   let viaScript = null;
+  // בלי התחברות תקפה לא מוחקים כלום (קודם ההזמנה נעלמה מהמסך אבל נשארה בגיליון).
+  const tokOk = await ensureToken();
+  if (!tokOk || !accessToken) { needRelogin('המחיקה'); return; }
   try {
-    const ok = await ensureToken();
-    if (ok && accessToken) {
-      const resp = await fetch(WEBAPP_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'delete_order', id, token: accessToken }) });
-      viaScript = await resp.json().catch(()=>null);
-    }
+    const resp = await fetch(WEBAPP_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'delete_order', id, token: accessToken }) });
+    viaScript = await resp.json().catch(()=>null);
   } catch(e) { console.error(e); viaScript = null; }
   if (viaScript && (viaScript.ok || viaScript.error === 'not_found')) {
     db.orders.splice(idx,1);
@@ -1044,17 +1195,15 @@ async function deleteOrder(id) {
     return;
   }
   // הסקריפט לא זמין / גרסה ישנה — מחיקה ישירה של השורה כמו קודם, בלי החזרת מלאי
-  db.orders.splice(idx,1);
-  saveCache(); closeModal('orderModal'); renderAll();
-  if (accessToken) {
-    try {
-      await gapi.client.sheets.spreadsheets.batchUpdate({
-        spreadsheetId: SHEET_ID,
-        resource:{requests:[{deleteDimension:{range:{sheetId:await getSheetId('Orders'),dimension:'ROWS',startIndex:idx+1,endIndex:idx+2}}}]}
-      });
-      toast(o.status === 'delivered' ? 'נמחק' : 'נמחק — המלאי לא הוחזר (הסקריפט עוד לא עודכן), לעדכן ידנית', 'ok');
-    } catch(e){ console.error(e); toast('שגיאת מחיקה','err'); }
-  }
+  // השורה מאותרת לפי מזהה ההזמנה; מהמסך היא יורדת רק אחרי שנמחקה באמת מהגיליון.
+  try {
+    await ensureGapi();
+    await deleteRowById('Orders', id, idx);   // false = כבר לא בגיליון — אין מה למחוק
+    const li = db.orders.findIndex(x => x.id === id);
+    if (li >= 0) db.orders.splice(li, 1);
+    saveCache(); closeModal('orderModal'); renderAll();
+    toast(o.status === 'delivered' ? 'נמחק' : 'נמחק — המלאי לא הוחזר אוטומטית, לעדכן ידנית', 'ok');
+  } catch(e){ console.error(e); alert('המחיקה נכשלה (' + gErr(e) + '). ההזמנה לא נמחקה — נסי שוב.'); }
 }
 
 async function getSheetId(name) {
@@ -1073,7 +1222,7 @@ function renderCustomers() {
     ${list.map(c=>{
       const ord = db.orders.filter(o=>o.customerId===c.id).length;
       const on = !!String(c.updatesAt||'').trim();
-      return `<tr><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p)"><strong>${esc(c.name)}</strong></a></td><td><a href="tel:${esc(c.phone)}">${esc(fmtPhone(c.phone))}</a></td><td>${esc(c.address||'-')}</td><td>${esc(c.allergies||'-')}</td><td>${updBadge(c)}</td><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p);font-weight:600">${ord} 👁️</a></td><td class="row-actions"><button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="editCust('${c.id}')">ערוך</button><button class="btn btn-s" style="padding:4px 10px;font-size:12px" title="${on?'הסרה מרשימת העדכונים':'סימון כמאושר/ת לעדכונים (רק אם ביקש/ה)'}" onclick="setCustomerUpdates('${c.id}',${on?'false':'true'})">${on?'🔕':'💛'}</button><a class="btn btn-s" style="padding:4px 10px;font-size:12px" href="https://wa.me/${c.phone.replace(/\D/g,'')}" target="_blank">📱</a></td></tr>`;
+      return `<tr><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p)"><strong>${esc(c.name)}</strong></a></td><td><a href="tel:${esc(c.phone)}">${esc(fmtPhone(c.phone))}</a></td><td>${esc(c.address||'-')}</td><td>${esc(c.allergies||'-')}</td><td>${updBadge(c)}</td><td><a href="#" onclick="showCustCard('${c.id}');return false" style="color:var(--p);font-weight:600">${ord} 👁️</a></td><td class="row-actions"><button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="editCust('${c.id}')">ערוך</button><button class="btn btn-s" style="padding:4px 10px;font-size:12px" title="${on?'הסרה מרשימת העדכונים':'סימון כמאושר/ת לעדכונים (רק אם ביקש/ה)'}" onclick="setCustomerUpdates('${c.id}',${on?'false':'true'})">${on?'🔕':'💛'}</button><a class="btn btn-s" style="padding:4px 10px;font-size:12px" href="https://wa.me/${waPhone(c.phone)}" rel="noopener" target="_blank">📱</a></td></tr>`;
     }).join('')}</tbody></table>`;
 }
 
@@ -1093,14 +1242,23 @@ async function saveCust() {
     const idx=db.customers.findIndex(x=>x.id===editingCustId);
     saveCache(); closeModal('custModal'); renderCustomers();
     const ok = await ensureToken();
-    if (ok && accessToken) { setSync('syncing','שומר...'); try{ await updateRow('Customers', idx+2, custToRow(c)); setSync('ok','מסונכרן'); toast('עודכן','ok'); }catch(e){setSync('err','שגיאה');} }
-    else { setSync('err','צריך להתחבר מחדש'); alert('ההתחברות לגוגל פגה — השינוי לא נשמר לגיליון. רענני (F5) והתחברי מחדש.'); }
+    if (ok && accessToken) {
+      setSync('syncing','שומר...');
+      try {
+        // רק השדות שנערכים בחלון (שם, טלפון, כתובת, אלרגיות, הערות) — "הזמנה אחרונה" ואישור העדכונים לא נדרסים.
+        const row = await rowOf('Customers', c.id, idx);
+        if (row < 0) { await rowGone('הלקוח'); return; }
+        await writeCells('Customers', row, { B: c.name, C: c.phone, D: c.address, E: c.allergies, F: c.notes });
+        setSync('ok','מסונכרן'); toast('עודכן','ok');
+      } catch(e){ console.error(e); setSync('err','שגיאת שמירה'); alert('פרטי הלקוח לא נשמרו בגיליון (' + gErr(e) + '). נסי שוב.'); }
+    }
+    else needRelogin('השינוי בלקוח');
   } else {
     db.customers.push(c);
     saveCache(); closeModal('custModal'); renderCustomers();
     const ok = await ensureToken();
-    if (ok && accessToken) { setSync('syncing','שומר...'); try{ await appendRow('Customers', custToRow(c)); setSync('ok','מסונכרן'); toast('נשמר','ok'); }catch(e){setSync('err','שגיאה');} }
-    else { setSync('err','צריך להתחבר מחדש'); alert('ההתחברות לגוגל פגה — הלקוח לא נשמר לגיליון. רענני (F5) והתחברי מחדש.'); }
+    if (ok && accessToken) { setSync('syncing','שומר...'); try{ await ensureGapi(); await appendRow('Customers', custToRow(c)); setSync('ok','מסונכרן'); toast('נשמר','ok'); }catch(e){ console.error(e); setSync('err','שגיאת שמירה'); alert('הלקוח לא נשמר בגיליון (' + gErr(e) + '). נסי שוב.'); } }
+    else needRelogin('הלקוח החדש');
   }
 }
 
@@ -1114,12 +1272,20 @@ function renderCalendar() {
   for (let i=0;i<7;i++) {
     const d=addDays(start,i), ds=isoDate(d), today=ds===todayStr();
     const ords = db.orders.filter(o=>o.date===ds);
-    html += `<div class="cal-day ${today?'today':''} ${i===5?'fri':''}"><div class="dt">${days[i]} · ${d.getDate()}/${d.getMonth()+1}</div>${ords.map(o=>`<div class="cal-item" onclick="showOrder('${o.id}')"><div class="name">${esc(o.name)}</div><div class="info">${esc(o.items.slice(0,30))}${o.items.length>30?'...':''}</div></div>`).join('')}</div>`;
+    html += `<div class="cal-day ${today?'today':''} ${i===5?'fri':''}"><div class="dt">${days[i]} · ${d.getDate()}/${d.getMonth()+1}</div>${ords.map(o=>`<div class="cal-item" onclick="showOrder('${o.id}')"><div class="name">${o.time?'🕒 '+esc(o.time)+' · ':''}${esc(o.name)}</div><div class="info">${esc(o.items.slice(0,30))}${o.items.length>30?'...':''}</div></div>`).join('')}</div>`;
   }
   document.getElementById('calGrid').innerHTML = html;
 }
 
 /* ============ NEW ORDER ============ */
+let _savingOrder = false;
+// אותם ערכים כמו באתר ובקוד השרת (Code.gs) — לשנות יחד.
+const DELIVERY_FEE = 10, DELIVERY_FREE_FROM = 150, DELIVERY_ITEM_NAME = 'משלוח באופקים';
+// המחיר שהלקוח משלם: מחיר מבצע כשהוא קיים ונמוך מהמחיר הרגיל (אותו כלל כמו serverPrice_ ב-Code.gs).
+function prodPrice(p) {
+  const list = parseFloat(p && p.price) || 0, sale = parseFloat(p && p.salePrice) || 0;
+  return (sale > 0 && sale < list) ? sale : list;
+}
 async function saveNewOrder() {
   const name=document.getElementById('oName').value.trim();
   const phoneRaw=document.getElementById('oPhone').value.trim();
@@ -1130,35 +1296,48 @@ async function saveNewOrder() {
   const items=pickedItemsText();
   const date=document.getElementById('oDate').value;
   if (!name||!phone||!picked.length||!date) { toast('שדות חובה חסרים — בחר לפחות פריט אחד','err'); return; }
-  // block over-selling: no line may exceed available stock
-  const over=picked.filter(it=>{const p=(db.products||[]).find(x=>x.id===it.id);return p && it.qty>availForProduct(p,it.flavor);});
-  if (over.length){ toast('מעל המלאי: '+over.map(it=>it.name).join(', '),'err'); return; }
+  // block over-selling: סך כל השורות של אותו מוצר/טעם לא עובר את המלאי (קודם נבדקה כל שורה לבד)
+  const want={};
+  picked.forEach(it=>{ const k=it.id+'|'+(it.flavor||''); want[k]=(want[k]||0)+(parseInt(it.qty)||0); });
+  const over=picked.filter(it=>{const p=(db.products||[]).find(x=>x.id===it.id);return p && want[it.id+'|'+(it.flavor||'')]>availForProduct(p,it.flavor);});
+  if (over.length){ toast('מעל המלאי: '+Array.from(new Set(over.map(it=>it.name))).join(', '),'err'); return; }
+  if (_savingOrder) return;
   const ful=document.getElementById('oFulfill').value;
+  const address=document.getElementById('oAddress').value.trim();
+  // סכום ופירוט מדויקים לפי המחירון ברגע ההזמנה — אותו מבנה שהאתר שומר (total + itemsJSON), כדי שהדשבורד
+  // והקבלה לא ינחשו מחיר מתוך הטקסט. שורת משלוח באותו כלל כמו באתר: 10 ₪, חינם מ-150 ₪.
+  const lines=picked.map(it=>{ const p=(db.products||[]).find(x=>x.id===it.id)||{}; return {id:it.id,name:it.name,flavor:it.flavor||'',qty:parseInt(it.qty)||0,price:prodPrice(p)}; });
+  const priced=lines.every(l=>l.price>0);
+  let total=lines.reduce((s,l)=>s+l.price*l.qty,0);
+  if (priced && ful==='delivery' && total>0 && total<DELIVERY_FREE_FROM) { lines.push({id:'delivery',name:DELIVERY_ITEM_NAME,flavor:'',qty:1,price:DELIVERY_FEE}); total+=DELIVERY_FEE; }
   // find or create customer
-  let c = db.customers.find(x=>x.phone===phone);
-  let isNewCust=false;
-  if (!c) {
-    c={id:uid('c'),name,phone,address:document.getElementById('oAddress').value.trim(),allergies:'',notes:'',createdAt:new Date().toISOString(),lastOrder:date};
-    db.customers.push(c); isNewCust=true;
-  } else { c.lastOrder=date; }
-  const o = {id:uid('o'),customerId:c.id,name,phone,address:document.getElementById('oAddress').value.trim(),fulfillment:ful,date,items,notes:document.getElementById('oNotes').value.trim(),status:'new',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
-  db.orders.push(o);
-  saveCache(); clearOrderForm(); renderAll(); switchTab('orders');
-  let saved = false;
+  const existing = db.customers.find(x=>x.phone===phone);
+  const c = existing || {id:uid('c'),name,phone,address,allergies:'',notes:'',createdAt:new Date().toISOString(),lastOrder:date};
+  const o = {id:uid('o'),customerId:c.id,name,phone,address,fulfillment:ful,date,items,notes:document.getElementById('oNotes').value.trim(),status:'new',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),paid:false,paymentMethod:'',total:priced?String(total):'',receiptUrl:''};
+  // הטופס נשאר מלא עד שההזמנה באמת נשמרה בגיליון. קודם הוא התרוקן מיד, וכשהשמירה נכשלה ההזמנה
+  // נראתה בלוח ונעלמה בסנכרון הבא.
   const ok = await ensureToken();
-  if (ok && accessToken) {
-    setSync('syncing','שומר...');
-    try {
-      if (isNewCust) await appendRow('Customers', custToRow(c));
-      else {
-        const ci=db.customers.findIndex(x=>x.id===c.id);
-        await updateRow('Customers', ci+2, custToRow(c));
-      }
-      await appendRow('Orders', orderToRow(o));
-      setSync('ok','מסונכרן'); toast('הזמנה נשמרה ✓','ok'); saved=true;
-    } catch(e){ console.error(e); setSync('err','שגיאת שמירה'); alert('ההזמנה לא נשמרה לגיליון (אולי תקלת רשת). היא שמורה מקומית — בדקי חיבור ונסי שוב.'); }
-  } else {
-    setSync('err','צריך להתחבר מחדש'); alert('ההתחברות לגוגל פגה — ההזמנה לא נשמרה לגיליון. רענני (F5), התחברי מחדש לגוגל, ונסי שוב.');
+  if (!ok || !accessToken) { needRelogin('ההזמנה'); return; }
+  let saved = false;
+  _savingOrder = true;
+  setSync('syncing','שומר...');
+  try {
+    await ensureGapi();
+    if (!existing) await appendRow('Customers', custToRow(c));
+    else {
+      const row = await rowOf('Customers', c.id, db.customers.indexOf(existing));
+      if (row > 0) await writeCells('Customers', row, { H: date });   // רק "הזמנה אחרונה"
+    }
+    // מחיר שלא ידוע (מוצר בלי מחיר) — לא כותבים סכום, והחישוב נשאר כמו בהזמנות ישנות.
+    await appendRow('Orders', priced ? orderToRow(o).concat([String(total), JSON.stringify(lines)]) : orderToRow(o));
+    saved = true;
+  } catch(e){ console.error(e); setSync('err','שגיאת שמירה'); alert('ההזמנה לא נשמרה בגיליון (' + gErr(e) + ').\nהטופס נשאר מלא — בדקי חיבור ולחצי שוב על שמירה.'); }
+  finally { _savingOrder = false; }
+  if (saved) {
+    if (!existing) db.customers.push(c); else existing.lastOrder = date;
+    db.orders.push(o);
+    saveCache(); clearOrderForm(); renderAll(); switchTab('orders');
+    setSync('ok','מסונכרן'); toast('הזמנה נשמרה ✓','ok');
   }
   // Decrement inventory ONLY if the order actually saved to the sheet — otherwise
   // stock would drop for an order that doesn't exist.
@@ -1191,7 +1370,7 @@ function availForProduct(p, flavor) {
 function renderItemResults() {
   const box = document.getElementById('itemResults'); if (!box) return;
   const q = (document.getElementById('itemSearch').value || '').trim().toLowerCase();
-  const list = (db.products || []).filter(p => p.name && (!q || p.name.toLowerCase().includes(q)))
+  const list = (db.products || []).filter(p => p.name && p.id !== '__settings__' && (!q || p.name.toLowerCase().includes(q)))
     .sort((a,b) => (a.sortOrder||100)-(b.sortOrder||100)).slice(0, 30);
   if (!list.length) { box.style.display='none'; return; }
   box.innerHTML = list.map(p => {
@@ -1245,7 +1424,7 @@ async function decrementPickedItems(picked) {
   });
   if (!decremented.length) return [];
   saveCache(); renderProducts();
-  if (accessToken) await Promise.all(Array.from(touched).map(id => { const p=db.products.find(x=>x.id===id); return p?persistProductRow(p):null; }));
+  await Promise.all(Array.from(touched).map(id => { const p=db.products.find(x=>x.id===id); return p?persistProductRow(p):null; }));
   return decremented;
 }
 
@@ -1527,7 +1706,7 @@ function calcPricing() {
     <div class="line"><span>מכפיל רווח ×${mult}</span><span>+₪${profit.toFixed(2)}</span></div>
     <div class="line total"><span>מחיר מכירה (×${mult})</span><span>₪${sellPrice.toFixed(2)}</span></div>
     <div class="line"><span>מחיר ליחידה (תפוקה ${yld})</span><span><strong>₪${perUnit.toFixed(2)}</strong></span></div>
-    <div class="line" style="color:var(--ok)"><span>רווח</span><span>₪${profit.toFixed(2)} (${(profit/sellPrice*100).toFixed(0)}%)</span></div>`;
+    <div class="line" style="color:var(--ok)"><span>רווח</span><span>₪${profit.toFixed(2)} (${sellPrice>0?(profit/sellPrice*100).toFixed(0):0}%)</span></div>`;
 }
 
 /* ============ EXPENSES ============ */
@@ -1542,28 +1721,39 @@ async function saveExp(){
   e.description=document.getElementById('eDesc').value.trim();
   e.amount=amt;
   e.vendor=document.getElementById('eVendor').value.trim();
-  if (editingExpId){
-    const idx=db.expenses.findIndex(x=>x.id===editingExpId);
-    saveCache(); closeModal('expModal'); renderExpenses();
-    if (accessToken) { setSync('syncing','שומר...'); try{ await updateRow('Expenses', idx+2, expToRow(e)); setSync('ok','מסונכרן'); toast('עודכן','ok'); }catch(err){setSync('err','שגיאה');} }
-  } else {
-    db.expenses.push(e);
-    saveCache(); closeModal('expModal'); renderExpenses();
-    if (accessToken) { setSync('syncing','שומר...'); try{ await appendRow('Expenses', expToRow(e)); setSync('ok','מסונכרן'); toast('נשמר','ok'); }catch(err){setSync('err','שגיאה');} }
-  }
+  // ההתחברות נבדקת באמת (קודם נבדק רק שיש אישור, גם אם פג), וכישלון מקבל התראה — לא נעלם בשקט.
+  const isEdit = !!editingExpId;
+  const idx = isEdit ? db.expenses.findIndex(x=>x.id===editingExpId) : -1;
+  if (!isEdit) db.expenses.push(e);
+  saveCache(); closeModal('expModal'); renderExpenses();
+  const ok = await ensureToken();
+  if (!ok || !accessToken) { needRelogin('ההוצאה'); return; }
+  setSync('syncing','שומר...');
+  try {
+    await ensureGapi();
+    if (isEdit) { if (!(await updateRowById('Expenses', e.id, idx, expToRow(e)))) { await rowGone('ההוצאה'); return; } }
+    else await appendRow('Expenses', expToRow(e));
+    setSync('ok','מסונכרן'); toast(isEdit ? 'עודכן' : 'נשמר','ok');
+  } catch(err){ console.error(err); setSync('err','שגיאת שמירה'); alert('ההוצאה לא נשמרה בגיליון (' + gErr(err) + '). נסי שוב.'); }
 }
 async function deleteExp(id){
   if(!confirm('למחוק?'))return;
   const idx=db.expenses.findIndex(x=>x.id===id);
   if (idx<0) return;
-  db.expenses.splice(idx,1);
-  saveCache(); renderExpenses();
-  if (accessToken) { try{ await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:SHEET_ID,resource:{requests:[{deleteDimension:{range:{sheetId:await getSheetId('Expenses'),dimension:'ROWS',startIndex:idx+1,endIndex:idx+2}}}]}}); toast('נמחק','ok'); }catch(e){toast('שגיאה','err');} }
+  const ok = await ensureToken();
+  if (!ok || !accessToken) { needRelogin('המחיקה'); return; }
+  try {
+    await ensureGapi();
+    await deleteRowById('Expenses', id, idx);   // איתור לפי מזהה; מהמסך יורדת רק אחרי שנמחקה מהגיליון
+    const li = db.expenses.findIndex(x=>x.id===id);
+    if (li >= 0) db.expenses.splice(li,1);
+    saveCache(); renderExpenses(); toast('נמחק','ok');
+  } catch(e){ console.error(e); alert('המחיקה נכשלה (' + gErr(e) + '). נסי שוב.'); }
 }
 function renderExpenses(){
-  const now=new Date(), thisMo=now.toISOString().slice(0,7);
-  const lastMoDate=new Date(now.getFullYear(),now.getMonth()-1,1), lastMo=lastMoDate.toISOString().slice(0,7);
-  const yr=now.getFullYear()+'';
+  const today=todayStr(), thisMo=today.slice(0,7);
+  const lastMo=ymLocal(new Date(+today.slice(0,4), +today.slice(5,7)-2, 1));
+  const yr=today.slice(0,4);
   const thisSum=db.expenses.filter(e=>e.date&&e.date.startsWith(thisMo)).reduce((s,e)=>s+e.amount,0);
   const lastSum=db.expenses.filter(e=>e.date&&e.date.startsWith(lastMo)).reduce((s,e)=>s+e.amount,0);
   const yrSum=db.expenses.filter(e=>e.date&&e.date.startsWith(yr)).reduce((s,e)=>s+e.amount,0);
@@ -1898,11 +2088,16 @@ async function saveProduct() {
   if (editingProdId) {
     const idx = db.products.findIndex(x => x.id === editingProdId);
     saveCache(); closeModal('prodModal'); renderProducts();
-    if (accessToken) { setSync('syncing','שומר...'); try { await updateRow('Products', idx+2, prodToRow(p)); pingCatalogSync('product-edit'); setSync('ok','מסונכרן'); toast('עודכן','ok'); } catch(e){ console.error('saveProduct update failed:', e); setSync('err','שגיאה'); toast('שגיאת שמירה: '+(e.result&&e.result.error&&e.result.error.message||e.message||'unknown'),'err'); } }
+    // אותו מסלול בטוח כמו עדכון מהיר: איתור לפי מזהה + שילוב עם מלאי שנמכר בינתיים.
+    if (await persistProductRow(p, 'product-edit')) toast('עודכן','ok');
   } else {
     db.products.push(p);
     saveCache(); closeModal('prodModal'); renderProducts();
-    if (accessToken) { setSync('syncing','שומר...'); try { await appendRow('Products', prodToRow(p)); pingCatalogSync('product-new'); setSync('ok','מסונכרן'); toast('נשמר','ok'); } catch(e){ console.error('saveProduct append failed:', e); setSync('err','שגיאה'); toast('שגיאת שמירה: '+(e.result&&e.result.error&&e.result.error.message||e.message||'unknown'),'err'); } }
+    const ok = await ensureToken();
+    if (!ok || !accessToken) { needRelogin('המוצר החדש'); return; }
+    setSync('syncing','שומר...');
+    try { await ensureGapi(); await appendRow('Products', prodToRow(p)); _prodBase[p.id] = { qty: parseInt(p.qty)||0, flavors: p.flavors||'' }; pingCatalogSync('product-new'); setSync('ok','מסונכרן'); toast('נשמר','ok'); }
+    catch(e){ console.error('saveProduct append failed:', e); setSync('err','שגיאת שמירה'); alert('המוצר לא נשמר בגיליון (' + gErr(e) + '). נסי שוב.'); }
   }
 }
 
@@ -1912,17 +2107,18 @@ async function deleteProduct() {
   if (!p) return;
   if (!confirm(`למחוק את "${p.name}"? המוצר יוסר מהאתר ומהדשבורד.`)) return;
   const idx = db.products.findIndex(x => x.id === editingProdId);
-  db.products.splice(idx, 1);
-  saveCache(); closeModal('prodModal'); renderProducts();
-  if (accessToken) {
-    try {
-      await gapi.client.sheets.spreadsheets.batchUpdate({
-        spreadsheetId: SHEET_ID,
-        resource: {requests: [{deleteDimension: {range: {sheetId: await getSheetId('Products'), dimension:'ROWS', startIndex:idx+1, endIndex:idx+2}}}]}
-      });
-      toast('נמחק','ok');
-    } catch(e){ console.error(e); toast('שגיאת מחיקה','err'); }
-  }
+  const pid = p.id;
+  const ok = await ensureToken();
+  if (!ok || !accessToken) { needRelogin('המחיקה'); return; }
+  try {
+    await ensureGapi();
+    await deleteRowById('Products', pid, idx);   // איתור לפי מזהה; מהמסך יורד רק אחרי שנמחק מהגיליון
+    const li = db.products.findIndex(x => x.id === pid);
+    if (li >= 0) db.products.splice(li, 1);
+    delete _prodBase[pid];
+    saveCache(); closeModal('prodModal'); renderProducts();
+    toast('נמחק','ok');
+  } catch(e){ console.error(e); alert('המחיקה נכשלה (' + gErr(e) + '). המוצר לא נמחק — נסי שוב.'); }
 }
 
 async function togglePublish(id, val) {
@@ -1968,17 +2164,36 @@ async function setFlavorQty(id, flavorIdx, v) {
   saveCache(); renderProducts();
   await persistProductRow(p);
 }
-async function persistProductRow(p) {
+// כתיבות מוצר רצות אחת אחרי השנייה (לחיצות מהירות על + / − לא עוקפות זו את זו). מחזיר true כשנשמר.
+function persistProductRow(p, tag) {
+  const run = () => _persistProductRow(p, tag);
+  _prodQueue = _prodQueue.then(run, run);
+  return _prodQueue;
+}
+async function _persistProductRow(p, tag) {
   const idx = db.products.findIndex(x => x.id === p.id);
-  if (idx < 0) return;
-  if (!accessToken) {
-    setSync('err','לא מחובר');
-    toast('⚠️ לא מחוברים לגוגל — השינוי נשמר רק במכשיר ולא יופיע באתר. רענני את הדף והתחברי מחדש, ואז עדכני שוב.','err');
-    return;
-  }
+  if (idx < 0) return false;
+  const ok = await ensureToken();
+  if (!ok || !accessToken) { needRelogin('השינוי במוצר'); return false; }
   setSync('syncing','שומר...');
-  try { await updateRow('Products', idx+2, prodToRow(p)); pingCatalogSync('product-quick'); setSync('ok','מסונכרן'); }
-  catch(e){ console.error(e); setSync('err','שגיאת שמירה'); toast('⚠️ השמירה לגיליון נכשלה — רענני והתחברי מחדש, ואז עדכני שוב.','err'); }
+  try {
+    await ensureGapi();
+    gapi.client.setToken({access_token: accessToken});
+    const row = await rowOf('Products', p.id, idx);
+    if (row < 0) { await rowGone('המוצר'); return false; }
+    // המלאי העדכני בגיליון רגע לפני הכתיבה (F = כמות, M = טעמים) — כדי לא להחזיר מלאי שנמכר בינתיים באתר.
+    const [qv, fv] = await Promise.all([readRange('Products!F' + row), readRange('Products!M' + row)]);
+    const fresh = { qty: parseInt((qv[0] || [])[0]) || 0, flavors: String((fv[0] || [])[0] || '') };
+    const m = mergeStock(_prodBase[p.id], { qty: parseInt(p.qty) || 0, flavors: p.flavors || '' }, fresh);
+    const moved = m.qty !== (parseInt(p.qty) || 0) || m.flavors !== (p.flavors || '');
+    p.qty = m.qty; p.flavors = m.flavors;
+    await updateRow('Products', row, prodToRow(p));
+    _prodBase[p.id] = { qty: p.qty, flavors: p.flavors || '' };
+    pingCatalogSync(tag || 'product-quick'); setSync('ok','מסונכרן');
+    if (moved) { saveCache(); renderProducts(); toast('המלאי עודכן לפי הזמנות שנכנסו בינתיים (' + p.name + ': ' + p.qty + ')', 'ok'); }
+    return true;
+  }
+  catch(e){ console.error(e); setSync('err','שגיאת שמירה'); alert('השינוי במוצר לא נשמר בגיליון (' + gErr(e) + '). נסי שוב.'); return false; }
 }
 
 // Decrement product quantities based on parsed order items.
@@ -2037,13 +2252,13 @@ function initMonthSelect(){
   const now=new Date(); const opts=[];
   for(let i=0;i<12;i++){
     const d=new Date(now.getFullYear(),now.getMonth()-i,1);
-    const v=d.toISOString().slice(0,7);
+    const v=ymLocal(d);
     opts.push(`<option value="${v}">${d.toLocaleDateString('he',{year:'numeric',month:'long'})}</option>`);
   }
   sel.innerHTML=opts.join('');
 }
 function renderPL(){
-  const mo=document.getElementById('plMonth').value||new Date().toISOString().slice(0,7);
+  const mo=document.getElementById('plMonth').value||todayStr().slice(0,7);
   const ords=db.orders.filter(o=>o.date&&o.date.startsWith(mo));
   const exps=db.expenses.filter(e=>e.date&&e.date.startsWith(mo));
   const rev=ords.reduce((s,o)=>s+orderTotal(o),0);
@@ -2297,7 +2512,9 @@ function anRecipeCostPerUnit(r){
   let ingredCost=0;
   (r.ingredients||[]).forEach(ing=>{ try{ ingredCost += rowCostBoughtUsed(normalizeIngr(ing)); }catch(e){} });
   const labor=(parseFloat(r.hours)||0)*(parseFloat(r.rate)||0);
-  const overPct=parseFloat(r.over)||0;
+  // התקורה נשמרת כפירוט ("gas:3|pack:5|market:0|other:7"); parseFloat על זה החזיר 0 והרווח יצא מנופח.
+  const ob=parseOverbreakdown(r.over);
+  const overPct=(ob.gas||0)+(ob.pack||0)+(ob.market||0)+(ob.other||0);
   const totalCost=(ingredCost+labor)*(1+overPct/100);
   const yld=parseFloat(r.yield)||0;
   return yld>0 ? totalCost/yld : 0;
@@ -2527,24 +2744,20 @@ async function saveRecipe(){
     mult: document.getElementById('prMult').value,
     ingredients
   };
-  if (existing) {
-    const idx = db.recipes.findIndex(r => r.id === existing.id);
-    db.recipes[idx] = recipe;
-    saveCache(); refreshRecipesList();
-    if (accessToken){
-      setSync('syncing','שומר...');
-      try{ await updateRow('Recipes', idx+2, recipeToRow(recipe)); setSync('ok','מסונכרן'); toast('המתכון "'+name+'" עודכן ✓','ok'); }
-      catch(e){ setSync('err','שגיאה'); toast('שגיאת שמירה: '+((e&&e.result&&e.result.error&&e.result.error.message)||e.message||'unknown'),'err'); console.error('saveRecipe failed:',e); }
-    } else { toast('נשמר במטמון','ok'); }
-  } else {
-    db.recipes.push(recipe);
-    saveCache(); refreshRecipesList();
-    if (accessToken){
-      setSync('syncing','שומר...');
-      try{ await appendRow('Recipes', recipeToRow(recipe)); setSync('ok','מסונכרן'); toast('המתכון "'+name+'" נשמר ✓','ok'); }
-      catch(e){ setSync('err','שגיאה'); toast('שגיאת שמירה: '+((e&&e.result&&e.result.error&&e.result.error.message)||e.message||'unknown'),'err'); console.error('saveRecipe failed:',e); }
-    } else { toast('נשמר במטמון','ok'); }
-  }
+  // המתכונים לא נטענו בסנכרון האחרון — "לא קיים" אולי לא נכון, ושמירה הייתה יוצרת מתכון כפול.
+  if (!existing && _loadFailed.Recipes) { alert('המתכונים לא נטענו מהגיליון בסנכרון האחרון.\nלחצי "סנכרון" ואז שמרי שוב.'); return; }
+  const idx = existing ? db.recipes.findIndex(r => r.id === existing.id) : -1;
+  if (existing) db.recipes[idx] = recipe; else db.recipes.push(recipe);
+  saveCache(); refreshRecipesList();
+  const ok = await ensureToken();
+  if (!ok || !accessToken) { needRelogin('המתכון'); return; }
+  setSync('syncing','שומר...');
+  try {
+    await ensureGapi();
+    if (existing) { if (!(await updateRowById('Recipes', recipe.id, idx, recipeToRow(recipe)))) { await rowGone('המתכון'); return; } }
+    else await appendRow('Recipes', recipeToRow(recipe));
+    setSync('ok','מסונכרן'); toast('המתכון "'+name+'" '+(existing?'עודכן':'נשמר')+' ✓','ok');
+  } catch(e){ console.error('saveRecipe failed:',e); setSync('err','שגיאת שמירה'); alert('המתכון לא נשמר בגיליון (' + gErr(e) + '). נסי שוב.'); }
 }
 
 function loadRecipe(name){
@@ -2571,14 +2784,17 @@ async function deleteRecipe(){
   if (!confirm('למחוק את המתכון "'+name+'"?')) return;
   const idx = db.recipes.findIndex(r => r.name === name);
   if (idx < 0) { toast('לא נמצא','err'); return; }
-  db.recipes.splice(idx,1);
-  saveCache(); refreshRecipesList(); clearPricing();
-  if (accessToken){
-    try{
-      await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:SHEET_ID,resource:{requests:[{deleteDimension:{range:{sheetId:await getSheetId('Recipes'),dimension:'ROWS',startIndex:idx+1,endIndex:idx+2}}}]}});
-      toast('המתכון נמחק','ok');
-    } catch(e){ console.error(e); toast('שגיאת מחיקה','err'); }
-  }
+  const rid = db.recipes[idx].id;
+  const ok = await ensureToken();
+  if (!ok || !accessToken) { needRelogin('המחיקה'); return; }
+  try {
+    await ensureGapi();
+    await deleteRowById('Recipes', rid, idx);   // איתור לפי מזהה; מהמסך יורד רק אחרי שנמחק מהגיליון
+    const li = db.recipes.findIndex(r => r.id === rid);
+    if (li >= 0) db.recipes.splice(li,1);
+    saveCache(); refreshRecipesList(); clearPricing();
+    toast('המתכון נמחק','ok');
+  } catch(e){ console.error(e); alert('המחיקה נכשלה (' + gErr(e) + '). נסי שוב.'); }
 }
 
 function refreshRecipesList(){
@@ -2692,7 +2908,7 @@ async function sendAssistantMessage(){
   asstShowTyping(true);
   try {
     const ok = await ensureToken();
-    if (!ok || !accessToken){ asstShowTyping(false); asstAddSys('צריך להתחבר מחדש לגוגל כדי שאוכל לעבוד. רענני (F5) והתחברי שוב.'); asstSetBusy(false); return; }
+    if (!ok || !accessToken){ asstShowTyping(false); setSyncRelogin(); asstAddSys('צריך להתחבר מחדש לגוגל כדי שאוכל לעבוד. לחצי על התג האדום למעלה ("ההתחברות פגה") ואז שלחי שוב.'); asstSetBusy(false); return; }
     const apiMsgs = _asstHistory.filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role, content:m.content}));
     const resp = await fetch(AGENT_URL.replace(/\/$/,'') + '/api/chat', {
       method:'POST',
@@ -2702,7 +2918,7 @@ async function sendAssistantMessage(){
     asstShowTyping(false);
     if (!resp.ok){
       let msg = 'שגיאה ('+resp.status+').';
-      if (resp.status===401||resp.status===403) msg = 'אין לי הרשאה כרגע. רענני והתחברי מחדש.';
+      if (resp.status===401||resp.status===403) msg = 'אין לי הרשאה כרגע. לחצי על התג האדום למעלה כדי להתחבר מחדש, ואז שלחי שוב.';
       else if (resp.status>=500) msg = 'המוח לא זמין כרגע, נסי שוב עוד רגע.';
       asstAddSys(msg); asstSetBusy(false); return;
     }
@@ -2863,7 +3079,7 @@ async function applyAsstSettings(a){
     });
     renderOverridesList();
   }
-  await saveOrderSettings();
+  if (!(await saveOrderSettings())) throw new Error('ההגדרות לא נשמרו בגיליון');
 }
 
 // מוצר — מאתר לפי id/שם ומעדכן ישירות דרך persistProductRow הקיים.
@@ -2896,7 +3112,8 @@ async function applyAsstProduct(a){
   }
   p.updatedAt=new Date().toISOString();
   saveCache(); renderProducts();
-  await persistProductRow(p);
+  // העוזר לא מדווח "בוצע" על שינוי שלא נשמר בגיליון.
+  if (!(await persistProductRow(p))) throw new Error('השינוי במוצר "' + p.name + '" לא נשמר בגיליון');
   return p.name;
 }
 
@@ -2971,10 +3188,22 @@ async function asstRollback(auto){
     else asstAddSys('ℹ️ '+((data && (data.message||data.error)) || ('לא הוחזר ('+status+')')));
   } catch(e){ asstAddSys('⚠️ '+(e.message||'שגיאת רשת בהחזרה')); }
 }
-function todayStr(){return new Date().toISOString().slice(0,10);}
+// תאריכים לפי שעון ישראל. קודם "היום" והחודש חושבו לפי שעון לונדון: בין חצות ל-02:00/03:00 הכול זז יום
+// אחורה, ורווח-והפסד הציג חודש קודם תחת תווית החודש הנוכחי (26.11.2026).
+function pad2(n){return String(n).padStart(2,'0');}
+function ymdLocal(d){return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());}
+function ymLocal(d){return d.getFullYear()+'-'+pad2(d.getMonth()+1);}
+function todayStr(){
+  try {
+    const o={}; new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jerusalem',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).forEach(p=>{o[p.type]=p.value;});
+    if (o.year && o.month && o.day) return o.year+'-'+o.month+'-'+o.day;
+  } catch(e){}
+  return ymdLocal(new Date());
+}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
-function addDaysStr(s,n){const d=new Date(s);d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
-function isoDate(d){return d.toISOString().slice(0,10);}
+// חשבון ימים על התאריך עצמו (UTC טהור) — בלי תלות בשעון קיץ/חורף של המכשיר.
+function addDaysStr(s,n){const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||''));const d=m?new Date(Date.UTC(+m[1],+m[2]-1,+m[3])):new Date(s);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+function isoDate(d){return ymdLocal(d);}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function stLabel(id){const s=STATUSES.find(x=>x.id===id);return s?s.label:id;}
 
@@ -3056,8 +3285,7 @@ async function onPayMethodChange(id, method){
 async function markPaid(id){
   const o = db.orders.find(x => x.id === id); if (!o) return;
   if (!o.paymentMethod) { toast('בחרי אמצעי תשלום קודם', 'err'); return; }
-  await setOrderPaid(id, true);
-  toast('סומן כשולם · הקבלה תישלח ללקוח תוך 2 דקות', 'ok');
+  if (await setOrderPaid(id, true)) toast('סומן כשולם · הקבלה תישלח ללקוח תוך 2 דקות', 'ok');
 }
 async function unmarkPaid(id){
   const o = db.orders.find(x => x.id === id); if (!o) return;
@@ -3080,6 +3308,9 @@ function dayTag(o){
 function sortByDue(a, b){
   const da = a.date || '9999-99-99', dbb = b.date || '9999-99-99';
   if (da !== dbb) return da < dbb ? -1 : 1;
+  // באותו יום: לפי שעת האיסוף/משלוח שהלקוח ביקש (הזמנה בלי שעה — בסוף היום)
+  const ta = a.time || '99:99', tb = b.time || '99:99';
+  if (ta !== tb) return ta < tb ? -1 : 1;
   return String(a.createdAt||'').localeCompare(String(b.createdAt||''));
 }
 // "נמסר" שנשאר על הלוח: נמסר/מועד ב-3 הימים האחרונים (או עתידי)
@@ -3249,7 +3480,7 @@ async function removeWaiter(id){
   const w = db.waitlist[idx];
   if (!confirm('להסיר את ' + fmtPhone(w.phone) + ' מרשימת ההמתנה ל"' + (w.productName||'') + '"?\nלא תישלח אליו/ה הודעה כשהמוצר יחזור.')) return;
   const ok = await ensureToken();
-  if (!ok || !accessToken) { setSync('err','צריך להתחבר מחדש'); alert('ההתחברות לגוגל פגה — ההסרה לא נשמרה. רענני (F5), התחברי מחדש, ונסי שוב.'); return; }
+  if (!ok || !accessToken) { needRelogin('ההסרה'); return; }
   setSync('syncing','שומר...');
   try {
     if (typeof gapi !== 'undefined' && gapi.client) gapi.client.setToken({access_token: accessToken});
@@ -3281,14 +3512,18 @@ async function setCustomerUpdates(id, on){
   const c = db.customers[idx];
   if (!confirm(on ? 'לסמן את '+c.name+' כמאושר/ת לקבלת עדכונים בוואטסאפ?\n(רק אם ביקש/ה במפורש)' : 'להסיר את '+c.name+' מרשימת העדכונים?')) return;
   const ok = await ensureToken();
-  if (!(ok && accessToken)) { alert('ההתחברות לגוגל פגה — רענני (F5) והתחברי מחדש.'); return; }
+  if (!(ok && accessToken)) { needRelogin('אישור העדכונים'); return; }
   const now = new Date().toISOString();
   try {
     setSync('syncing','שומר...');
-    await gapi.client.sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: 'Customers!I'+(idx+2)+':J'+(idx+2), valueInputOption:'RAW', resource:{ values:[ on ? [now,'dashboard'] : ['',''] ] } });
+    await ensureGapi();
+    // איתור לפי מזהה הלקוח — אישור לדיוור לא נרשם בטעות על לקוח אחר.
+    const row = await rowOf('Customers', c.id, idx);
+    if (row < 0) { await rowGone('הלקוח'); return; }
+    await writeCells('Customers', row, on ? { I: now, J: 'dashboard' } : { I: '', J: '' });
     c.updatesAt = on ? now : ''; c.updatesSource = on ? 'dashboard' : '';
     saveCache(); renderCustomers(); setSync('ok','מסונכרן'); toast(on?'סומן/ה כמאושר/ת לעדכונים':'הוסר/ה מרשימת העדכונים','ok');
-  } catch(e){ console.error('setCustomerUpdates', e); setSync('err','שגיאה'); toast('לא נשמר','err'); }
+  } catch(e){ console.error('setCustomerUpdates', e); setSync('err','שגיאת שמירה'); alert('לא נשמר (' + gErr(e) + '). נסי שוב.'); }
 }
 
 // ── שליחת "עדכון" (דרך הבוט) ──
@@ -3309,7 +3544,7 @@ async function showBroadcast(){
   bcPreview();
   document.getElementById('bcModal').classList.add('show');
   const ok = await ensureToken();
-  if (!(ok && accessToken)) { document.getElementById('bcStatus').textContent = 'ההתחברות לגוגל פגה — רענני (F5) והתחברי מחדש.'; return; }
+  if (!(ok && accessToken)) { setSyncRelogin(); document.getElementById('bcStatus').textContent = 'ההתחברות לגוגל פגה — סגרי את החלון, לחצי על התג האדום למעלה כדי להתחבר, ונסי שוב.'; return; }
   try { bcStatus = await bcFetchStatus(); } catch(e) { document.getElementById('bcStatus').textContent = 'הבוט לא זמין כרגע ('+e.message+'). נסי שוב בעוד דקה.'; return; }
   bcRenderStatus();
 }
