@@ -709,7 +709,7 @@ function fmtPhone(p){ const m=normalizeIlMobile(p); if(m) return m.slice(0,3)+'-
 // המלאי השתנה → מבקשים מ-Meta למשוך את הקטלוג עכשיו (במקום לחכות לשעה). fire-and-forget, לא חוסם.
 function pingCatalogSync(reason){ try { const base=AGENT_URL.endsWith('/')?AGENT_URL.slice(0,-1):AGENT_URL; fetch(base+'/api/catalog-push?reason='+encodeURIComponent(reason||'dashboard'), {method:'POST', keepalive:true}).catch(()=>{}); } catch(e){} }
 function waPhone(p){ let d=String(p||'').replace(/\D/g,''); if(d.startsWith('972'))return d; if(d.startsWith('0'))return '972'+d.slice(1); if(d.length===9)return '972'+d; return d; }
-const PAYMENT_METHODS = ['מזומן','ביט','העברה בנקאית','אשראי','צ׳ק','אחר'];
+const PAYMENT_METHODS = ['מזומן','ביט','פייבוקס','העברה בנקאית','אשראי','צ׳ק','אחר'];
 function rowToExp(r){ return {id:r[0]||'', date:r[1]||'', category:r[2]||'', description:r[3]||'', amount:parseFloat(r[4])||0, vendor:r[5]||''}; }
 function expToRow(e){ return [e.id, e.date, e.category, e.description, String(e.amount), e.vendor]; }
 function rowToRecipe(r){ let ing=[]; try{ ing=JSON.parse(r[7]||'[]'); }catch(e){} return {id:r[0]||'', name:r[1]||'', yield:r[2]||'30', hours:r[3]||'2', rate:r[4]||'50', over:r[5]||'15', mult:r[6]||'2.5', ingredients:ing}; }
