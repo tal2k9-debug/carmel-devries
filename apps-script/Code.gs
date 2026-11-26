@@ -49,7 +49,86 @@ var DELIVERY_ITEM_NAME = 'משלוח באופקים';
 
 // --- גרסת הקוד ---
 // GET בלי action מחזיר אותה — כך בודקים מבחוץ איזו גרסה פרוסה בפועל.
-var CODE_VERSION = '2026-11-19';
+var CODE_VERSION = '2026-11-26';
+
+// מזהה האפליקציה של הדשבורד בגוגל. אישור כניסה מתקבל רק אם הונפק לאפליקציה הזו (לא לאפליקציה אחרת כלשהי).
+var ADMIN_CLIENT_ID = '564598491904-8afmllpcgue97fd0hrht9ejkjut70m6f.apps.googleusercontent.com';
+
+// אמצעי התשלום שהלקוח בוחר באתר (מפתח → תווית). נשמר בעמודת payChoice; קרן עדיין מסמנת "שולם" בעצמה.
+var PAY_CHOICE_LABELS = { cash: 'מזומן', paybox: 'פייבוקס', bit: 'ביט' };
+
+// טקסט חופשי של לקוח שמתחיל ב- = + - @ היה נכתב לגיליון כנוסחה. גרש מוביל הופך אותו לטקסט רגיל
+// (הגיליון לא מציג את הגרש).
+function safeText_(s) {
+  s = String(s === null || s === undefined ? '' : s);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
+// האם שורת פריט היא שורת המשלוח. לפי המזהה או השם המדויק — לא לפי המילה "משלוח" בתוך שם של מוצר.
+function isDeliveryItem_(it) {
+  return String((it && it.id) || '') === 'delivery' || String((it && it.name) || '') === DELIVERY_ITEM_NAME;
+}
+
+// הגבלת קצב פשוטה לפעולות ציבוריות (הרשמה לעדכונים / לרשימת המתנה): עד max בקשות בכל 10 דקות, לכל האתר.
+// תנועה אמיתית רחוקה מזה; סקריפט שמציף מספרי טלפון נעצר. תקלה במטמון לא חוסמת לקוח אמיתי.
+function rateLimited_(key, max) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var k = 'rl:' + key + ':' + Math.floor(Date.now() / 600000);
+    var n = parseInt(cache.get(k), 10) || 0;
+    if (n >= max) return true;
+    cache.put(k, String(n + 1), 900);
+    return false;
+  } catch (err) { return false; }
+}
+
+// ההגדרות של קרן כמפה (מפתח → ערך). null כשאי אפשר לקרוא — ואז לא אוכפים כלום (לא חוסמים הזמנה אמיתית).
+function readSettings_(ss) {
+  try {
+    var sh = ss.getSheetByName('Settings');
+    if (!sh) return null;
+    var data = sh.getDataRange().getDisplayValues();
+    var s = {};
+    for (var r = 1; r < data.length; r++) {
+      var k = String(data[r][0] || '').trim();
+      if (k) s[k] = data[r][1];
+    }
+    return s;
+  } catch (err) { return null; }
+}
+
+// בודק את תאריך האיסוף/משלוח לפי שעון ישראל וההגדרות של קרן — אותם כללים כמו באתר (dateLeadOK + dateDayOpen):
+// לא בעבר, מספר הימים מראש, ויום פתוח (תאריך מיוחד גובר על היום בשבוע). מחזיר הודעה ללקוח, או null כשתקין.
+function orderDateProblem_(ss, dateStr) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+  if (!m) return 'התאריך שנבחר לא תקין.';
+  var utc = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (utc.getUTCFullYear() !== +m[1] || utc.getUTCMonth() !== +m[2] - 1 || utc.getUTCDate() !== +m[3]) return 'התאריך שנבחר לא תקין.';
+  try {
+    var t = Utilities.formatDate(new Date(), 'Asia/Jerusalem', 'yyyy-MM-dd').split('-');
+    var diff = Math.round((utc.getTime() - Date.UTC(+t[0], +t[1] - 1, +t[2])) / 86400000);
+    if (diff < 0) return 'התאריך שנבחר כבר עבר.';
+    var s = readSettings_(ss);
+    if (!s) return null;
+    var lead = (s.leadDays !== undefined && String(s.leadDays).trim() !== '') ? Math.max(0, parseInt(s.leadDays, 10) || 0) : 2;
+    if (diff < lead) return 'לתאריך הזה כבר אי אפשר להזמין — צריך להזמין ' + (lead === 1 ? 'יום' : (lead === 2 ? 'יומיים' : lead + ' ימים')) + ' מראש לפחות.';
+    var closedMsg = 'ביום שנבחר לא מקבלים הזמנות.';
+    var ov = null;
+    try { ov = JSON.parse(s.overrides || '[]'); } catch (e1) { ov = null; }
+    if (Array.isArray(ov)) {
+      for (var i = 0; i < ov.length; i++) {
+        if (ov[i] && ov[i].date === dateStr) return ov[i].open ? null : closedMsg;
+      }
+    }
+    var h = null;
+    try { h = JSON.parse(s.hours || 'null'); } catch (e2) { h = null; }
+    if (Array.isArray(h) && h.length >= 7) {
+      var day = h[utc.getUTCDay()];
+      if (!(day && day.open)) return closedMsg;
+    }
+    return null;
+  } catch (err) { return null; }
+}
 
 // --- תמונות מוצרים כקבצים (19.11.2026) ---
 // התמונות שמורות בגיליון כ-base64 (כ-40KB למוצר), ולכן רשימת המוצרים שקלה כ-600KB.
@@ -77,7 +156,7 @@ function withDeliveryLine_(order) {
   var sum = 0;
   items.forEach(function (it) { sum += (parseFloat(it.price) || 0) * (parseInt(it.qty, 10) || 0); });
   if (!(sum > 0) || sum >= DELIVERY_FREE_FROM) return items;
-  for (var i = 0; i < items.length; i++) { if (String(items[i].name || '').indexOf('משלוח') !== -1) return items; }
+  for (var i = 0; i < items.length; i++) { if (isDeliveryItem_(items[i])) return items; }
   items.push({ id: 'delivery', name: DELIVERY_ITEM_NAME, flavor: '', qty: 1, price: DELIVERY_FEE });
   return items;
 }
@@ -149,6 +228,16 @@ function doPost(e) {
     if (c0[f]) c0[f] = String(c0[f]).slice(0, 300);
   });
   if (payload.date) payload.date = String(payload.date).slice(0, 20);
+  // שעת האיסוף/משלוח שהלקוח בחר: "HH:MM" או "בתיאום". כל דבר אחר נזרק (לא נכתב טקסט חופשי לגיליון).
+  var tm0 = String(payload.time || '').trim();
+  payload.time = (/^([01]\d|2[0-3]):[0-5]\d$/.test(tm0) || tm0 === 'בתיאום') ? tm0 : '';
+  // אמצעי התשלום שהלקוח בחר — רק אחד מהמוכרים.
+  payload.payChoice = PAY_CHOICE_LABELS[String(payload.payment || '')] || '';
+  // שורה עם כמות 0 לא נרשמת בהזמנה; טעם נחתך לאורך סביר.
+  its0 = its0.filter(function (it) { return it && (parseInt(it.qty, 10) || 0) > 0; });
+  its0.forEach(function (it) { if (it.flavor) it.flavor = String(it.flavor).slice(0, 60); });
+  if (!its0.length) return json({ ok: false, error: 'bad_order' });
+  payload.items = its0;
   // תיבת "אשמח לקבל עדכונים" בטופס ההזמנה — אישור מפורש של הלקוח לרשימת העדכונים בוואטסאפ
   payload.updates = payload.updates === true || payload.updates === 1 || payload.updates === '1';
 
@@ -196,10 +285,18 @@ function doPost(e) {
     }
 
     // החנות סגורה (המתג הראשי בדשבורד) — לשונית שנשארה פתוחה מלפני הסגירה לא יכולה להזמין.
-    if (clientV >= 2) {
+    // siteV>=2 = האתר מ-26.11.2026 ואילך: מכיר גם "תאריך לא תקין" ו"כמות מינימום". עליו "סגור" נאכף תמיד
+    // (גם כשהוא שולח v=1 אחרי שתי דחיות מחיר). קטלוג הוואטסאפ ולשוניות ישנות לא מקבלים קודים חדשים.
+    var siteV = parseInt(order.site, 10) || 0;
+    if (clientV >= 2 || siteV >= 2) {
       var closedMsg = shopClosedMessage_(ss);
       if (closedMsg) return json({ ok: false, error: 'closed', message: closedMsg });
     }
+    if (siteV >= 2) {
+      var dateMsg = orderDateProblem_(ss, order.date);
+      if (dateMsg) return json({ ok: false, error: 'bad_date', message: dateMsg });
+    }
+    var qtyByProduct = {}; // row -> סך היחידות שהוזמנו מהמוצר (כל הטעמים) — לבדיקת כמות מינימום
 
     // המחיר הקובע = מה שבגיליון ברגע ההזמנה, בדיוק כפי שהאתר מציג אותו (אותו חישוב כמו shapeProduct).
     var priceDisp = ci.price !== undefined ? prod.getRange(1, ci.price + 1, data.length, 1).getDisplayValues() : null;
@@ -235,7 +332,13 @@ function doPost(e) {
           priceChanges.push({ id: String(it.id), name: String((ci.name !== undefined && data[row][ci.name]) || it.name || it.id), flavor: String(it.flavor || ''), was: isNaN(cp) ? null : cp, now: sp });
         }
         it.price = sp;
+      } else {
+        // אין מחיר קריא בגיליון — מקבלים את המחיר מהדפדפן, אבל לעולם לא שלילי.
+        it.price = Math.max(0, parseFloat(it.price) || 0);
       }
+      // שם הפריט בהזמנה = השם שבגיליון (לא טקסט שהדפדפן שלח).
+      if (ci.name !== undefined && String(data[row][ci.name] || '').trim()) it.name = String(data[row][ci.name]);
+      qtyByProduct[row] = (qtyByProduct[row] || 0) + qtyReq;
 
       var flavorsStr = String(data[row][ci.flavors] || '');
       if (flavorsStr && it.flavor) {
@@ -255,6 +358,17 @@ function doPost(e) {
       changed[row] = true;
     });
 
+    // כמות מינימום למוצר (עד עכשיו נבדקה רק בדפדפן). רק לאתר החדש, שיודע להציג את ההודעה.
+    if (siteV >= 2 && ci.minOrder !== undefined) {
+      Object.keys(qtyByProduct).forEach(function (rs) {
+        var r = parseInt(rs, 10);
+        var minQ = parseInt(data[r][ci.minOrder], 10) || 0;
+        if (minQ > 0 && qtyByProduct[r] < minQ) {
+          problems.push({ name: String((ci.name !== undefined && data[r][ci.name]) || ''), reason: 'min_order', min: minQ });
+        }
+      });
+    }
+
     if (problems.length) return json({ ok: false, error: 'stock', problems: problems });
 
     if (priceChanges.length) {
@@ -272,6 +386,10 @@ function doPost(e) {
     // return an error and stock stays untouched — an order can never go missing.
     // (Worst case becomes: order recorded but stock not reduced — visible & fixable.)
     var saved = appendOrder(ss, order, now) || {};
+
+    // זוכרים את הבקשה מיד אחרי הרישום (ולא רק בסוף): אם עדכון המלאי נכשל והלקוח לוחץ שוב,
+    // ההזמנה שכבר נרשמה לא נרשמת פעם שנייה.
+    if (reqCache && reqId) { try { reqCache.put('req:' + reqId, String(saved.id || '1'), 21600); } catch (errPut0) {} }
 
     // Then commit stock changes.
     Object.keys(changed).forEach(function (rs) {
@@ -522,13 +640,16 @@ function uploaderOk_(token) {
     );
     if (r.getResponseCode() !== 200) return false;
     var info = JSON.parse(r.getContentText());
+    // האישור חייב להיות של הדשבורד עצמו — אישור של אחת המנהלות שהונפק לאפליקציה אחרת לא מתקבל.
+    if (String(info.aud || '') !== ADMIN_CLIENT_ID && String(info.azp || '') !== ADMIN_CLIENT_ID) return false;
     return ALLOWED_UPLOADERS.indexOf(String(info.email || '').toLowerCase()) !== -1;
   } catch (err) { return false; }
 }
 
 function appendOrder(ss, order, now) {
   var sheet = ss.getSheetByName('Orders');
-  if (!sheet) return;
+  // בלי לשונית Orders אין לאן לרשום: עוצרים בשגיאה (לפני שנוגעים במלאי), במקום להחזיר "נקלטה" על הזמנה שלא נרשמה.
+  if (!sheet) throw new Error('no_orders_sheet');
   var c = order.customer || {};
   var lineItems = withDeliveryLine_(order); // כולל שורת משלוח כשרלוונטי
   var itemsText = lineItems.map(function (it) {
@@ -555,18 +676,25 @@ function appendOrder(ss, order, now) {
   if (hdr.indexOf('total') === -1) sheet.getRange(1, 15).setValue('total');
   if (hdr.indexOf('itemsJSON') === -1) sheet.getRange(1, 16).setValue('itemsJSON');
   if (hdr.indexOf('receiptUrl') === -1) sheet.getRange(1, 17).setValue('receiptUrl');
+  // שעת האיסוף/משלוח ואמצעי התשלום שהלקוח בחר באתר (26.11.2026) — עמודות R ו-S.
+  if (hdr.indexOf('time') === -1) sheet.getRange(1, 18).setValue('time');
+  if (hdr.indexOf('payChoice') === -1) sheet.getRange(1, 19).setValue('payChoice');
 
   var id = 'o-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
-  // Columns: id,customerId,name,phone,address,fulfillment,date,items,notes,status,createdAt,updatedAt,paid,paymentMethod,total,itemsJSON,receiptUrl
+  // Columns: id,customerId,name,phone,address,fulfillment,date,items,notes,status,createdAt,updatedAt,paid,paymentMethod,total,itemsJSON,receiptUrl,time,payChoice
   sheet.appendRow([
-    id, customerId, c.name || '', c.phone || '', c.address || '',
-    order.fulfillment || 'pickup', order.date || '', itemsText,
-    (c.notes || '') + ' [הזמנת אתר]' + (order._priceNote ? ' ' + order._priceNote : ''), 'new', now, now,
+    id, customerId, safeText_(c.name || ''), c.phone || '', safeText_(c.address || ''),
+    order.fulfillment || 'pickup', order.date || '', safeText_(itemsText),
+    safeText_((c.notes || '') + ' [הזמנת אתר]' + (order._priceNote ? ' ' + order._priceNote : '')), 'new', now, now,
     '0', '', // paid=false, paymentMethod=blank — set later by Keren in dashboard
-    total, itemsJSON, '' // receiptUrl — filled by the bot once the receipt is issued
+    total, itemsJSON, '', // receiptUrl — filled by the bot once the receipt is issued
+    '', order.payChoice || ''
   ]);
+  var newRow = sheet.getLastRow();
   // הטלפון כטקסט, כדי שה-0 המוביל לא ייעלם (הגיליון הופך "0526…" למספר)
-  try { sheet.getRange(sheet.getLastRow(), 4).setNumberFormat('@').setValue(String(c.phone || '')); } catch (e) {}
+  try { sheet.getRange(newRow, 4).setNumberFormat('@').setValue(String(c.phone || '')); } catch (e) {}
+  // השעה כטקסט ("16:30" כמו שהוא), כדי שהגיליון לא יהפוך אותה לערך-שעה שמוצג אחרת
+  try { if (order.time) sheet.getRange(newRow, 18).setNumberFormat('@').setValue(String(order.time)); } catch (e2) {}
   return { id: id, total: total };
 }
 
@@ -600,7 +728,7 @@ function upsertCustomer(ss, order, now) {
     }
     var cid = 'c-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
     // Customers cols: id,name,phone,address,allergies,notes,createdAt,lastOrder[,updatesAt,updatesSource]
-    var row = [cid, c.name || '', c.phone || '', c.address || '', '', c.notes || '', now, now];
+    var row = [cid, safeText_(c.name || ''), c.phone || '', safeText_(c.address || ''), '', safeText_(c.notes || ''), now, now];
     if (uc) { while (row.length < Math.max(uc.at, uc.src) + 1) row.push(''); row[uc.at] = now; row[uc.src] = 'site'; }
     sheet.appendRow(row);
     try { sheet.getRange(sheet.getLastRow(), 3).setNumberFormat('@').setValue(String(c.phone || '')); } catch (e) {}
@@ -845,7 +973,8 @@ function updatesOptin_(payload) {
     if (payload.hp) return json({ ok: true, added: true });
     var phone = normalizeIlMobile_(payload.phone);
     if (!phone) return json({ ok: false, error: 'bad_phone' });
-    var name = String(payload.name || '').slice(0, 60);
+    if (rateLimited_('optin', 40)) return json({ ok: false, error: 'busy' });
+    var name = safeText_(String(payload.name || '').slice(0, 60));
     var lock = LockService.getScriptLock();
     try { lock.waitLock(15000); } catch (e) { return json({ ok: false, error: 'busy' }); }
     try {
@@ -895,8 +1024,10 @@ function waitlistSheet_(ss) {
 // מוסיף ממתין. payload: {productId, productName?, phone, name?}
 function waitlistAdd_(payload) {
   try {
+    if (payload.hp) return json({ ok: true, added: true }); // שדה מלכודת, כמו בהזמנה
     var phone = normalizeIlMobile_(payload.phone);
     if (!phone) return json({ ok: false, error: 'bad_phone' });
+    if (rateLimited_('waitlist', 40)) return json({ ok: false, error: 'busy' });
     var pid = String(payload.productId || '').trim().slice(0, 60);
     if (!pid) return json({ ok: false, error: 'bad_product' });
 
@@ -932,7 +1063,7 @@ function waitlistAdd_(payload) {
       if (data.length > 3000) return json({ ok: false, error: 'full' });
       var now = new Date().toISOString();
       var id = 'w-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
-      sh.appendRow([id, pid, pname, phone, String(payload.name || '').slice(0, 60), now, '', 'waiting']);
+      sh.appendRow([id, pid, pname, phone, safeText_(String(payload.name || '').slice(0, 60)), now, '', 'waiting']);
       sh.getRange(sh.getLastRow(), 4).setNumberFormat('@').setValue(phone);
       return json({ ok: true, added: true, product: pname });
     } finally { lock.releaseLock(); }
@@ -1086,7 +1217,7 @@ function restockItems_(ss, items) {
     if (!it) return;
     var qty = parseInt(it.qty, 10) || 0;
     if (qty <= 0) return;
-    if (String(it.id || '') === 'delivery' || String(it.name || '').indexOf('משלוח') === 0) return;
+    if (isDeliveryItem_(it)) return;
     var row = -1;
     for (var r = 1; r < data.length; r++) {
       if (it.id && String(data[r][ci.id]) === String(it.id)) { row = r; break; }
