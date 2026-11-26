@@ -319,7 +319,7 @@ try{
 }catch(e){}
 // גרסת הקוד של הדף. משתנה רק כשעולה שינוי בקוד (לא ברענון השעתי של נתוני המוצרים).
 // version.json מחזיק את הגרסה העדכנית; דף שנשאר פתוח מגרסה ישנה מתרענן לבד כשאין הזמנה באמצע.
-const SITE_BUILD='2026-11-19.1';
+const SITE_BUILD='2026-11-26.1';
 let _liveSig=JSON.stringify(products); // חתימת הרשימה שמוצגת כרגע — מרנדרים מחדש רק כשמשהו השתנה
 let _productsAt=0;                     // מתי התקבלה לאחרונה רשימה טרייה מהשרת
 let _serverVersion='';                 // גרסת הסקריפט בגוגל (מגיעה עם רשימת המוצרים)
@@ -685,22 +685,45 @@ function pickDate(iso){
   const msg=document.getElementById('date-msg');if(msg)msg.style.display='none';
   populateTimeOptions(iso);
 }
-// שעות איסוף/משלוח לבחירה לפי היום: א׳–ה׳ 09:00–20:00, שישי 09:00–14:00, חצי שעה. שבת אין.
+// שעות איסוף/משלוח לבחירה, בקפיצות של חצי שעה. ברירת המחדל שקרן ביקשה: א׳–ה׳ 09:00–20:00, שישי 09:00–14:00.
+// אם קרן הגדירה ליום הזה בדשבורד חלון שעות צר יותר (לא "כל היום") — הרשימה מצטמצמת אליו, כך שהיא לא
+// סותרת את מה שכתוב ללקוח. להיום: רק שעות שעוד לא עברו. יום שאין לו שעות ברשימה (שבת שנפתחה במיוחד,
+// או היום כשכל השעות עברו) מקבל "בתיאום עם קרן" — כדי שהלקוח לא ייתקע על שדה חובה בלי אפשרות.
+const TIME_BY_ARRANGEMENT='בתיאום';
+function timeSlotsFor(iso){
+  const p=String(iso).split('-');if(p.length!==3)return [];
+  const dow=new Date(+p[0],+p[1]-1,+p[2]).getDay();
+  let from=9*60,to=(dow===5?14:20)*60;
+  if(dow===6){from=0;to=-1;} // שבת: אין ברירת מחדל; רק חלון שקרן הגדירה
+  const h=orderSettings.hours,day=Array.isArray(h)&&h.length>=7?h[dow]:null;
+  if(day&&day.open&&!dateOverride(iso)){
+    const f=hmToMin(day.from),t=hmToMin(day.to);
+    const allDay=f===0&&(day.to==='23:59'||day.to==='24:00');
+    if(f!==null&&t!==null&&f<t&&!allDay){
+      if(dow===6){from=f;to=t;}else{from=Math.max(from,f);to=Math.min(to,t);}
+    }
+  }
+  const out=[];
+  let minNow=-1;
+  if(iso===calIso(new Date())){const n=new Date();minNow=n.getHours()*60+n.getMinutes();}
+  for(let m=Math.ceil(from/30)*30;m<=to;m+=30){
+    if(m<=minNow)continue;
+    out.push(String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'));
+  }
+  return out;
+}
 function populateTimeOptions(iso){
   const sel=$('#cust-time');if(!sel)return;
   const prev=sel.value;
-  const p=String(iso).split('-');const dow=p.length===3?new Date(+p[0],+p[1]-1,+p[2]).getDay():-1;
-  let endH=20;
-  if(dow===5)endH=14;
-  if(dow===6){sel.innerHTML='<option value="">אין איסוף/משלוח בשבת</option>';sel.classList.remove('inv');return;}
-  let opts='<option value="">בחרי שעה ▾</option>';
-  for(let h=9;h<=endH;h++){
-    const hh=(h<10?'0':'')+h;
-    opts+='<option value="'+hh+':00">'+hh+':00</option>';
-    if(h<endH)opts+='<option value="'+hh+':30">'+hh+':30</option>';
+  if(!iso){sel.innerHTML='<option value="">בחרי קודם תאריך</option>';return;}
+  const slots=timeSlotsFor(iso);
+  if(!slots.length){
+    sel.innerHTML='<option value="'+TIME_BY_ARRANGEMENT+'">בתיאום עם קרן</option>';
+    sel.value=TIME_BY_ARRANGEMENT;
+  }else{
+    sel.innerHTML='<option value="">בחרי שעה ▾</option>'+slots.map(s=>'<option value="'+s+'">'+s+'</option>').join('');
+    if(prev&&slots.indexOf(prev)!==-1)sel.value=prev;
   }
-  sel.innerHTML=opts;
-  if(prev&&sel.querySelector('option[value="'+prev+'"]'))sel.value=prev;
   sel.classList.remove('inv');
 }
 function dateLeadOK(v){if(!v)return true;const p=String(v).split('-');if(p.length!==3)return true;const sel=new Date(+p[0],+p[1]-1,+p[2]);const now=new Date();now.setHours(0,0,0,0);const diff=Math.round((sel-now)/86400000);return diff>=leadDaysVal();}
@@ -775,7 +798,7 @@ function loadSettings(){
     .then(r=>r.json())
     .then(d=>{if(d&&d.ok&&d.settings)orderSettings=parseSettings(d.settings);})
     .catch(()=>{})
-    .then(()=>{refreshDateMin();applyOrderAvailability();});
+    .then(()=>{refreshDateMin();applyOrderAvailability();const dv=($('#cust-date')||{}).value;if(dv)populateTimeOptions(dv);});
 }
 function validateDate(){
   const d=$('#cust-date'),msg=document.getElementById('date-msg');
@@ -1044,7 +1067,9 @@ function send(){
 }
 
 // מזהה לבקשת ההזמנה: אותו תוכן שנשלח שוב (אחרי תקלת רשת) מקבל אותו מזהה, והשרת לא רושם אותו פעמיים.
-let _reqId='',_reqSig='',_priceRetries=0,_submitting=false;
+// _retryPending: השליחה האחרונה נגמרה בלי תשובה מהשרת (רשת). עד שמגיעה תשובה הסל לא "מתיישר" מול המלאי —
+// אחרת המלאי שירד בגלל ההזמנה שאולי כבר נקלטה היה משנה את הסל, המזהה היה מתחלף, ונרשמה הזמנה שנייה.
+let _reqId='',_reqSig='',_priceRetries=0,_submitting=false,_retryPending=false;
 function orderReqId(obj){
   const sig=JSON.stringify(obj);
   if(sig!==_reqSig||!_reqId){_reqSig=sig;_reqId='r-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);}
@@ -1063,7 +1088,7 @@ async function submitOrder(){
   try{
     // הנתונים בדף ישנים (הלשונית ישנה ברקע, או שהרענון האחרון נכשל)? מרעננים רגע לפני השליחה, כדי
     // שההזמנה תהיה לפי המחיר והמלאי של עכשיו. השרת לא ענה תוך 8 שניות — ממשיכים; הוא בודק בכל מקרה.
-    if(Date.now()-_productsAt>90000){
+    if(!_retryPending&&Date.now()-_productsAt>90000){
       sb.textContent='בודק זמינות...';
       const changes=await withTimeout(loadProductsFromSheet(),8000);
       if(changes&&changes.length){
@@ -1078,8 +1103,11 @@ async function submitOrder(){
     // v=2: השרת מחזיר "המחיר התעדכן" במקום לרשום. אחרי שתי דחיות כאלה ברצף שולחים כ-1: ההזמנה נרשמת
     // במחיר שבשרת (שכבר הוצג ללקוח בהודעה), כדי שלקוח לא ייתקע אם הדף והשרת לא מסכימים על מחיר.
     obj.v=_priceRetries>=2?1:2;
+    // site=2: הדף הזה מכיר את הודעות השרת החדשות (תאריך לא תקין, כמות מינימום), והשרת אוכף עליו "סגור" תמיד.
+    obj.site=2;
     const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),70000);
     let resp;
+    _retryPending=true; // עד שתגיע תשובה מהשרת
     try{
       resp=await fetch(WEBAPP_URL,{
         method:'POST',
@@ -1096,6 +1124,7 @@ async function submitOrder(){
       return;
     }
     const data=await resp.json();
+    _retryPending=false; // השרת ענה — יודעים בוודאות אם ההזמנה נרשמה
     if(data.ok){
       try{fetch('https://carmel-agent.vercel.app/api/catalog-push?reason=site-order',{method:'POST',keepalive:true}).catch(()=>{});}catch(e){} // המלאי ירד → קטלוג וואטסאפ מתעדכן תוך דקה
       // הסכום לתשלום: מה שהשרת רשם בפועל (כולל משלוח); סקריפט ישן לא מחזיר סכום — אז החישוב של הדף.
@@ -1107,9 +1136,15 @@ async function submitOrder(){
       loadProductsFromSheet();
       showOrderSuccess(pm,paidTotal,wantUpd);
     }else if(data.error==='stock'){
-      const lines=(data.problems||[]).map(p=>'• '+p.name+(p.reason==='unavailable'?' — כבר לא זמין':(p.available!=null?' — נותרו רק '+p.available:' — אזל'))).join('\n');
+      const lines=(data.problems||[]).map(p=>'• '+p.name+(p.reason==='min_order'?' — כמות מינימום להזמנה: '+p.min:(p.reason==='unavailable'?' — כבר לא זמין':(p.available!=null?' — נותרו רק '+p.available:' — אזל')))).join('\n');
       alert('חלק מהפריטים כבר לא זמינים בכמות שביקשת:\n'+lines+'\n\nעדכנו את הסל ונסו שוב 🙏');
       loadProductsFromSheet();
+    }else if(data.error==='bad_date'){
+      // השרת בודק את התאריך לפי שעון ישראל וההגדרות העדכניות של קרן (לשונית שנשארה פתוחה מאתמול, למשל).
+      alert((data.message||'התאריך שנבחר כבר לא זמין להזמנה.')+'\nבחרו תאריך אחר ולחצו שוב על שליחה 🙏');
+      $('#cust-date').value='';const _b=$('#date-display');if(_b){_b.textContent='בחרי תאריך ▾';_b.classList.remove('has');_b.classList.add('inv');}
+      populateTimeOptions('');
+      loadSettings();
     }else if(data.error==='price_changed'){
       _priceRetries++;
       const lines=(data.changes||[]).map(c=>'• '+c.name+(c.flavor?' · '+c.flavor:'')+': ₪'+c.now+(c.was!=null?' (היה ₪'+c.was+')':'')).join('\n');
@@ -1171,6 +1206,9 @@ function showOrderSuccess(pm,total,upd){
 $('#sb').onclick=send;$('#bsb').onclick=send;
 $$('#paym .pm').forEach(b=>b.onclick=()=>{payMethod=b.dataset.m;$$('#paym .pm').forEach(x=>x.classList.toggle('sel',x===b));});
 $$('#cust-name,#cust-phone,#cust-date,#cust-address').forEach(el=>el.addEventListener('input',()=>{el.classList.remove('inv');clearFormError();}));
+{const _ct=$('#cust-time');if(_ct)_ct.addEventListener('change',()=>{_ct.classList.remove('inv');clearFormError();});}
+// דפדפן ששחזר תאריך בריענון (שדה נסתר) — משלימים את התצוגה ואת רשימת השעות, או מנקים תאריך שכבר לא זמין.
+{const _dv=($('#cust-date')||{}).value;if(_dv){const _pp=_dv.split('-');const _dd=_pp.length===3?new Date(+_pp[0],+_pp[1]-1,+_pp[2]):null;if(_dd&&!isNaN(_dd)&&dateLeadOK(_dv)&&dateDayOpen(_dv))pickDate(_dv);else $('#cust-date').value='';}}
 function computeTotal(){let sub=0;products.forEach(p=>{if(cart[p.id])Object.values(cart[p.id]).forEach(q=>sub+=q*p.price);});return sub+calcD(sub);}
 $('#cust-fulfill').onchange=()=>{updAddr();upd();};
 setupDate();updAddr();render();upd();loadSettings();
@@ -1295,7 +1333,8 @@ function loadProductsFromSheet(){
                        return a.sortOrder-b.sortOrder;
                      });
     live.forEach(p=>{delete p.updatedAt;});
-    const changes=reconcileCart(live); // לפני החלפת הרשימה — משווה מול מה שהלקוח ראה עד עכשיו
+    // באמצע ניסיון שליחה שלא קיבל תשובה — לא נוגעים בסל (ראו _retryPending); השרת יבדוק מלאי ומחיר בשליחה הבאה.
+    const changes=_retryPending?[]:reconcileCart(live); // לפני החלפת הרשימה — משווה מול מה שהלקוח ראה עד עכשיו
     const sig=JSON.stringify(live),same=(sig===_liveSig);
     _liveSig=sig;_productsAt=Date.now();
     products.length=0;
